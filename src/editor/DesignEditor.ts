@@ -4,11 +4,19 @@ import {
   Textbox,
   type FabricObject,
 } from 'fabric'
-import type { AddImageOptions, AddTextOptions } from '../core/types'
+import { parseDesignDocument } from '../core/design'
+import type {
+  AddImageOptions,
+  AddTextOptions,
+  DesignDocument,
+  DesignObject,
+  DesignObjectTransform,
+} from '../core/types'
 import {
   calculateContainmentOffset,
   calculateContainmentScale,
 } from './objectBounds'
+import { resolvePersistentImageSource } from './imageSource'
 
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
@@ -37,7 +45,11 @@ export class DesignEditor {
   private readonly height: number
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
+  private readonly objectIds = new WeakMap<FabricObject, string>()
+  private readonly usedObjectIds = new Set<string>()
+  private readonly imageSources = new WeakMap<FabricImage, string>()
   private readonly resizeObserver: ResizeObserver
+  private objectIdSequence = 0
 
   /**
    * @param host 二维编辑器挂载容器
@@ -205,10 +217,8 @@ export class DesignEditor {
    * @throws 图片加载失败或被 CORS 策略阻止时抛出错误
    */
   async addImage(options: AddImageOptions): Promise<FabricImage> {
-    const image = await FabricImage.fromURL(
-      options.src,
-      options.src.startsWith('blob:') ? undefined : { crossOrigin: 'anonymous' },
-    )
+    const source = await resolvePersistentImageSource(options.src)
+    const image = await this.loadImage(source)
     const targetWidth = options.width ?? this.width * 0.22
     const scale = targetWidth / Math.max(image.width, 1)
 
@@ -226,8 +236,79 @@ export class DesignEditor {
       cornerSize: 16,
     })
 
+    this.imageSources.set(image, source)
     this.addAndSelect(image)
     return image
+  }
+
+  /**
+   * 返回与 Fabric.js 无关的当前设计快照
+   *
+   * 文档只包含可编辑对象和逻辑画布尺寸，不包含背景纹理或产品模型配置
+   *
+   * @returns 可以安全传给 JSON.stringify 的 Design JSON 文档
+   * @throws 画布包含不支持的对象或非字符串文字填充时抛出错误
+   */
+  saveDesign(): DesignDocument {
+    return {
+      version: 1,
+      canvas: { width: this.width, height: this.height },
+      objects: this.canvas.getObjects().map((object) => this.serializeObject(object)),
+    }
+  }
+
+  /**
+   * 校验并恢复 Design JSON，图片全部加载成功后才替换当前对象
+   *
+   * 背景纹理和当前产品保持不变，恢复后不选中任何对象
+   *
+   * @param value JSON.parse 结果或符合 DesignDocument 的对象
+   * @throws Schema 无效、画布尺寸不匹配或图片无法加载时抛出错误
+   */
+  async loadDesign(value: unknown): Promise<void> {
+    const design = parseDesignDocument(value)
+    if (design.canvas.width !== this.width || design.canvas.height !== this.height) {
+      throw new RangeError(
+        `Design canvas ${design.canvas.width}x${design.canvas.height} does not match editor canvas ${this.width}x${this.height}`,
+      )
+    }
+
+    const entries: Array<{
+      id: string
+      object: FabricObject
+      source?: string
+    }> = []
+
+    try {
+      for (const object of design.objects) {
+        entries.push({
+          id: object.id,
+          object: await this.createObjectFromDesign(object),
+          source: object.type === 'image' ? object.src : undefined,
+        })
+      }
+    } catch (error) {
+      entries.forEach(({ object }) => object.dispose())
+      throw error
+    }
+
+    const previousObjects = this.canvas.getObjects()
+    this.canvas.discardActiveObject()
+    this.canvas.remove(...previousObjects)
+    previousObjects.forEach((object) => object.dispose())
+    this.usedObjectIds.clear()
+
+    for (const entry of entries) {
+      this.registerObject(entry.object, entry.id)
+      if (entry.object instanceof FabricImage && entry.source) {
+        this.imageSources.set(entry.object, entry.source)
+      }
+      this.canvas.add(entry.object)
+      this.constrainObjectToCanvas(entry.object)
+    }
+
+    this.canvas.requestRenderAll()
+    this.selectionListeners.forEach((listener) => listener(false))
   }
 
   /**
@@ -277,11 +358,119 @@ export class DesignEditor {
   }
 
   private addAndSelect(object: FabricObject): void {
+    this.registerObject(object)
     this.canvas.add(object)
     this.constrainObjectToCanvas(object)
     this.canvas.setActiveObject(object)
     this.canvas.requestRenderAll()
     this.selectionListeners.forEach((listener) => listener(true))
+  }
+
+  private registerObject(object: FabricObject, id = this.createObjectId()): void {
+    if (this.usedObjectIds.has(id)) {
+      throw new Error(`Design object id is already in use: ${id}`)
+    }
+    this.usedObjectIds.add(id)
+    this.objectIds.set(object, id)
+  }
+
+  private createObjectId(): string {
+    let id: string
+    do {
+      this.objectIdSequence += 1
+      id = `object-${this.objectIdSequence}`
+    } while (this.usedObjectIds.has(id))
+    return id
+  }
+
+  private serializeObject(object: FabricObject): DesignObject {
+    const id = this.objectIds.get(object)
+    if (!id) {
+      throw new Error('Design object is missing its stable id')
+    }
+
+    const transform = this.serializeTransform(object)
+    if (object instanceof Textbox) {
+      if (typeof object.fill !== 'string') {
+        throw new Error(`Text object ${id} uses an unsupported non-string fill`)
+      }
+      return {
+        id,
+        type: 'text',
+        transform,
+        text: object.text,
+        width: object.width,
+        fontFamily: object.fontFamily,
+        fontSize: object.fontSize,
+        color: object.fill,
+      }
+    }
+
+    if (object instanceof FabricImage) {
+      const src = this.imageSources.get(object) ?? object.getSrc()
+      if (!src || src.startsWith('blob:')) {
+        throw new Error(`Image object ${id} does not have a persistent source`)
+      }
+      return { id, type: 'image', transform, src }
+    }
+
+    throw new Error(`Design object ${id} has an unsupported type`)
+  }
+
+  private serializeTransform(object: FabricObject): DesignObjectTransform {
+    const center = object.getCenterPoint()
+    return {
+      x: center.x,
+      y: center.y,
+      scaleX: Math.abs(object.scaleX),
+      scaleY: Math.abs(object.scaleY),
+      rotation: object.angle,
+      flipX: object.scaleX < 0 ? !object.flipX : object.flipX,
+      flipY: object.scaleY < 0 ? !object.flipY : object.flipY,
+    }
+  }
+
+  private async createObjectFromDesign(design: DesignObject): Promise<FabricObject> {
+    const common = {
+      left: design.transform.x,
+      top: design.transform.y,
+      originX: 'center' as const,
+      originY: 'center' as const,
+      scaleX: design.transform.scaleX,
+      scaleY: design.transform.scaleY,
+      angle: design.transform.rotation,
+      flipX: design.transform.flipX,
+      flipY: design.transform.flipY,
+      transparentCorners: false,
+      cornerColor: '#ffffff',
+      cornerStrokeColor: '#13717d',
+      borderColor: '#13717d',
+      cornerSize: 16,
+    }
+
+    if (design.type === 'text') {
+      return new Textbox(design.text, {
+        ...common,
+        width: design.width,
+        fontFamily: design.fontFamily,
+        fontSize: design.fontSize,
+        fontWeight: 700,
+        fill: design.color,
+        textAlign: 'center',
+        editable: true,
+      })
+    }
+
+    const image = await this.loadImage(design.src)
+    image.set(common)
+    return image
+  }
+
+  private loadImage(source: string): Promise<FabricImage> {
+    return FabricImage.fromURL(
+      source,
+      source.startsWith('data:') ? undefined : { crossOrigin: 'anonymous' },
+    )
   }
 
   private constrainObjectToCanvas(object: FabricObject): void {

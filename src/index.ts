@@ -37,5 +37,11 @@ export type {
   AddTextOptions,
   CustomizerEventMap,
   CustomizerOptions,
+  DesignCanvas,
+  DesignDocument,
+  DesignObject,
+  DesignObjectTransform,
+  ImageDesignObject,
   ProductConfiguration,
+  TextDesignObject,
 } from './core/types'

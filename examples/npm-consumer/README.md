@@ -20,4 +20,6 @@ The dependency path in `package.json` expects `customforge-0.1.0-alpha.0.tgz` in
 
 The browser example explicitly ignores the optional native `canvas` build and does not require `pnpm approve-builds`
 
+The toolbar also verifies the packaged Design JSON boundary: save the current text and image objects, modify the canvas, then load the downloaded JSON to restore the design
+
 For a strict repository-independent check, copy this directory outside the repository and replace the `customforge` dependency with the absolute path to that tarball

@@ -1,9 +1,11 @@
 import {
   Box,
   Download,
+  FolderOpen,
   ImagePlus,
   Link2,
   RotateCcw,
+  Save,
   Trash2,
   Type,
   Upload,
@@ -56,13 +58,44 @@ app.innerHTML = `
         </header>
 
         <div class="toolstrip" role="toolbar" aria-label="Design tools">
-          <button class="tool-button" id="add-text-button" type="button">
+          <button
+            class="tool-button"
+            id="add-text-button"
+            type="button"
+            title="Add text"
+            aria-label="Add text"
+          >
             <i data-lucide="type"></i>
-            Add text
+            <span>Add text</span>
           </button>
-          <button class="tool-button" id="add-image-button" type="button">
+          <button
+            class="tool-button"
+            id="add-image-button"
+            type="button"
+            title="Add image"
+            aria-label="Add image"
+          >
             <i data-lucide="image-plus"></i>
-            Add image
+            <span>Add image</span>
+          </button>
+          <span class="tool-separator" aria-hidden="true"></span>
+          <button
+            class="icon-button"
+            id="save-design-button"
+            type="button"
+            title="Save design JSON"
+            aria-label="Save design JSON"
+          >
+            <i data-lucide="save"></i>
+          </button>
+          <button
+            class="icon-button"
+            id="load-design-button"
+            type="button"
+            title="Load design JSON"
+            aria-label="Load design JSON"
+          >
+            <i data-lucide="folder-open"></i>
           </button>
           <span class="tool-separator" aria-hidden="true"></span>
           <button
@@ -79,6 +112,7 @@ app.innerHTML = `
 
         <div class="editor-stage" id="editor-host"></div>
         <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        <input id="design-input" type="file" accept="application/json,.json" hidden />
       </section>
 
       <section class="workspace-panel viewer-panel" aria-labelledby="viewer-title">
@@ -165,9 +199,11 @@ createIcons({
   icons: {
     Box,
     Download,
+    FolderOpen,
     ImagePlus,
     Link2,
     RotateCcw,
+    Save,
     Trash2,
     Type,
     Upload,
@@ -193,6 +229,8 @@ const status = requiredElement<HTMLSpanElement>('#app-status')
 const editorHost = requiredElement<HTMLDivElement>('#editor-host')
 const deleteButton = requiredElement<HTMLButtonElement>('#delete-button')
 const imageInput = requiredElement<HTMLInputElement>('#image-input')
+const designInput = requiredElement<HTMLInputElement>('#design-input')
+const loadDesignButton = requiredElement<HTMLButtonElement>('#load-design-button')
 const dialog = requiredElement<HTMLDialogElement>('#load-dialog')
 const remoteForm = requiredElement<HTMLFormElement>('#remote-form')
 const loadButton = requiredElement<HTMLButtonElement>('#load-button')
@@ -200,6 +238,22 @@ const loadButton = requiredElement<HTMLButtonElement>('#load-button')
 function setStatus(message: string, mode: 'ready' | 'busy' | 'error' = 'ready'): void {
   statusLabel.textContent = message
   status.dataset.mode = mode
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function downloadJson(filename: string, value: unknown): void {
+  const blob = new Blob([JSON.stringify(value, null, 2)], {
+    type: 'application/json',
+  })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.download = filename
+  anchor.href = url
+  anchor.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 setStatus('Loading demo', 'busy')
@@ -260,6 +314,38 @@ imageInput.addEventListener('change', async () => {
   } finally {
     URL.revokeObjectURL(objectUrl)
     imageInput.value = ''
+  }
+})
+
+requiredElement<HTMLButtonElement>('#save-design-button').addEventListener('click', () => {
+  try {
+    downloadJson('customforge-design.json', customizer.saveDesign())
+    setStatus('Design saved')
+  } catch (error) {
+    setStatus(errorMessage(error), 'error')
+  }
+})
+
+loadDesignButton.addEventListener('click', () => {
+  designInput.click()
+})
+
+designInput.addEventListener('change', async () => {
+  const file = designInput.files?.[0]
+  if (!file) {
+    return
+  }
+
+  loadDesignButton.disabled = true
+  setStatus('Loading design', 'busy')
+  try {
+    await customizer.loadDesign(JSON.parse(await file.text()))
+    setStatus('Design loaded')
+  } catch (error) {
+    setStatus(errorMessage(error), 'error')
+  } finally {
+    loadDesignButton.disabled = false
+    designInput.value = ''
   }
 })
 

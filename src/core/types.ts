@@ -87,6 +87,100 @@ export interface AddImageOptions {
   width?: number
 }
 
+/** Design JSON 使用的画布逻辑尺寸 */
+export interface DesignCanvas {
+  /** 画布逻辑宽度，单位为像素 */
+  width: number
+
+  /** 画布逻辑高度，单位为像素 */
+  height: number
+}
+
+/** Design JSON 中所有可编辑对象共用的变换 */
+export interface DesignObjectTransform {
+  /** 对象中心在画布中的横坐标，单位为像素 */
+  x: number
+
+  /** 对象中心在画布中的纵坐标，单位为像素 */
+  y: number
+
+  /** 对象相对于原始尺寸的横向缩放倍数 */
+  scaleX: number
+
+  /** 对象相对于原始尺寸的纵向缩放倍数 */
+  scaleY: number
+
+  /** 对象顺时针旋转角度，单位为度 */
+  rotation: number
+
+  /** 是否沿对象自身横轴翻转 */
+  flipX: boolean
+
+  /** 是否沿对象自身纵轴翻转 */
+  flipY: boolean
+}
+
+/** Design JSON 中的文字对象 */
+export interface TextDesignObject {
+  /** 文档内稳定且唯一的对象标识 */
+  id: string
+
+  /** 用于区分联合类型的对象种类 */
+  type: 'text'
+
+  /** 对象位置和变换 */
+  transform: DesignObjectTransform
+
+  /** 文字内容，可以为空字符串 */
+  text: string
+
+  /** 未应用缩放前的文字编辑框宽度，单位为像素 */
+  width: number
+
+  /** 字体名称，恢复时依赖消费页面提供对应字体 */
+  fontFamily: string
+
+  /** 未应用缩放前的字体大小，单位为像素 */
+  fontSize: number
+
+  /** 文字颜色，仅保存 CSS 字符串颜色 */
+  color: string
+}
+
+/** Design JSON 中的图片对象 */
+export interface ImageDesignObject {
+  /** 文档内稳定且唯一的对象标识 */
+  id: string
+
+  /** 用于区分联合类型的对象种类 */
+  type: 'image'
+
+  /** 对象位置和变换 */
+  transform: DesignObjectTransform
+
+  /** 可重新加载的远程 URL 或 Data URL，不允许短生命周期 Blob URL */
+  src: string
+}
+
+/** Design JSON 当前支持的可编辑对象 */
+export type DesignObject = TextDesignObject | ImageDesignObject
+
+/**
+ * 可持久化并恢复的单画布设计文档
+ *
+ * 只包含二维可编辑对象，不包含产品模型、目标 Mesh 或基础纹理配置
+ */
+export interface DesignDocument {
+  /** Schema 版本，当前固定为 1 */
+  version: 1
+
+  /** 保存设计时使用的逻辑画布尺寸 */
+  canvas: DesignCanvas
+
+  /** 按渲染层级从后到前排列的可编辑对象 */
+  objects: DesignObject[]
+}
+
 /**
  * 产品定制器事件及其载荷
  */

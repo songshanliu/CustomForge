@@ -6,6 +6,7 @@ import type {
   CustomizerEventMap,
   CustomizerEventName,
   CustomizerOptions,
+  DesignDocument,
   ProductConfiguration,
 } from '../core/types'
 import { DesignEditor } from '../editor/DesignEditor'
@@ -132,6 +133,39 @@ export class ProductCustomizer {
    */
   deleteSelected(): boolean {
     return this.editor.deleteSelected()
+  }
+
+  /**
+   * 创建当前二维设计的版本化 JSON 快照
+   *
+   * 快照不包含产品模型、目标 Mesh 或基础纹理配置
+   * Blob URL 图片会在添加时转换为 Data URL，因此返回值可以跨页面会话保存
+   *
+   * @returns 可以安全传给 JSON.stringify 的 DesignDocument
+   * @throws 设计中存在不支持的对象或文字填充时抛出错误
+   */
+  saveDesign(): DesignDocument {
+    return this.editor.saveDesign()
+  }
+
+  /**
+   * 校验并恢复版本化 Design JSON
+   *
+   * 图片全部加载成功后才替换当前二维对象，产品和基础纹理保持不变
+   * 输入画布尺寸必须与当前编辑器的逻辑尺寸完全一致
+   *
+   * @param value JSON.parse 结果或符合 DesignDocument 的对象
+   * @throws Schema 无效、画布尺寸不匹配或图片加载失败时抛出错误
+   */
+  async loadDesign(value: unknown): Promise<void> {
+    this.emit('status', { message: 'Loading design' })
+    try {
+      await this.editor.loadDesign(value)
+      this.emit('status', { message: 'Design loaded' })
+    } catch (error) {
+      this.reportError(error)
+      throw error
+    }
   }
 
   /**

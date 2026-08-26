@@ -543,6 +543,17 @@ input:focus-visible {
     display: none;
   }
 
+  .tool-button {
+    flex: 0 0 34px;
+    justify-content: center;
+    width: 34px;
+    padding: 0;
+  }
+
+  .tool-button span {
+    display: none;
+  }
+
   .editor-stage {
     min-height: 270px;
   }

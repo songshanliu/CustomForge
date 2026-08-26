@@ -34,6 +34,7 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 - 通过 Mesh 名称指定可定制表面
 - 使用 OrbitControls 旋转和缩放三维预览
 - 将合成后的纹理导出为 PNG
+- 通过版本化 Design JSON 保存和恢复可编辑对象
 
 工作台内置了一个程序生成的杯子，无需准备外部资源即可直接运行
 
@@ -147,6 +148,28 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 当前只提供本地 `.tgz` 验证，不从 npm Registry 安装
 
+## Design JSON
+
+`saveDesign()` 返回由 Library 自身定义、可安全写入 JSON 的文档，不暴露 Fabric.js 序列化格式。`loadDesign()` 校验未知输入，并异步恢复可编辑对象栈：
+
+```ts
+const design = customizer.saveDesign()
+localStorage.setItem('customforge-design', JSON.stringify(design))
+
+const savedDesign = localStorage.getItem('customforge-design')
+if (savedDesign) {
+  await customizer.loadDesign(JSON.parse(savedDesign))
+}
+```
+
+当前 Schema 版本为 `1`。文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID 与基于中心点的变换
+
+Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只能加载到逻辑宽高完全相同的编辑器中
+
+加载具有事务性：只有文档校验通过且全部引用图片成功加载后，当前设计才会被替换。Blob URL 图片会在添加时转换为 Data URL；远程图片仍保留 URL，恢复时必须继续满足浏览器 CORS 要求
+
+该 Schema 目前仍属于 alpha 契约，首次公开发布前可能调整
+
 ## 实例 API
 
 | 方法 | 说明 |
@@ -154,6 +177,8 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 | `addText(options)` | 添加并选中文字，自动约束在画布内 |
 | `addImage(options)` | 加载并选中图片，自动约束在画布内 |
 | `deleteSelected()` | 删除当前对象或选区 |
+| `saveDesign()` | 返回当前版本化 Design JSON 文档 |
+| `loadDesign(value)` | 校验并以事务方式恢复 Design JSON |
 | `loadProduct(product)` | 更换模型、基础纹理和目标 Mesh |
 | `exportTexture(filename?)` | 将合成纹理下载为 PNG |
 | `resetView()` | 恢复默认三维相机位置 |
@@ -162,7 +187,7 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 当前事件包括 `ready`、`change`、`selectionchange`、`status` 和 `error`
 
-首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer` 以及从根入口导出的配置和事件类型
+首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer` 以及从根入口导出的配置、事件和 Design JSON 类型
 
 `ProductCustomizer` 不公开 Fabric.js 编辑器和 Three.js 查看器实例，使用方只通过门面 API 操作定制器
 
@@ -248,7 +273,7 @@ pnpm preview     # 预览生产构建
 
 本地可分发 ESM 制品已经配置，正式 npm Registry 发布仍不在当前范围内
 
-多定制面、撤销与重做、设计序列化和框架适配器仍未实现
+多定制面、撤销与重做和框架适配器仍未实现。撤销与重做是下一阶段计划，并将复用 Design JSON 快照契约
 
 ## 技术栈
 

@@ -34,6 +34,7 @@ CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 - Select the customizable surface by mesh name
 - Rotate and zoom the 3D preview with OrbitControls
 - Export the composed texture as a PNG
+- Save and restore editable objects through versioned Design JSON
 
 The included workbench starts with a procedural cup, so the project works immediately without external assets
 
@@ -147,6 +148,28 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 The current package is available only as a local `.tgz`, not from the npm Registry
 
+## Design JSON
+
+`saveDesign()` returns a Library-owned, JSON-safe document instead of exposing Fabric.js serialization. `loadDesign()` validates unknown input and restores the editable object stack asynchronously:
+
+```ts
+const design = customizer.saveDesign()
+localStorage.setItem('customforge-design', JSON.stringify(design))
+
+const savedDesign = localStorage.getItem('customforge-design')
+if (savedDesign) {
+  await customizer.loadDesign(JSON.parse(savedDesign))
+}
+```
+
+The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs and center-based transforms
+
+Design JSON intentionally excludes the product model, target mesh, and base texture. A document can only be loaded into an editor with exactly the same logical width and height
+
+Loading is transactional: the current design remains unchanged unless the document validates and every referenced image loads successfully. Blob URL images are converted to Data URLs when added; remote image URLs remain URLs and must continue to satisfy browser CORS requirements when restored
+
+The Schema is still an alpha contract and may change before the first public release
+
 ## Instance API
 
 | Method | Description |
@@ -154,6 +177,8 @@ The current package is available only as a local `.tgz`, not from the npm Regist
 | `addText(options)` | Add and select editable text, constrained to the canvas |
 | `addImage(options)` | Load and select an image, constrained to the canvas |
 | `deleteSelected()` | Remove the active object or selection |
+| `saveDesign()` | Return the current versioned Design JSON document |
+| `loadDesign(value)` | Validate and transactionally restore Design JSON |
 | `loadProduct(product)` | Replace the model, base texture, and target mesh |
 | `exportTexture(filename?)` | Download the composed texture as PNG |
 | `resetView()` | Restore the default 3D camera position |
@@ -162,7 +187,7 @@ The current package is available only as a local `.tgz`, not from the npm Regist
 
 Available events are `ready`, `change`, `selectionchange`, `status`, and `error`
 
-The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, and the configuration and event types exported from the package root
+The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, and the configuration, event, and Design JSON types exported from the package root
 
 `ProductCustomizer` does not expose its Fabric.js editor or Three.js viewer instances; consumers interact through the facade API
 
@@ -248,7 +273,7 @@ The current milestone intentionally focuses on one texture and one customizable 
 
 The local distributable ESM package is configured; publishing it to the npm Registry remains outside the present scope
 
-Multi-surface products, undo/redo, design serialization, and framework adapters are not implemented yet
+Multi-surface products, undo/redo, and framework adapters are not implemented yet. Undo/redo is the next planned milestone and will build on the Design JSON snapshot contract
 
 ## Technology
 

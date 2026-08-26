@@ -124,12 +124,15 @@ assert(
 const rootDeclaration = await readProjectFile('dist/index.d.ts')
 assert(!rootDeclaration.includes('/src/'), 'Root declaration contains a source path')
 assert(!rootDeclaration.includes('/demo/'), 'Demo type leaked into root declaration')
+assert(rootDeclaration.includes('DesignDocument'), 'Design document type is missing')
 
 const customizerDeclaration = await readProjectFile(
   'dist/customizer/ProductCustomizer.d.ts',
 )
 assert(!customizerDeclaration.includes('DesignEditor'), 'Editor type leaked into public class')
 assert(!customizerDeclaration.includes('ProductViewer'), 'Viewer type leaked into public class')
+assert(customizerDeclaration.includes('saveDesign'), 'Design save method is missing')
+assert(customizerDeclaration.includes('loadDesign'), 'Design load method is missing')
 
 const expectedPackageFiles = [
   ...distFiles.map((file) => `dist/${file}`),

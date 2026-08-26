@@ -10,6 +10,9 @@ All notable changes to CustomForge will be documented in this file
 - TypeScript declaration and declaration map generation
 - Namespaced core stylesheet exported as `customforge/style.css`
 - Local package verification and npm consumer example
+- Versioned, Fabric-independent Design JSON types and runtime validation
+- Public `saveDesign()` and transactional `loadDesign()` methods
+- Design JSON save and load controls in the built-in and npm consumer demos
 
 ### Changed
 
@@ -19,3 +22,4 @@ All notable changes to CustomForge will be documented in this file
 - Package version is prepared as `0.1.0-alpha.0` while remaining private
 - Text and image objects remain fully inside the editor canvas while being added or transformed
 - The built-in demo product no longer includes the obstructive torus handle
+- Blob URL images are converted to persistent Data URLs when added

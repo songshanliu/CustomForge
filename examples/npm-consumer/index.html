@@ -12,6 +12,8 @@
         <span id="status" role="status">Starting</span>
         <button id="add-text" type="button">Add text</button>
         <button id="add-image" type="button">Add image</button>
+        <button id="save-design" type="button">Save JSON</button>
+        <button id="load-design" type="button">Load JSON</button>
         <button id="reset-view" type="button">Reset view</button>
         <button id="export" type="button">Export PNG</button>
         <button id="destroy" type="button">Destroy</button>
@@ -36,6 +38,7 @@
         <div id="editor"></div>
         <div id="viewer"></div>
       </section>
+      <input id="design-input" type="file" accept="application/json,.json" hidden />
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
