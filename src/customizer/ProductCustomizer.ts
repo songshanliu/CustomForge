@@ -19,25 +19,27 @@ type EventListener<K extends CustomizerEventName> = (
 /**
  * 统一管理二维编辑器、三维查看器和实时纹理同步
  *
+ * 仅支持具有 DOM、Canvas、WebGL 和 ResizeObserver 的浏览器环境
  * 每个实例独立持有 DOM 事件、Fabric 状态和 WebGL 资源
  * 不再使用实例时必须调用 `destroy()`
  */
 export class ProductCustomizer {
-  /** 当前实例使用的二维设计编辑器 */
-  readonly editor: DesignEditor
-
-  /** 当前实例使用的三维产品查看器 */
-  readonly viewer: ProductViewer
-
   private readonly events = new EventTarget()
   private readonly textureBridge: TextureBridge
+  private readonly editor: DesignEditor
+  private readonly viewer: ProductViewer
   private product: ReturnType<typeof normalizeProductConfiguration>
   private readonly stopSelectionListener: () => void
   private readonly stopRenderListener: () => void
+  private destroyed = false
 
   private constructor(options: CustomizerOptions) {
     const editorHost = resolveElement(options.editor, 'Editor')
     const viewerHost = resolveElement(options.viewer, 'Viewer')
+
+    if (editorHost === viewerHost) {
+      throw new Error('Editor and viewer must use different elements')
+    }
 
     this.product = normalizeProductConfiguration(options.product)
     this.editor = new DesignEditor(editorHost, {
@@ -64,7 +66,7 @@ export class ProductCustomizer {
    *
    * @param options 产品定制器初始化配置
    * @returns 初始化完成的产品定制器实例
-   * @throws 初始化失败时自动释放已创建资源并继续抛出原始错误
+   * @throws DOM 容器无效或初始化失败时释放已创建资源并继续抛出原始错误
    */
   static async create(options: CustomizerOptions): Promise<ProductCustomizer> {
     const customizer = new ProductCustomizer(options)
@@ -98,6 +100,8 @@ export class ProductCustomizer {
   /**
    * 在二维画布中添加并选中一个文字对象
    *
+   * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
+   *
    * @param options 文字内容、位置和样式配置
    */
   addText(options?: AddTextOptions): void {
@@ -106,6 +110,8 @@ export class ProductCustomizer {
 
   /**
    * 加载图片并将其添加到二维画布
+   *
+   * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 图片地址、位置和显示宽度
    * @throws 图片无法访问、加载失败或被 CORS 策略阻止时抛出错误
@@ -169,9 +175,14 @@ export class ProductCustomizer {
   /**
    * 释放事件监听、Fabric Canvas、纹理和 WebGL 资源
    *
-   * 调用后不得继续使用当前实例
+   * 重复调用不会再次释放资源，首次调用后不得继续使用其他实例方法
    */
   destroy(): void {
+    if (this.destroyed) {
+      return
+    }
+
+    this.destroyed = true
     this.stopSelectionListener?.()
     this.stopRenderListener?.()
     this.textureBridge.destroy()

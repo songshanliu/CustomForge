@@ -37,7 +37,7 @@ CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 
 The included workbench starts with a procedural cup, so the project works immediately without external assets
 
-## Quick Start
+## Repository Development
 
 Requirements: Node.js 22+ and pnpm 11+
 
@@ -49,6 +49,31 @@ pnpm dev
 Open the URL printed by Vite
 
 The built-in demo appears with a UV workspace on the left and a live 3D preview on the right
+
+## Local npm Package
+
+The repository now configures a local ESM Library package while keeping `private: true`, so it cannot be published to the npm Registry
+
+Build, verify, and create the local package from the repository root:
+
+```powershell
+pnpm pack:local
+```
+
+The command builds JavaScript, TypeScript declarations, and core styles, checks the npm file list, and creates:
+
+```text
+customforge-0.1.0-alpha.0.tgz
+```
+
+Install the local package and its peer dependencies in an independent Vite TypeScript project:
+
+```powershell
+pnpm add D:\project\CustomForge\CustomForge\customforge-0.1.0-alpha.0.tgz
+pnpm add fabric three
+```
+
+The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace
 
 ## Load Your Product
 
@@ -72,9 +97,11 @@ The optional texture image is the visual base layer, not a replacement for model
 
 ## Basic Usage
 
-The framework-independent source entry is [`src/index.ts`](./src/index.ts)
+The framework-independent Library entry can be mounted into any two DOM containers:
 
-It can be mounted into any two DOM containers:
+CustomForge is browser-only and must be initialized after its DOM containers are available
+
+The editor and viewer require two different containers; call `destroy()` when the page, host component, or instance is no longer in use to release Fabric, WebGL, observer, and event resources
 
 ```html
 <div id="texture-editor"></div>
@@ -82,7 +109,8 @@ It can be mounted into any two DOM containers:
 ```
 
 ```ts
-import { createCustomizer } from './src'
+import { createCustomizer } from 'customforge'
+import 'customforge/style.css'
 
 const customizer = await createCustomizer({
   editor: '#texture-editor',
@@ -111,18 +139,20 @@ await customizer.addImage({
   y: 240,
   width: 220,
 })
+
+window.addEventListener('beforeunload', () => customizer.destroy(), {
+  once: true,
+})
 ```
 
-This repository does not publish an npm package or standalone library bundle yet
-
-The current Vite build produces the demo application; `src/index.ts` is the intended future library boundary
+The current package is available only as a local `.tgz`, not from the npm Registry
 
 ## Instance API
 
 | Method | Description |
 | --- | --- |
-| `addText(options)` | Add and select an editable text object |
-| `addImage(options)` | Load, add, and select an image object |
+| `addText(options)` | Add and select editable text, constrained to the canvas |
+| `addImage(options)` | Load and select an image, constrained to the canvas |
 | `deleteSelected()` | Remove the active object or selection |
 | `loadProduct(product)` | Replace the model, base texture, and target mesh |
 | `exportTexture(filename?)` | Download the composed texture as PNG |
@@ -131,6 +161,12 @@ The current Vite build produces the demo application; `src/index.ts` is the inte
 | `destroy()` | Release DOM events, Fabric state, and WebGL resources |
 
 Available events are `ready`, `change`, `selectionchange`, `status`, and `error`
+
+The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, and the configuration and event types exported from the package root
+
+`ProductCustomizer` does not expose its Fabric.js editor or Three.js viewer instances; consumers interact through the facade API
+
+Imports from `core`, `editor`, `viewer`, `bridge`, or any other undeclared package subpath are unsupported
 
 ## Architecture
 
@@ -178,8 +214,16 @@ src/
 |-- customizer/       Public instance orchestration
 |-- demo/             Runnable workbench UI
 |-- editor/           Fabric.js design surface
+|-- style.css         Public Library style entry
+|-- styles/           Library core styles
 |-- viewer/           Three.js product preview
 `-- index.ts          Framework-independent source entry
+
+examples/
+`-- npm-consumer/     Independent local .tgz consumer
+
+scripts/
+`-- verify-package.mjs  npm file and artifact boundary checks
 ```
 
 ## Development Commands
@@ -188,6 +232,9 @@ src/
 pnpm check       # TypeScript project check
 pnpm test        # Unit tests
 pnpm build       # Type-check and production build
+pnpm build:lib   # Build ESM, declarations, and core styles
+pnpm verify:package # Check dist and the npm file list
+pnpm pack:local  # Build, verify, and create the local .tgz
 pnpm preview     # Preview the production build
 ```
 
@@ -199,7 +246,9 @@ The public API and design document format are not stable yet
 
 The current milestone intentionally focuses on one texture and one customizable mesh
 
-Multi-surface products, undo/redo, design serialization, framework adapters, and a distributable package are outside the present scope
+The local distributable ESM package is configured; publishing it to the npm Registry remains outside the present scope
+
+Multi-surface products, undo/redo, design serialization, and framework adapters are not implemented yet
 
 ## Technology
 

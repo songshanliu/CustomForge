@@ -1,0 +1,157 @@
+:root {
+  color: #172126;
+  background: #eef0ef;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: #172126;
+  background: #ffffff;
+  border: 1px solid #c7cecc;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover:not(:disabled) {
+  color: #0d555e;
+  background: #edf6f6;
+  border-color: #8ab9be;
+}
+
+button:disabled {
+  color: #8a9491;
+  cursor: not-allowed;
+}
+
+.consumer-shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: 100%;
+  min-height: 100vh;
+}
+
+.consumer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 10px 14px;
+  color: #f7f9f8;
+  background: #172126;
+}
+
+.consumer-toolbar strong {
+  margin-right: auto;
+}
+
+#status {
+  max-width: 220px;
+  overflow: hidden;
+  color: #b9c3c2;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.consumer-source {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.5fr) auto auto auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #f7f9f8;
+  border-bottom: 1px solid #c7cecc;
+}
+
+.consumer-source label:not(.consumer-check) {
+  display: grid;
+  gap: 5px;
+  color: #53605e;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.consumer-source input[type='text'],
+.consumer-source input[type='url'] {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px;
+  background: #ffffff;
+  border: 1px solid #c7cecc;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.consumer-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  color: #53605e;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.consumer-workbench {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(480px, 1fr);
+  min-height: 620px;
+}
+
+#editor,
+#viewer {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  place-items: center;
+}
+
+#editor {
+  background: #dfe3e1;
+  border-right: 1px solid #c7cecc;
+}
+
+#viewer {
+  background: #eef0ef;
+}
+
+@media (max-width: 900px) {
+  .consumer-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .consumer-toolbar strong {
+    flex-basis: 100%;
+  }
+
+  .consumer-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .consumer-source {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #editor,
+  #viewer {
+    min-height: 440px;
+  }
+}

@@ -1,12 +1,14 @@
 import {
   Canvas,
   FabricImage,
-  Group,
-  Rect,
   Textbox,
   type FabricObject,
 } from 'fabric'
 import type { AddImageOptions, AddTextOptions } from '../core/types'
+import {
+  calculateContainmentOffset,
+  calculateContainmentScale,
+} from './objectBounds'
 
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
@@ -59,7 +61,7 @@ export class DesignEditor {
       selectionBorderColor: '#13717d',
     })
 
-    this.canvas.wrapperEl.classList.add('design-canvas')
+    this.canvas.wrapperEl.classList.add('customforge-design-canvas')
     this.host.dataset.renderState = 'pending'
     this.canvas.on('after:render', () => {
       this.markRenderState()
@@ -74,6 +76,17 @@ export class DesignEditor {
     this.canvas.on('selection:created', notifySelection)
     this.canvas.on('selection:updated', notifySelection)
     this.canvas.on('selection:cleared', notifySelection)
+
+    const constrainTarget = ({ target }: { target: FabricObject }) => {
+      this.constrainObjectToCanvas(target)
+    }
+    this.canvas.on('object:moving', constrainTarget)
+    this.canvas.on('object:scaling', constrainTarget)
+    this.canvas.on('object:rotating', constrainTarget)
+    this.canvas.on('object:skewing', constrainTarget)
+    this.canvas.on('object:resizing', constrainTarget)
+    this.canvas.on('object:modified', constrainTarget)
+    this.canvas.on('text:changed', constrainTarget)
 
     this.resizeObserver = new ResizeObserver(() => this.resizeDisplay())
     this.resizeObserver.observe(host)
@@ -151,6 +164,7 @@ export class DesignEditor {
    * 添加并选中一个可编辑文字对象
    *
    * 文字位置使用画布像素坐标，原点位于对象左上角
+   * 对象过大时会等比缩小，越界时会自动移回画布
    *
    * @param options 文字内容、位置和样式
    * @returns 创建的 Fabric Textbox
@@ -183,6 +197,7 @@ export class DesignEditor {
    * 加载、添加并选中一个图片对象
    *
    * 图片位置使用画布像素坐标，原点位于图片中心
+   * 对象过大时会等比缩小，越界时会自动移回画布
    * 远程图片必须提供正确的 CORS 响应头才能安全导出 PNG
    *
    * @param options 图片地址、中心位置和显示宽度
@@ -213,48 +228,6 @@ export class DesignEditor {
 
     this.addAndSelect(image)
     return image
-  }
-
-  /**
-   * 添加内置 OPC 徽标，仅用于无外部资源时展示纹理同步
-   *
-   * @returns 创建的 Fabric Group
-   */
-  addDemoBadge(): Group {
-    const plate = new Rect({
-      width: 188,
-      height: 188,
-      rx: 28,
-      ry: 28,
-      fill: '#e34f3f',
-      originX: 'center',
-      originY: 'center',
-    })
-    const label = new Textbox('OPC', {
-      width: 160,
-      fontFamily: 'Arial',
-      fontSize: 58,
-      fontWeight: 800,
-      fill: '#ffffff',
-      textAlign: 'center',
-      originX: 'center',
-      originY: 'center',
-    })
-    const badge = new Group([plate, label], {
-      left: this.width * 0.67,
-      top: this.height * 0.5,
-      originX: 'center',
-      originY: 'center',
-      angle: 6,
-      transparentCorners: false,
-      cornerColor: '#ffffff',
-      cornerStrokeColor: '#13717d',
-      borderColor: '#13717d',
-      cornerSize: 16,
-    })
-
-    this.addAndSelect(badge)
-    return badge
   }
 
   /**
@@ -305,9 +278,34 @@ export class DesignEditor {
 
   private addAndSelect(object: FabricObject): void {
     this.canvas.add(object)
+    this.constrainObjectToCanvas(object)
     this.canvas.setActiveObject(object)
     this.canvas.requestRenderAll()
     this.selectionListeners.forEach((listener) => listener(true))
+  }
+
+  private constrainObjectToCanvas(object: FabricObject): void {
+    object.setCoords()
+    let bounds = object.getBoundingRect()
+    const scale = calculateContainmentScale(bounds, this.width, this.height)
+
+    if (scale < 1) {
+      object.set({
+        scaleX: object.scaleX * scale,
+        scaleY: object.scaleY * scale,
+      })
+      object.setCoords()
+      bounds = object.getBoundingRect()
+    }
+
+    const offset = calculateContainmentOffset(bounds, this.width, this.height)
+    if (offset.x !== 0 || offset.y !== 0) {
+      object.set({
+        left: object.left + offset.x,
+        top: object.top + offset.y,
+      })
+      object.setCoords()
+    }
   }
 
   private resizeDisplay(): void {

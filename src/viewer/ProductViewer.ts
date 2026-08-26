@@ -58,6 +58,7 @@ export class ProductViewer {
     this.renderer.toneMappingExposure = 1.05
     this.renderer.shadowMap.enabled = true
     this.renderer.domElement.setAttribute('aria-label', 'Interactive 3D product preview')
+    this.renderer.domElement.classList.add('customforge-viewer-canvas')
     host.append(this.renderer.domElement)
     host.dataset.renderState = 'pending'
 
@@ -197,13 +198,6 @@ export class ProductViewer {
     bottom.rotation.x = Math.PI / 2
     bottom.position.y = -1.17
     root.add(bottom)
-
-    const handle = new Mesh(new TorusGeometry(0.72, 0.16, 24, 72), ceramic)
-    handle.rotation.y = Math.PI / 2
-    handle.position.set(-1.18, 0.05, 0)
-    handle.scale.y = 1.15
-    handle.castShadow = true
-    root.add(handle)
 
     return { root, surface }
   }

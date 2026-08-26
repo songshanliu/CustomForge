@@ -37,7 +37,7 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 
 工作台内置了一个程序生成的杯子，无需准备外部资源即可直接运行
 
-## 快速开始
+## 仓库开发
 
 环境要求：Node.js 22+ 和 pnpm 11+
 
@@ -49,6 +49,31 @@ pnpm dev
 打开 Vite 输出的地址
 
 内置演示的左侧是 UV 编辑区，右侧是实时三维预览
+
+## 本地 npm 制品
+
+当前版本已经配置本地 ESM Library 制品，但仍保持 `private: true`，不会发布到 npm Registry
+
+在仓库根目录构建、检查并生成本地包：
+
+```powershell
+pnpm pack:local
+```
+
+命令依次生成 JavaScript、TypeScript 声明、核心样式，检查 npm 文件清单，并创建：
+
+```text
+customforge-0.1.0-alpha.0.tgz
+```
+
+在独立 Vite TypeScript 项目中安装本地制品和 peer dependencies：
+
+```powershell
+pnpm add D:\project\CustomForge\CustomForge\customforge-0.1.0-alpha.0.tgz
+pnpm add fabric three
+```
+
+仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装
 
 ## 加载你的产品
 
@@ -72,7 +97,11 @@ UV 坐标应当保存在三维模型中
 
 ## 基本用法
 
-与框架无关的源码入口是 [`src/index.ts`](./src/index.ts)，可以挂载到任意两个 DOM 容器中：
+与框架无关的 Library 入口可以挂载到任意两个 DOM 容器中：
+
+CustomForge 仅支持浏览器环境，应在 DOM 挂载容器可用后创建实例
+
+编辑器和查看器必须使用两个不同的容器；页面卸载、组件卸载或不再使用实例时必须调用 `destroy()` 释放 Fabric、WebGL、观察器和事件资源
 
 ```html
 <div id="texture-editor"></div>
@@ -80,7 +109,8 @@ UV 坐标应当保存在三维模型中
 ```
 
 ```ts
-import { createCustomizer } from './src'
+import { createCustomizer } from 'customforge'
+import 'customforge/style.css'
 
 const customizer = await createCustomizer({
   editor: '#texture-editor',
@@ -109,18 +139,20 @@ await customizer.addImage({
   y: 240,
   width: 220,
 })
+
+window.addEventListener('beforeunload', () => customizer.destroy(), {
+  once: true,
+})
 ```
 
-本仓库目前尚未发布 npm 包或独立的库制品
-
-当前 Vite 构建生成的是演示应用，`src/index.ts` 是未来计划使用的库边界
+当前只提供本地 `.tgz` 验证，不从 npm Registry 安装
 
 ## 实例 API
 
 | 方法 | 说明 |
 | --- | --- |
-| `addText(options)` | 添加并选中一个可编辑的文字对象 |
-| `addImage(options)` | 加载、添加并选中一个图片对象 |
+| `addText(options)` | 添加并选中文字，自动约束在画布内 |
+| `addImage(options)` | 加载并选中图片，自动约束在画布内 |
 | `deleteSelected()` | 删除当前对象或选区 |
 | `loadProduct(product)` | 更换模型、基础纹理和目标 Mesh |
 | `exportTexture(filename?)` | 将合成纹理下载为 PNG |
@@ -129,6 +161,12 @@ await customizer.addImage({
 | `destroy()` | 释放 DOM 事件、Fabric 状态和 WebGL 资源 |
 
 当前事件包括 `ready`、`change`、`selectionchange`、`status` 和 `error`
+
+首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer` 以及从根入口导出的配置和事件类型
+
+`ProductCustomizer` 不公开 Fabric.js 编辑器和 Three.js 查看器实例，使用方只通过门面 API 操作定制器
+
+不支持从 `core`、`editor`、`viewer`、`bridge` 或其他未声明的包子路径导入模块
 
 ## 架构
 
@@ -176,8 +214,16 @@ src/
 |-- customizer/       公共实例编排
 |-- demo/             可运行的工作台界面
 |-- editor/           Fabric.js 设计画布
+|-- style.css         Library 公开样式入口
+|-- styles/           Library 核心样式
 |-- viewer/           Three.js 产品预览
 `-- index.ts          与框架无关的源码入口
+
+examples/
+`-- npm-consumer/     本地 .tgz 独立消费示例
+
+scripts/
+`-- verify-package.mjs  npm 文件和制品边界检查
 ```
 
 ## 开发命令
@@ -186,6 +232,9 @@ src/
 pnpm check       # TypeScript 项目检查
 pnpm test        # 单元测试
 pnpm build       # 类型检查和生产构建
+pnpm build:lib   # 构建 ESM、类型声明和核心样式
+pnpm verify:package # 检查 dist 和 npm 文件清单
+pnpm pack:local  # 构建、检查并生成本地 .tgz
 pnpm preview     # 预览生产构建
 ```
 
@@ -197,7 +246,9 @@ pnpm preview     # 预览生产构建
 
 当前里程碑有意聚焦于一张纹理和一个可定制 Mesh
 
-多定制面、撤销与重做、设计序列化、框架适配器和可分发制品暂不在当前范围内
+本地可分发 ESM 制品已经配置，正式 npm Registry 发布仍不在当前范围内
+
+多定制面、撤销与重做、设计序列化和框架适配器仍未实现
 
 ## 技术栈
 

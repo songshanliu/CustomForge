@@ -1,21 +1,62 @@
 {
   "name": "customforge",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.0",
+  "description": "A framework-agnostic browser library for live 2D-to-3D product customization",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:lib:js": "vite build --config vite.lib.config.ts",
+    "build:lib:types": "tsc -p tsconfig.lib.json",
+    "build:lib": "pnpm build:lib:js && pnpm build:lib:types",
     "check": "tsc -b --pretty false",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:package": "node scripts/verify-package.mjs",
+    "pack:local": "pnpm build:lib && pnpm verify:package && pnpm pack"
   },
-  "dependencies": {
+  "peerDependencies": {
     "fabric": "^7.4.0",
-    "lucide": "^1.34.0",
     "three": "^0.185.1"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/songshanliu/CustomForge.git"
+  },
+  "homepage": "https://github.com/songshanliu/CustomForge#readme",
+  "bugs": {
+    "url": "https://github.com/songshanliu/CustomForge/issues"
+  },
+  "keywords": [
+    "3d",
+    "fabricjs",
+    "product-customizer",
+    "threejs",
+    "web-to-print"
+  ],
   "packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c",
   "pnpm": {
     "ignoredBuiltDependencies": [
@@ -24,6 +65,9 @@
   },
   "devDependencies": {
     "@types/three": "^0.185.4",
+    "fabric": "^7.4.0",
+    "lucide": "^1.34.0",
+    "three": "^0.185.1",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

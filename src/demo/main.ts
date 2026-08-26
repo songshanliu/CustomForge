@@ -209,7 +209,14 @@ const customizer = await createCustomizer({
   viewer: '#viewer-host',
 })
 
-customizer.editor.addDemoBadge()
+customizer.addText({
+  text: 'CF',
+  x: 680,
+  y: 170,
+  width: 220,
+  fontSize: 132,
+  color: '#e34f3f',
+})
 customizer.addText({
   text: 'MAKE IT YOURS',
   x: 96,
@@ -218,9 +225,6 @@ customizer.addText({
   fontSize: 66,
   color: '#172126',
 })
-customizer.editor.canvas.discardActiveObject()
-customizer.editor.canvas.requestRenderAll()
-editorHost.dataset.objectCount = String(customizer.editor.objectCount)
 setStatus('Demo product ready')
 
 customizer.on('change', ({ objectCount }) => {
