@@ -305,7 +305,7 @@ packages:
     engines: {node: '>=18'}
 
   customforge@file:../../customforge-0.1.0-alpha.0.tgz:
-    resolution: {integrity: sha512-WxZFnhoAbgQpF/NOlcwmHfThWJU+t9+/4MJn6SpSbWk0oXUyBBH74WGTe65sRY8ApY0bzPZ5gnbi0SjGvIooFg==, tarball: file:../../customforge-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-fSQrWLQJJNmGKLH9bn5MS0w15bSaHbGQfa5po0IVyCRLgBdljZBUs5sk+pr8Auv8xd72WYagD2/QcZzU3I1caw==, tarball: file:../../customforge-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=22.12.0'}
     peerDependencies:

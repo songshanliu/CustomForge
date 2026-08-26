@@ -51,11 +51,18 @@ pnpm dev
 
 内置演示的左侧是 UV 编辑区，右侧是实时三维预览
 
-## 本地 npm 制品
+## npm Alpha 制品
 
-当前版本已经配置本地 ESM Library 制品，但仍保持 `private: true`，不会发布到 npm Registry
+CustomForge 已准备通过 `alpha` dist-tag 公开发布。不同 alpha 版本之间的 API 和 Design JSON Schema 可能发生变化
 
-在仓库根目录构建、检查并生成本地包：
+首次发布完成后，使用以下命令安装当前 alpha 及其 peer dependencies：
+
+```powershell
+pnpm add customforge@alpha
+pnpm add fabric three
+```
+
+发布前如需进行独立于仓库源码的验证，可在仓库根目录构建并生成本地包：
 
 ```powershell
 pnpm pack:local
@@ -67,7 +74,7 @@ pnpm pack:local
 customforge-0.1.0-alpha.0.tgz
 ```
 
-在独立 Vite TypeScript 项目中安装本地制品和 peer dependencies：
+在独立 Vite TypeScript 项目中安装该本地制品及其 peer dependencies：
 
 ```powershell
 pnpm add D:\project\CustomForge\CustomForge\customforge-0.1.0-alpha.0.tgz
@@ -146,7 +153,7 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 })
 ```
 
-当前只提供本地 `.tgz` 验证，不从 npm Registry 安装
+公开包与本地 `.tgz` 使用相同的根入口和样式入口；需要可重复安装时应固定具体 alpha 版本
 
 ## Design JSON
 
@@ -168,7 +175,7 @@ Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只�
 
 加载具有事务性：只有文档校验通过且全部引用图片成功加载后，当前设计才会被替换。Blob URL 图片会在添加时转换为 Data URL；远程图片仍保留 URL，恢复时必须继续满足浏览器 CORS 要求
 
-该 Schema 目前仍属于 alpha 契约，首次公开发布前可能调整
+该 Schema 目前仍属于 alpha 契约，后续 alpha 版本可能调整
 
 ## 实例 API
 
@@ -260,6 +267,7 @@ pnpm build       # 类型检查和生产构建
 pnpm build:lib   # 构建 ESM、类型声明和核心样式
 pnpm verify:package # 检查 dist 和 npm 文件清单
 pnpm pack:local  # 构建、检查并生成本地 .tgz
+pnpm release:check # 执行检查、测试、制品构建、校验和本地打包
 pnpm preview     # 预览生产构建
 ```
 
@@ -271,7 +279,7 @@ pnpm preview     # 预览生产构建
 
 当前里程碑有意聚焦于一张纹理和一个可定制 Mesh
 
-本地可分发 ESM 制品已经配置，正式 npm Registry 发布仍不在当前范围内
+在 API 和 Design JSON 契约进入更稳定阶段前，公开 npm 版本统一使用 `alpha` dist-tag
 
 多定制面、撤销与重做和框架适配器仍未实现。撤销与重做是下一阶段计划，并将复用 Design JSON 快照契约
 

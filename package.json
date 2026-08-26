@@ -3,7 +3,11 @@
   "version": "0.1.0-alpha.0",
   "description": "A framework-agnostic browser library for live 2D-to-3D product customization",
   "license": "Apache-2.0",
-  "private": true,
+  "private": false,
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
   "type": "module",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -33,7 +37,8 @@
     "test": "vitest run",
     "preview": "vite preview",
     "verify:package": "node scripts/verify-package.mjs",
-    "pack:local": "pnpm build:lib && pnpm verify:package && pnpm pack"
+    "pack:local": "pnpm build:lib && pnpm verify:package && pnpm pack",
+    "release:check": "pnpm check && pnpm test && pnpm pack:local"
   },
   "peerDependencies": {
     "fabric": "^7.4.0",

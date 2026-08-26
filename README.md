@@ -51,11 +51,18 @@ Open the URL printed by Vite
 
 The built-in demo appears with a UV workspace on the left and a live 3D preview on the right
 
-## Local npm Package
+## npm Alpha Package
 
-The repository now configures a local ESM Library package while keeping `private: true`, so it cannot be published to the npm Registry
+CustomForge is prepared for public alpha releases under the `alpha` dist-tag. The API and Design JSON Schema may change between alpha versions
 
-Build, verify, and create the local package from the repository root:
+After the first release is published, install the current alpha and its peer dependencies with:
+
+```powershell
+pnpm add customforge@alpha
+pnpm add fabric three
+```
+
+For repository-independent verification before publishing, build and create the local package from the repository root:
 
 ```powershell
 pnpm pack:local
@@ -67,7 +74,7 @@ The command builds JavaScript, TypeScript declarations, and core styles, checks 
 customforge-0.1.0-alpha.0.tgz
 ```
 
-Install the local package and its peer dependencies in an independent Vite TypeScript project:
+Install that local package and its peer dependencies in an independent Vite TypeScript project:
 
 ```powershell
 pnpm add D:\project\CustomForge\CustomForge\customforge-0.1.0-alpha.0.tgz
@@ -146,7 +153,7 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 })
 ```
 
-The current package is available only as a local `.tgz`, not from the npm Registry
+The public package uses the same root and style imports as the local `.tgz`; pin an exact alpha version when reproducible installs are required
 
 ## Design JSON
 
@@ -168,7 +175,7 @@ Design JSON intentionally excludes the product model, target mesh, and base text
 
 Loading is transactional: the current design remains unchanged unless the document validates and every referenced image loads successfully. Blob URL images are converted to Data URLs when added; remote image URLs remain URLs and must continue to satisfy browser CORS requirements when restored
 
-The Schema is still an alpha contract and may change before the first public release
+The Schema is still an alpha contract and may change in later alpha versions
 
 ## Instance API
 
@@ -260,6 +267,7 @@ pnpm build       # Type-check and production build
 pnpm build:lib   # Build ESM, declarations, and core styles
 pnpm verify:package # Check dist and the npm file list
 pnpm pack:local  # Build, verify, and create the local .tgz
+pnpm release:check # Run checks, tests, package build, verification, and local pack
 pnpm preview     # Preview the production build
 ```
 
@@ -271,7 +279,7 @@ The public API and design document format are not stable yet
 
 The current milestone intentionally focuses on one texture and one customizable mesh
 
-The local distributable ESM package is configured; publishing it to the npm Registry remains outside the present scope
+Public npm releases use the `alpha` dist-tag until the API and Design JSON contract are ready for a more stable channel
 
 Multi-surface products, undo/redo, and framework adapters are not implemented yet. Undo/redo is the next planned milestone and will build on the Design JSON snapshot contract
 

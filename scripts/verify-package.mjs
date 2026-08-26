@@ -42,8 +42,11 @@ function collectImportSpecifiers(source) {
 
 const packageJson = JSON.parse(await readProjectFile('package.json'))
 
+assert(packageJson.name === 'customforge', 'Unexpected package name')
 assert(packageJson.version === '0.1.0-alpha.0', 'Unexpected package version')
-assert(packageJson.private === true, 'Local package must remain private before release approval')
+assert(packageJson.private === false, 'Public alpha package must not be private')
+assert(packageJson.publishConfig?.access === 'public', 'Public package access is invalid')
+assert(packageJson.publishConfig?.tag === 'alpha', 'Public package tag must remain alpha')
 assert(packageJson.type === 'module', 'Package must use ESM')
 assert(packageJson.types === './dist/index.d.ts', 'Package types entry is invalid')
 assert(packageJson.exports?.['.']?.import === './dist/index.js', 'ESM export is invalid')
@@ -54,6 +57,12 @@ assert(packageJson.peerDependencies?.three, 'Three.js must be a peer dependency'
 assert(!packageJson.dependencies?.fabric, 'Fabric.js must not be a runtime dependency')
 assert(!packageJson.dependencies?.three, 'Three.js must not be a runtime dependency')
 assert(!packageJson.dependencies?.lucide, 'Demo icon package must not be a runtime dependency')
+
+const changelog = await readProjectFile('CHANGELOG.md')
+assert(
+  changelog.includes(`## [${packageJson.version}]`),
+  'Current package version is missing from CHANGELOG.md',
+)
 
 const approvedPackageFiles = [
   'dist',
