@@ -1,6 +1,6 @@
 <div align="center">
 
-# Open Product Customizer
+# CustomForge
 
 **让二维纹理画布实时呈现在三维产品上**
 
@@ -25,7 +25,7 @@
 
 ## 项目能力
 
-Open Product Customizer 将常见的二维设计界面与带 UV 的三维模型连接起来：
+CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来：
 
 - 在二维纹理画布上添加和编辑文字
 - 上传、移动、缩放和旋转图片
@@ -208,7 +208,7 @@ pnpm preview     # 预览生产构建
 
 ## 开源协议
 
-Open Product Customizer 依据 Apache License 2.0 开源
+CustomForge 依据 Apache License 2.0 开源
 
 完整协议内容请参阅 [LICENSE](./LICENSE)
 

@@ -21,10 +21,10 @@ if (!app) {
 app.innerHTML = `
   <main class="app-shell">
     <header class="topbar">
-      <div class="brand" aria-label="Open Product Customizer">
+      <div class="brand" aria-label="CustomForge">
         <span class="brand-mark"><i data-lucide="box"></i></span>
         <span class="brand-copy">
-          <strong>Open Product Customizer</strong>
+          <strong>CustomForge</strong>
           <span>Texture pipeline prototype</span>
         </span>
       </div>

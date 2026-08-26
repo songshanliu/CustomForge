@@ -1,6 +1,6 @@
 <div align="center">
 
-# Open Product Customizer
+# CustomForge
 
 **Turn a 2D texture canvas into a live 3D product preview**
 
@@ -25,7 +25,7 @@ A lightweight, framework-agnostic prototype for building browser-based product c
 
 ## What It Does
 
-Open Product Customizer connects a familiar 2D design surface to a UV-mapped 3D model:
+CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 
 - Add and edit text on a 2D texture canvas
 - Upload, move, scale, and rotate images
@@ -210,7 +210,7 @@ Multi-surface products, undo/redo, design serialization, framework adapters, and
 
 ## License
 
-Open Product Customizer is licensed under the Apache License 2.0
+CustomForge is licensed under the Apache License 2.0
 
 See [LICENSE](./LICENSE) for the full license terms
 
