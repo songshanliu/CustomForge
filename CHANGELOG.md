@@ -25,6 +25,8 @@ All notable changes to CustomForge will be documented in this file
 - Workbench now bundles the rounded Nunito Sans UI font with system font fallbacks
 - Solid accent buttons now consistently use the configured high-contrast text color
 - Layer selection and Dialog transitions now use subtle motion with reduced-motion support
+- Nunito Sans is emitted as a cacheable font asset instead of being inlined into the stylesheet
+- Package verification now parses actual ESM imports without matching examples inside bundled strings
 - The bundled CustomForge logo is now the default Workbench brand mark
 - Successful product changes reset design history while preserving current design objects
 

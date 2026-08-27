@@ -1,4 +1,5 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
+import { parseAst } from 'vite'
 
 const projectRoot = new URL('../', import.meta.url)
 
@@ -30,15 +31,55 @@ async function listFiles(directory, prefix = '') {
 }
 
 function collectImportSpecifiers(source) {
+  const program = parseAst(source)
   const specifiers = []
-  const pattern = /\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']/g
 
-  for (const match of source.matchAll(pattern)) {
-    specifiers.push(match[1] ?? match[2])
+  function visit(node) {
+    if (
+      ['ImportDeclaration', 'ExportNamedDeclaration', 'ExportAllDeclaration']
+        .includes(node.type) &&
+      typeof node.source?.value === 'string'
+    ) {
+      specifiers.push(node.source.value)
+    } else if (
+      node.type === 'ImportExpression' &&
+      typeof node.source?.value === 'string'
+    ) {
+      specifiers.push(node.source.value)
+    }
+
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        value.forEach((child) => {
+          if (child && typeof child.type === 'string') {
+            visit(child)
+          }
+        })
+      } else if (
+        value &&
+        typeof value === 'object' &&
+        typeof value.type === 'string'
+      ) {
+        visit(value)
+      }
+    }
   }
 
+  visit(program)
   return specifiers
 }
+
+const importParserFixture = collectImportSpecifiers(`
+  import value from 'runtime-package'
+  export { value as default } from 're-export-package'
+  const lazyModule = import('lazy-package')
+  const documentation = "import { icons } from 'lucide'"
+`)
+assert(
+  importParserFixture.join(',') ===
+    'runtime-package,re-export-package,lazy-package',
+  'ESM import parser matched documentation text or missed runtime imports',
+)
 
 const packageJson = JSON.parse(await readProjectFile('package.json'))
 
@@ -168,10 +209,12 @@ assert(coreStyle.includes('.customforge-viewer-canvas'), 'Viewer core style is m
 assert(coreStyle.includes('.customforge-workbench'), 'Workbench style is missing')
 assert(coreStyle.includes('@font-face'), 'Bundled font declaration is missing')
 assert(coreStyle.includes('Nunito Sans'), 'Bundled Workbench font is missing')
-assert(
-  distFiles.some((file) => /NunitoSans.*\.ttf$/i.test(file)),
-  'Bundled Nunito Sans font asset is missing',
-)
+assert(!coreStyle.includes('data:font/'), 'Workbench font must not be inlined in CSS')
+const nunitoFontFile = distFiles.find((file) => /NunitoSans.*\.ttf$/i.test(file))
+assert(nunitoFontFile, 'Bundled Nunito Sans font asset is missing')
+assert(coreStyle.includes(nunitoFontFile), 'Workbench CSS does not reference its font asset')
+const coreStyleStats = await stat(new URL('dist/style.css', projectRoot))
+assert(coreStyleStats.size < 250_000, 'Core stylesheet is unexpectedly large')
 assert(
   !/(^|})\s*(?:\*|:root|html|body|button|input)(?:\b|\s|,|\{)/m.test(coreStyle),
   'Core style contains an unsupported global selector',
@@ -224,7 +267,12 @@ assert(
 
 const expectedPackageFiles = [
   ...distFiles.map((file) => `dist/${file}`),
-  ...approvedPackageFiles.filter((file) => file !== 'dist'),
+  ...approvedPackageFiles.filter(
+    (file) => file !== 'dist' && file !== 'LICENSES',
+  ),
+  ...(await listFiles(new URL('LICENSES/', projectRoot))).map(
+    (file) => `LICENSES/${file}`,
+  ),
   'package.json',
 ].sort()
 const expectedPackageFileSet = new Set(expectedPackageFiles)
@@ -233,7 +281,7 @@ assert(nunitoLicense.includes('SIL OPEN FONT LICENSE Version 1.1'), 'Nunito Sans
 const requiredPackedFiles = [
   'CHANGELOG.md',
   'LICENSE',
-  'LICENSES',
+  'LICENSES/NunitoSans-OFL.txt',
   'README.md',
   'README.zh-CN.md',
   'dist/index.d.ts',

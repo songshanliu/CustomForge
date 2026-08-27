@@ -1,6 +1,7 @@
 @font-face {
   font-family: "Nunito Sans";
-  src: url("../workbench/assets/fonts/NunitoSans-Variable.ttf") format("truetype");
+  src: url("../workbench/assets/fonts/NunitoSans-Variable.ttf?no-inline")
+    format("truetype");
   font-display: swap;
   font-style: normal;
   font-weight: 200 1000;
