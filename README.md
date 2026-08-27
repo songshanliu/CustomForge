@@ -1,22 +1,27 @@
 <div align="center">
 
-# CustomForge
+<img src="./src/workbench/assets/CustomForgeLogo.png" alt="CustomForge Logo" width="136">
 
-**Turn a 2D texture canvas into a live 3D product preview**
+<h1>CustomForge</h1>
 
-A lightweight, framework-agnostic prototype for building browser-based product customization experiences with Fabric.js and Three.js
+<hr>
+
+<p><strong>Turn a 2D texture canvas into a live 3D product preview</strong></p>
+
+<p>A lightweight, framework-agnostic toolkit for building browser-based product customization experiences with Fabric.js and Three.js</p>
 
 <p>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white">
-  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white">
-  <img alt="Three.js" src="https://img.shields.io/badge/Three.js-r185-111111?logo=threedotjs&logoColor=white">
-  <img alt="Fabric.js" src="https://img.shields.io/badge/Fabric.js-7-DB4D6D">
-  <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-2F6F9F">
+  <strong>English</strong>
+  <span> · </span>
+  <a href="./README.zh-CN.md">简体中文</a>
 </p>
 
 <p>
-  <strong>English</strong> |
-  <a href="./README.zh-CN.md">中文简体</a>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-2563EB?style=flat-square&logo=typescript&logoColor=white&labelColor=1F2937">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-7C3AED?style=flat-square&logo=vite&logoColor=white&labelColor=1F2937">
+  <img alt="Three.js" src="https://img.shields.io/badge/Three.js-r185-27272A?style=flat-square&logo=threedotjs&logoColor=white&labelColor=1F2937">
+  <img alt="Fabric.js" src="https://img.shields.io/badge/Fabric.js-7-BE185D?style=flat-square&labelColor=1F2937">
+  <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-0F766E?style=flat-square&logo=apache&logoColor=white&labelColor=1F2937">
 </p>
 
 </div>
