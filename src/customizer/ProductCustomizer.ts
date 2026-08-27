@@ -32,6 +32,7 @@ export class ProductCustomizer {
   private product: ReturnType<typeof normalizeProductConfiguration>
   private readonly stopSelectionListener: () => void
   private readonly stopRenderListener: () => void
+  private readonly stopHistoryListener: () => void
   private destroyed = false
 
   private constructor(options: CustomizerOptions) {
@@ -42,10 +43,16 @@ export class ProductCustomizer {
       throw new Error('Editor and viewer must use different elements')
     }
 
+    const historyLimit = options.historyLimit ?? 50
+    if (!Number.isInteger(historyLimit) || historyLimit < 1) {
+      throw new RangeError('historyLimit must be a positive integer')
+    }
+
     this.product = normalizeProductConfiguration(options.product)
     this.editor = new DesignEditor(editorHost, {
       width: options.editorWidth ?? 1024,
       height: options.editorHeight ?? 512,
+      historyLimit,
     })
     this.viewer = new ProductViewer(viewerHost)
     this.textureBridge = new TextureBridge(
@@ -54,11 +61,17 @@ export class ProductCustomizer {
       this.product.textureFlipY,
     )
 
-    this.stopSelectionListener = this.editor.onSelectionChange((hasSelection) => {
-      this.emit('selectionchange', { hasSelection })
+    this.stopSelectionListener = this.editor.onSelectionChange((objectIds) => {
+      this.emit('selectionchange', {
+        hasSelection: objectIds.length > 0,
+        objectIds,
+      })
     })
     this.stopRenderListener = this.editor.onRender(() => {
       this.emit('change', { objectCount: this.editor.objectCount })
+    })
+    this.stopHistoryListener = this.editor.onHistoryChange((state) => {
+      this.emit('historychange', state)
     })
   }
 
@@ -112,6 +125,7 @@ export class ProductCustomizer {
   /**
    * 加载图片并将其添加到二维画布
    *
+   * role 为 background 时会替换已有设计背景并默认锁定在最底层
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 图片地址、位置和显示宽度
@@ -124,6 +138,84 @@ export class ProductCustomizer {
       this.reportError(error)
       throw error
     }
+  }
+
+  /**
+   * 返回当前可编辑对象的独立快照
+   *
+   * @returns 按画布层级从后到前排列的 Design JSON 对象
+   */
+  getObjects(): DesignDocument['objects'] {
+    return this.editor.getObjects()
+  }
+
+  /** 当前选中对象的 ID，按画布层级从后到前排列 */
+  getSelectedObjectIds(): string[] {
+    return this.editor.getSelectedObjectIds()
+  }
+
+  /**
+   * 按稳定 ID 选中一个可见对象
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到并选中了对象
+   */
+  selectObject(id: string): boolean {
+    return this.editor.selectObject(id)
+  }
+
+  /**
+   * 按稳定 ID 删除一个对象
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到并删除了对象
+   */
+  removeObject(id: string): boolean {
+    return this.editor.removeObject(id)
+  }
+
+  /**
+   * 将对象移动到指定图层索引
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param index 从 0 开始的索引，0 表示最底层
+   * @returns 对象层级是否发生变化
+   */
+  moveObject(id: string, index: number): boolean {
+    return this.editor.moveObject(id, index)
+  }
+
+  /**
+   * 修改对象在图层面板中的名称
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param name 非空图层名称
+   * @returns 是否找到并更新了对象
+   */
+  renameObject(id: string, name: string): boolean {
+    return this.editor.renameObject(id, name)
+  }
+
+  /**
+   * 修改对象是否参与渲染
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param visible 是否参与二维画布、三维纹理和 PNG 渲染
+   * @returns 是否找到并更新了对象
+   */
+  setObjectVisibility(id: string, visible: boolean): boolean {
+    return this.editor.setObjectVisibility(id, visible)
+  }
+
+  /**
+   * 修改对象是否允许通过画布控件变换
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param locked 是否锁定移动、缩放、旋转、倾斜和文字编辑
+   * @returns 是否找到并更新了对象
+   */
+  setObjectLocked(id: string, locked: boolean): boolean {
+    return this.editor.setObjectLocked(id, locked)
   }
 
   /**
@@ -168,6 +260,59 @@ export class ProductCustomizer {
     }
   }
 
+  /** 当前是否存在可以撤销的设计快照 */
+  canUndo(): boolean {
+    return this.editor.canUndo
+  }
+
+  /** 当前是否存在可以重做的设计快照 */
+  canRedo(): boolean {
+    return this.editor.canRedo
+  }
+
+  /**
+   * 恢复上一个设计快照
+   *
+   * @returns 是否成功恢复了一个历史步骤
+   * @throws 历史中的图片无法恢复时抛出错误
+   */
+  async undo(): Promise<boolean> {
+    try {
+      const changed = await this.editor.undo()
+      if (changed) {
+        this.emit('status', { message: 'Undo complete' })
+      }
+      return changed
+    } catch (error) {
+      this.reportError(error)
+      throw error
+    }
+  }
+
+  /**
+   * 恢复下一个设计快照
+   *
+   * @returns 是否成功恢复了一个历史步骤
+   * @throws 历史中的图片无法恢复时抛出错误
+   */
+  async redo(): Promise<boolean> {
+    try {
+      const changed = await this.editor.redo()
+      if (changed) {
+        this.emit('status', { message: 'Redo complete' })
+      }
+      return changed
+    } catch (error) {
+      this.reportError(error)
+      throw error
+    }
+  }
+
+  /** 以当前设计为起点清空撤销与重做历史 */
+  clearHistory(): void {
+    this.editor.clearHistory()
+  }
+
   /**
    * 将当前二维设计合成为 PNG 并触发浏览器下载
    *
@@ -186,6 +331,8 @@ export class ProductCustomizer {
   /**
    * 更换模型、基础纹理和接收纹理的目标 Mesh
    *
+   * 成功后保留当前设计对象，并将当前设计设为新的历史起点
+   *
    * @param product 新的产品配置
    * @throws 模型或纹理加载失败、目标 Mesh 不存在时抛出错误
    */
@@ -198,6 +345,7 @@ export class ProductCustomizer {
       await this.editor.setBackgroundTexture(nextProduct.textureUrl)
       this.textureBridge.setFlipY(nextProduct.textureFlipY)
       this.product = nextProduct
+      this.editor.clearHistory()
       this.emit('ready', { product: this.product })
       this.emit('status', { message: nextProduct.modelUrl ? 'Remote product ready' : 'Demo product ready' })
     } catch (error) {
@@ -219,6 +367,7 @@ export class ProductCustomizer {
     this.destroyed = true
     this.stopSelectionListener?.()
     this.stopRenderListener?.()
+    this.stopHistoryListener?.()
     this.textureBridge.destroy()
     this.editor.destroy()
     this.viewer.destroy()

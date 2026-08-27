@@ -5,9 +5,12 @@ export default defineConfig({
     copyPublicDir: false,
     emptyOutDir: true,
     lib: {
-      entry: 'src/index.ts',
+      entry: {
+        index: 'src/index.ts',
+        workbench: 'src/workbench/index.ts',
+      },
       formats: ['es'],
-      fileName: 'index',
+      fileName: (_format, entryName) => `${entryName}.js`,
       cssFileName: 'style',
     },
     minify: false,

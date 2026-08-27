@@ -39,9 +39,12 @@ export type {
   CustomizerOptions,
   DesignCanvas,
   DesignDocument,
+  DesignImageRole,
   DesignObject,
+  DesignObjectState,
   DesignObjectTransform,
   ImageDesignObject,
+  HistoryState,
   ProductConfiguration,
   TextDesignObject,
 } from './core/types'

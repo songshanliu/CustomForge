@@ -35,6 +35,10 @@ CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 - Rotate and zoom the 3D preview with OrbitControls
 - Export the composed texture as a PNG
 - Save and restore editable objects through versioned Design JSON
+- Organize objects through names, visibility, locking, and layer order
+- Undo and redo design changes through snapshot history
+- Use configurable typography, background, and decorative asset Dialogs
+- Adapt the default Workbench with branding, labels, theme tokens, and icons
 
 The included workbench starts with a procedural cup, so the project works immediately without external assets
 
@@ -85,23 +89,23 @@ For repository-independent verification before publishing, build and create the 
 pnpm pack:local
 ```
 
-The command builds JavaScript, TypeScript declarations, and core styles, checks the npm file list, and creates:
+The command builds JavaScript, TypeScript declarations, and public styles, checks the npm file list, and creates:
 
 ```text
-customforge-0.1.0-alpha.1.tgz
+customforge-0.1.0-alpha.2.tgz
 ```
 
 Install that local package in an independent Vite TypeScript project:
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.1.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.2.tgz
 ```
 
 The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace
 
 ## Load Your Product
 
-Choose **Load remote** in the demo and provide:
+Choose **Load product** in the demo and provide:
 
 | Field | Purpose |
 | --- | --- |
@@ -171,6 +175,126 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 The public package uses the same root and style imports as the local `.tgz`; pin an exact alpha version when reproducible installs are required
 
+## Ready-made Workbench
+
+Use the optional Workbench entry when a complete default interface is preferable to building controls from scratch
+
+The host element must have an explicit height so the design surface, layers, and 3D preview can measure their available space
+
+```html
+<div id="customforge-workbench" style="height: 720px"></div>
+```
+
+```ts
+import { createWorkbench } from 'customforge/workbench'
+import 'customforge/style.css'
+
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    surfaceMesh: 'PrintArea',
+  },
+  features: {
+    presetBackgrounds: true,
+    presetElements: true,
+  },
+  layout: {
+    header: true,
+    layers: true,
+  },
+  branding: {
+    logoUrl: '/brand/logo.png',
+    title: 'Studio',
+    subtitle: 'Product personalization',
+  },
+  labels: {
+    addText: 'Typography',
+    addImage: 'Artwork',
+  },
+  theme: {
+    accent: '#0057b8',
+    accentHover: '#003f87',
+    accentContrast: '#ffffff',
+  },
+  assets: {
+    backgrounds: [
+      { id: 'floral', name: 'Floral', url: '/presets/floral.png' },
+    ],
+    elements: [
+      { id: 'flower', name: 'Flower', url: '/presets/flower.png' },
+    ],
+  },
+})
+```
+
+The bundled CustomForge logo is used by default and can be replaced or hidden through `branding`
+
+`labels` replaces visible Workbench copy, `theme` maps to scoped CSS variables, and `icons` can disable built-in icons or replace individual semantic icons with image URLs
+
+The default UI font stack prefers the rounded `Nunito Sans` family and falls back to system sans-serif fonts
+
+CustomForge bundles the font asset and does not fetch third-party font services at runtime
+
+Text and image commands open focused Dialogs instead of immediately mutating the canvas
+
+- The text Dialog includes an input, color control, and replaceable typography presets
+- The image Dialog includes local upload, background presets, and decorative element presets
+- A design background replaces the previous design background, fills the canvas, starts locked at the bottom layer, and persists in Design JSON
+
+Feature and layout switches can also be changed after initialization
+
+```ts
+workbench.setFeature('addText', true)
+workbench.setLayout('header', true)
+```
+
+| Feature switch | Controls |
+| --- | --- |
+| `addText`, `addImage`, `deleteSelection` | Object Dialogs and deletion |
+| `undoRedo` | Undo and redo buttons plus Workbench keyboard shortcuts |
+| `saveDesign`, `loadDesign` | Design JSON actions |
+| `loadRemoteProduct`, `exportTexture`, `resetView` | Product and output actions |
+| `reorderObjects`, `toggleObjectVisibility`, `lockObjects`, `renameObjects` | Layer management |
+| `presetBackgrounds`, `presetElements` | Image Dialog preset tabs |
+
+| Layout switch | Region |
+| --- | --- |
+| `header` | Brand and global product actions |
+| `editorHeader`, `viewerHeader` | Workspace panel headings |
+| `toolbar` | Design tool controls |
+| `layers` | Object layer panel |
+| `status` | Runtime status and object count |
+
+All feature and layout values default to `true`
+
+Feature switches only control the built-in Workbench controls and do not remove methods from `workbench.customizer`
+
+Theme values are intended for coherent product-level styling rather than per-button color configuration
+
+```ts
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  icons: {
+    enabled: true,
+    sources: {
+      addText: '/icons/typography.svg',
+      exportTexture: null,
+    },
+  },
+  textPresets: [
+    {
+      id: 'brand-display',
+      name: 'Brand display',
+      fontFamily: 'Arial',
+      fontSize: 72,
+      width: 460,
+      color: '#17191c',
+    },
+  ],
+})
+```
+
 ## Design JSON
 
 `saveDesign()` returns a Library-owned, JSON-safe document instead of exposing Fabric.js serialization. `loadDesign()` validates unknown input and restores the editable object stack asynchronously:
@@ -185,32 +309,70 @@ if (savedDesign) {
 }
 ```
 
-The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs and center-based transforms
+The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs, names, visibility, locking, image roles, and center-based transforms
 
 Design JSON intentionally excludes the product model, target mesh, and base texture. A document can only be loaded into an editor with exactly the same logical width and height
+
+An image with `role: 'background'` is a design object rather than the product base texture. Only one is allowed, it must be the first object, and older version 1 documents without `role` continue to load as ordinary image elements
 
 Loading is transactional: the current design remains unchanged unless the document validates and every referenced image loads successfully. Blob URL images are converted to Data URLs when added; remote image URLs remain URLs and must continue to satisfy browser CORS requirements when restored
 
 The Schema is still an alpha contract and may change in later alpha versions
+
+## Undo and Redo
+
+History is enabled in both the headless core and Workbench and defaults to 50 undo steps
+
+Set `historyLimit` in `createCustomizer` or `createWorkbench` options to change the retained undo depth
+
+```ts
+if (customizer.canUndo()) {
+  await customizer.undo()
+}
+
+await customizer.redo()
+customizer.clearHistory()
+
+const stop = customizer.on('historychange', ({ canUndo, canRedo }) => {
+  console.log({ canUndo, canRedo })
+})
+```
+
+History covers object creation, deletion, canvas transforms, text edits, layer order, names, visibility, locking, and Design JSON loading
+
+Workbench also supports `Ctrl` or `Cmd` + `Z`, `Ctrl` or `Cmd` + `Shift` + `Z`, and `Ctrl` + `Y` while focus is outside form fields
+
+Successful product replacement keeps the current design but starts a new history baseline
 
 ## Instance API
 
 | Method | Description |
 | --- | --- |
 | `addText(options)` | Add and select editable text, constrained to the canvas |
-| `addImage(options)` | Load and select an image, constrained to the canvas |
+| `addImage(options)` | Load and select an element or replace the design background |
+| `getObjects()` | Return the current objects in back-to-front layer order |
+| `getSelectedObjectIds()` | Return stable IDs for the current selection |
+| `selectObject(id)` | Select a visible object by stable ID |
+| `removeObject(id)` | Remove an object by stable ID |
+| `moveObject(id, index)` | Move an object to a zero-based layer index |
+| `renameObject(id, name)` | Change the object name shown in layer tools |
+| `setObjectVisibility(id, visible)` | Include or exclude an object from rendering |
+| `setObjectLocked(id, locked)` | Lock or unlock canvas transformations |
 | `deleteSelected()` | Remove the active object or selection |
 | `saveDesign()` | Return the current versioned Design JSON document |
 | `loadDesign(value)` | Validate and transactionally restore Design JSON |
+| `canUndo()`, `canRedo()` | Query the current history directions |
+| `undo()`, `redo()` | Restore the previous or next design snapshot |
+| `clearHistory()` | Make the current design the new history baseline |
 | `loadProduct(product)` | Replace the model, base texture, and target mesh |
 | `exportTexture(filename?)` | Download the composed texture as PNG |
 | `resetView()` | Restore the default 3D camera position |
 | `on(event, listener)` | Subscribe to instance events; returns an unsubscribe function |
 | `destroy()` | Release DOM events, Fabric state, and WebGL resources |
 
-Available events are `ready`, `change`, `selectionchange`, `status`, and `error`
+Available events are `ready`, `change`, `selectionchange`, `historychange`, `status`, and `error`
 
-The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, and the configuration, event, and Design JSON types exported from the package root
+The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, the `customforge/workbench` entry, and the configuration, event, Workbench, and Design JSON types exported from declared package entries
 
 `ProductCustomizer` does not expose its Fabric.js editor or Three.js viewer instances; consumers interact through the facade API
 
@@ -239,7 +401,7 @@ ProductCustomizer
 
 `ProductCustomizer` coordinates the modules while keeping Fabric.js and Three.js details behind a small instance API
 
-The demo UI uses Vanilla TypeScript; the core does not depend on Vue, React, or another UI framework
+The optional Workbench and demo use Vanilla TypeScript; the core does not depend on Vue, React, or another UI framework
 
 ## Model Contract
 
@@ -261,10 +423,11 @@ src/
 |-- core/             Public types, configuration, and DOM helpers
 |-- customizer/       Public instance orchestration
 |-- demo/             Runnable workbench UI
-|-- editor/           Fabric.js design surface
+|-- editor/           Fabric.js design surface and snapshot history
 |-- style.css         Public Library style entry
-|-- styles/           Library core styles
+|-- styles/           Core and Workbench styles
 |-- viewer/           Three.js product preview
+|-- workbench/        Configurable UI, Dialogs, icons, and preset assets
 `-- index.ts          Framework-independent source entry
 
 examples/
@@ -280,7 +443,7 @@ scripts/
 pnpm check       # TypeScript project check
 pnpm test        # Unit tests
 pnpm build       # Type-check and production build
-pnpm build:lib   # Build ESM, declarations, and core styles
+pnpm build:lib   # Build core and Workbench ESM, declarations, and styles
 pnpm verify:package # Check dist and the npm file list
 pnpm pack:local  # Build, verify, and create the local .tgz
 pnpm release:check # Run checks, tests, package build, verification, and local pack
@@ -297,12 +460,13 @@ The current milestone intentionally focuses on one texture and one customizable 
 
 Public npm releases use the `alpha` dist-tag until the API and Design JSON contract are ready for a more stable channel
 
-Multi-surface products, undo/redo, and framework adapters are not implemented yet. Undo/redo is the next planned milestone and will build on the Design JSON snapshot contract
+Multi-surface products, advanced alignment tools, and framework adapters are not implemented yet
 
 ## Technology
 
 - [Fabric.js](https://fabricjs.com/) for the 2D editing surface
 - [Three.js](https://threejs.org/) for model loading and real-time 3D rendering
+- [Lucide](https://lucide.dev/) for bundled Workbench controls
 - [Vite](https://vite.dev/) for development and application builds
 - [TypeScript](https://www.typescriptlang.org/) with strict checking enabled
 
@@ -313,3 +477,5 @@ CustomForge is licensed under the Apache License 2.0
 See [LICENSE](./LICENSE) for the full license terms
 
 Third-party dependencies and assets remain subject to their respective licenses
+
+The bundled Nunito Sans font is licensed under the SIL Open Font License 1.1, available in [NunitoSans-OFL.txt](./LICENSES/NunitoSans-OFL.txt)

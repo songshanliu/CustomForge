@@ -4,6 +4,30 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.1.0-alpha.2] - 2026-08-27
+
+### Added
+
+- Optional configurable Workbench UI exported from `customforge/workbench`
+- Public object querying, selection, removal, naming, visibility, locking, and layer ordering APIs
+- Object names, visibility, and locking state in backward-compatible Design JSON version 1 documents
+- Undo and redo history with keyboard shortcuts and public history state APIs
+- Text composition Dialog with replaceable typography presets
+- Image Dialog with upload, configurable background, and decorative element catalogs
+- Custom branding, labels, theme tokens, icon visibility, and semantic icon overrides
+- Design background images that persist in Design JSON and remain locked at the bottom layer
+
+### Changed
+
+- Built-in demo now consumes the same public Workbench available to package users
+- Workbench presentation uses a quieter responsive studio layout with clearer control hierarchy
+- Default controls now use softer neutral surfaces, light selection states, and restrained 7px radii
+- Workbench now bundles the rounded Nunito Sans UI font with system font fallbacks
+- Solid accent buttons now consistently use the configured high-contrast text color
+- Layer selection and Dialog transitions now use subtle motion with reduced-motion support
+- The bundled CustomForge logo is now the default Workbench brand mark
+- Successful product changes reset design history while preserving current design objects
+
 ## [0.1.0-alpha.1] - 2026-08-27
 
 ### Changed

@@ -35,6 +35,10 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 - 使用 OrbitControls 旋转和缩放三维预览
 - 将合成后的纹理导出为 PNG
 - 通过版本化 Design JSON 保存和恢复可编辑对象
+- 通过名称、显隐、锁定和顺序管理对象图层
+- 使用设计快照撤销和重做修改
+- 使用可配置的文字、背景和装饰素材 Dialog
+- 通过品牌、文案、主题变量和图标适配默认 Workbench
 
 工作台内置了一个程序生成的杯子，无需准备外部资源即可直接运行
 
@@ -83,23 +87,23 @@ pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略，CustomForge
 pnpm pack:local
 ```
 
-命令依次生成 JavaScript、TypeScript 声明、核心样式，检查 npm 文件清单，并创建：
+命令依次生成 JavaScript、TypeScript 声明和公开样式，检查 npm 文件清单，并创建：
 
 ```text
-customforge-0.1.0-alpha.1.tgz
+customforge-0.1.0-alpha.2.tgz
 ```
 
 在独立 Vite TypeScript 项目中安装该本地制品：
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.1.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.2.tgz
 ```
 
 仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装
 
 ## 加载你的产品
 
-在演示页面中选择 **Load remote**，然后填写：
+在演示页面中选择 **Load product**，然后填写：
 
 | 字段 | 用途 |
 | --- | --- |
@@ -169,6 +173,126 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 公开包与本地 `.tgz` 使用相同的根入口和样式入口；需要可重复安装时应固定具体 alpha 版本
 
+## 开箱即用的 Workbench
+
+不希望从零编写控制界面时，可以使用可选的 Workbench 入口
+
+挂载元素必须设置明确高度，设计画布、图层面板和三维区域才能正确计算可用空间
+
+```html
+<div id="customforge-workbench" style="height: 720px"></div>
+```
+
+```ts
+import { createWorkbench } from 'customforge/workbench'
+import 'customforge/style.css'
+
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    surfaceMesh: 'PrintArea',
+  },
+  features: {
+    presetBackgrounds: true,
+    presetElements: true,
+  },
+  layout: {
+    header: true,
+    layers: true,
+  },
+  branding: {
+    logoUrl: '/brand/logo.png',
+    title: '定制工作室',
+    subtitle: '产品个性化设计',
+  },
+  labels: {
+    addText: '文字设计',
+    addImage: '图片素材',
+  },
+  theme: {
+    accent: '#0057b8',
+    accentHover: '#003f87',
+    accentContrast: '#ffffff',
+  },
+  assets: {
+    backgrounds: [
+      { id: 'floral', name: '花卉背景', url: '/presets/floral.png' },
+    ],
+    elements: [
+      { id: 'flower', name: '小花', url: '/presets/flower.png' },
+    ],
+  },
+})
+```
+
+默认使用包内的 CustomForge Logo，可以通过 `branding` 替换或隐藏
+
+`labels` 用于替换 Workbench 可见文案，`theme` 映射到限定作用域的 CSS 变量，`icons` 可以关闭内置图标或用图片地址替换指定语义图标
+
+默认界面字体栈优先使用圆润的 `Nunito Sans`，不可用时回退到系统无衬线字体
+
+CustomForge 会随制品提供该字体资源，不会在运行时请求第三方字体服务
+
+文字和图片命令现在会打开专用 Dialog，不会在点击工具栏按钮后立即修改画布
+
+- 文字 Dialog 提供文本输入、颜色选择和可替换的排版预设
+- 图片 Dialog 提供本地上传、预设背景和装饰元素
+- 设计背景会替换已有设计背景、铺满画布、默认锁定在最底层并保存到 Design JSON
+
+功能和布局开关也可以在初始化后动态调整
+
+```ts
+workbench.setFeature('addText', true)
+workbench.setLayout('header', true)
+```
+
+| 功能开关 | 控制内容 |
+| --- | --- |
+| `addText`、`addImage`、`deleteSelection` | 对象 Dialog 和删除操作 |
+| `undoRedo` | 撤销、重做按钮和 Workbench 键盘快捷键 |
+| `saveDesign`、`loadDesign` | Design JSON 操作 |
+| `loadRemoteProduct`、`exportTexture`、`resetView` | 产品和输出操作 |
+| `reorderObjects`、`toggleObjectVisibility`、`lockObjects`、`renameObjects` | 图层管理 |
+| `presetBackgrounds`、`presetElements` | 图片 Dialog 中的预设素材页签 |
+
+| 布局开关 | 控制区域 |
+| --- | --- |
+| `header` | 品牌和全局产品操作 |
+| `editorHeader`、`viewerHeader` | 工作区面板标题栏 |
+| `toolbar` | 设计工具栏 |
+| `layers` | 对象图层面板 |
+| `status` | 运行状态和对象数量 |
+
+所有功能和布局开关默认均为 `true`
+
+功能开关只控制 Workbench 自带控件，不会移除 `workbench.customizer` 上的底层方法
+
+主题配置用于统一的产品级视觉调整，不提供难以维护的逐按钮颜色配置
+
+```ts
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  icons: {
+    enabled: true,
+    sources: {
+      addText: '/icons/typography.svg',
+      exportTexture: null,
+    },
+  },
+  textPresets: [
+    {
+      id: 'brand-display',
+      name: '品牌展示',
+      fontFamily: 'Arial',
+      fontSize: 72,
+      width: 460,
+      color: '#17191c',
+    },
+  ],
+})
+```
+
 ## Design JSON
 
 `saveDesign()` 返回由 Library 自身定义、可安全写入 JSON 的文档，不暴露 Fabric.js 序列化格式。`loadDesign()` 校验未知输入，并异步恢复可编辑对象栈：
@@ -183,32 +307,70 @@ if (savedDesign) {
 }
 ```
 
-当前 Schema 版本为 `1`。文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID 与基于中心点的变换
+当前 Schema 版本为 `1`，文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID、名称、显隐、锁定状态、图片用途与基于中心点的变换
 
 Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只能加载到逻辑宽高完全相同的编辑器中
+
+带有 `role: 'background'` 的图片是设计对象，不是产品基础纹理，只允许存在一个并且必须位于对象数组首位，旧版 v1 文档缺少 `role` 时继续按普通图片元素加载
 
 加载具有事务性：只有文档校验通过且全部引用图片成功加载后，当前设计才会被替换。Blob URL 图片会在添加时转换为 Data URL；远程图片仍保留 URL，恢复时必须继续满足浏览器 CORS 要求
 
 该 Schema 目前仍属于 alpha 契约，后续 alpha 版本可能调整
+
+## 撤销与重做
+
+无界面核心和 Workbench 都支持历史记录，默认保留 50 个撤销步骤
+
+可以在 `createCustomizer` 或 `createWorkbench` 配置中通过 `historyLimit` 调整保留的撤销深度
+
+```ts
+if (customizer.canUndo()) {
+  await customizer.undo()
+}
+
+await customizer.redo()
+customizer.clearHistory()
+
+const stop = customizer.on('historychange', ({ canUndo, canRedo }) => {
+  console.log({ canUndo, canRedo })
+})
+```
+
+历史记录覆盖对象添加、删除、画布变换、文字编辑、图层排序、名称、显隐、锁定和 Design JSON 加载
+
+Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl` 或 `Cmd` + `Shift` + `Z` 和 `Ctrl` + `Y`
+
+成功更换产品后会保留当前设计对象，但以当前设计重新开始历史记录
 
 ## 实例 API
 
 | 方法 | 说明 |
 | --- | --- |
 | `addText(options)` | 添加并选中文字，自动约束在画布内 |
-| `addImage(options)` | 加载并选中图片，自动约束在画布内 |
+| `addImage(options)` | 加载普通图片元素或替换设计背景 |
+| `getObjects()` | 按从后到前的图层顺序返回当前对象 |
+| `getSelectedObjectIds()` | 返回当前选区中的稳定对象 ID |
+| `selectObject(id)` | 根据稳定 ID 选中可见对象 |
+| `removeObject(id)` | 根据稳定 ID 删除对象 |
+| `moveObject(id, index)` | 将对象移动到从 0 开始的图层索引 |
+| `renameObject(id, name)` | 修改图层工具中显示的对象名称 |
+| `setObjectVisibility(id, visible)` | 设置对象是否参与渲染 |
+| `setObjectLocked(id, locked)` | 锁定或解锁画布变换 |
 | `deleteSelected()` | 删除当前对象或选区 |
 | `saveDesign()` | 返回当前版本化 Design JSON 文档 |
 | `loadDesign(value)` | 校验并以事务方式恢复 Design JSON |
+| `canUndo()`、`canRedo()` | 查询当前可用的历史方向 |
+| `undo()`、`redo()` | 恢复前一个或后一个设计快照 |
+| `clearHistory()` | 将当前设计设为新的历史起点 |
 | `loadProduct(product)` | 更换模型、基础纹理和目标 Mesh |
 | `exportTexture(filename?)` | 将合成纹理下载为 PNG |
 | `resetView()` | 恢复默认三维相机位置 |
 | `on(event, listener)` | 订阅实例事件，并返回取消订阅函数 |
 | `destroy()` | 释放 DOM 事件、Fabric 状态和 WebGL 资源 |
 
-当前事件包括 `ready`、`change`、`selectionchange`、`status` 和 `error`
+当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`status` 和 `error`
 
-首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer` 以及从根入口导出的配置、事件和 Design JSON 类型
+首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer`、`customforge/workbench` 入口，以及从已声明入口导出的配置、事件、Workbench 和 Design JSON 类型
 
 `ProductCustomizer` 不公开 Fabric.js 编辑器和 Three.js 查看器实例，使用方只通过门面 API 操作定制器
 
@@ -237,7 +399,7 @@ ProductCustomizer
 
 `ProductCustomizer` 负责协调各模块，并将 Fabric.js 和 Three.js 的实现细节隐藏在小型实例 API 后面
 
-演示界面使用原生 TypeScript，核心不依赖 Vue、React 或其他 UI 框架
+可选 Workbench 和演示界面使用原生 TypeScript，核心不依赖 Vue、React 或其他 UI 框架
 
 ## 模型约定
 
@@ -259,10 +421,11 @@ src/
 |-- core/             公共类型、配置和 DOM 工具
 |-- customizer/       公共实例编排
 |-- demo/             可运行的工作台界面
-|-- editor/           Fabric.js 设计画布
+|-- editor/           Fabric.js 设计画布和快照历史
 |-- style.css         Library 公开样式入口
-|-- styles/           Library 核心样式
+|-- styles/           核心和 Workbench 样式
 |-- viewer/           Three.js 产品预览
+|-- workbench/        可配置界面、Dialog、图标和预设素材
 `-- index.ts          与框架无关的源码入口
 
 examples/
@@ -278,7 +441,7 @@ scripts/
 pnpm check       # TypeScript 项目检查
 pnpm test        # 单元测试
 pnpm build       # 类型检查和生产构建
-pnpm build:lib   # 构建 ESM、类型声明和核心样式
+pnpm build:lib   # 构建核心与 Workbench ESM、类型声明和样式
 pnpm verify:package # 检查 dist 和 npm 文件清单
 pnpm pack:local  # 构建、检查并生成本地 .tgz
 pnpm release:check # 执行检查、测试、制品构建、校验和本地打包
@@ -295,12 +458,13 @@ pnpm preview     # 预览生产构建
 
 在 API 和 Design JSON 契约进入更稳定阶段前，公开 npm 版本统一使用 `alpha` dist-tag
 
-多定制面、撤销与重做和框架适配器仍未实现。撤销与重做是下一阶段计划，并将复用 Design JSON 快照契约
+多定制面、高级对齐工具和框架适配器仍未实现
 
 ## 技术栈
 
 - [Fabric.js](https://fabricjs.com/)：二维编辑画布
 - [Three.js](https://threejs.org/)：模型加载和实时三维渲染
+- [Lucide](https://lucide.dev/)：打包到 Workbench 中的界面图标
 - [Vite](https://vite.dev/)：开发环境和应用构建
 - [TypeScript](https://www.typescriptlang.org/)：启用严格类型检查
 
@@ -311,3 +475,5 @@ CustomForge 依据 Apache License 2.0 开源
 完整协议内容请参阅 [LICENSE](./LICENSE)
 
 第三方依赖和资产仍遵循各自的许可条款
+
+随包提供的 Nunito Sans 字体遵循 SIL Open Font License 1.1，完整条款见 [NunitoSans-OFL.txt](./LICENSES/NunitoSans-OFL.txt)

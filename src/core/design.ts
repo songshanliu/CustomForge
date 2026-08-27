@@ -1,6 +1,8 @@
 import type {
+  DesignImageRole,
   DesignDocument,
   DesignObject,
+  DesignObjectState,
   DesignObjectTransform,
 } from './types'
 
@@ -51,6 +53,32 @@ function readBoolean(value: unknown, path: string): boolean {
   return value
 }
 
+function readImageRole(value: unknown, path: string): DesignImageRole {
+  if (value !== 'element' && value !== 'background') {
+    throw new TypeError(`${path} must be element or background`)
+  }
+  return value
+}
+
+function parseObjectState(
+  object: Record<string, unknown>,
+  path: string,
+): DesignObjectState {
+  return {
+    ...(object.name === undefined
+      ? {}
+      : { name: readString(object.name, `${path}.name`).trim() }),
+    visible:
+      object.visible === undefined
+        ? true
+        : readBoolean(object.visible, `${path}.visible`),
+    locked:
+      object.locked === undefined
+        ? false
+        : readBoolean(object.locked, `${path}.locked`),
+  }
+}
+
 function parseTransform(value: unknown, path: string): DesignObjectTransform {
   const transform = readRecord(value, path)
   return {
@@ -69,11 +97,13 @@ function parseObject(value: unknown, index: number): DesignObject {
   const object = readRecord(value, path)
   const id = readString(object.id, `${path}.id`)
   const transform = parseTransform(object.transform, `${path}.transform`)
+  const state = parseObjectState(object, path)
 
   if (object.type === 'text') {
     return {
       id,
       type: 'text',
+      ...state,
       transform,
       text: readString(object.text, `${path}.text`, true),
       width: readPositiveNumber(object.width, `${path}.width`),
@@ -88,7 +118,16 @@ function parseObject(value: unknown, index: number): DesignObject {
     if (src.startsWith('blob:')) {
       throw new TypeError(`${path}.src must not use a Blob URL`)
     }
-    return { id, type: 'image', transform, src }
+    return {
+      id,
+      type: 'image',
+      ...state,
+      transform,
+      src,
+      ...(object.role === undefined
+        ? {}
+        : { role: readImageRole(object.role, `${path}.role`) }),
+    }
   }
 
   throw new TypeError(`${path}.type is not supported`)
@@ -114,11 +153,21 @@ export function parseDesignDocument(value: unknown): DesignDocument {
 
   const objects = design.objects.map(parseObject)
   const ids = new Set<string>()
+  let backgroundCount = 0
   for (const object of objects) {
     if (ids.has(object.id)) {
       throw new TypeError(`design object id is duplicated: ${object.id}`)
     }
     ids.add(object.id)
+    if (object.type === 'image' && object.role === 'background') {
+      backgroundCount += 1
+      if (backgroundCount > 1) {
+        throw new TypeError('design must not contain more than one background')
+      }
+      if (objects.indexOf(object) !== 0) {
+        throw new TypeError('design background must be the first object')
+      }
+    }
   }
 
   return {
