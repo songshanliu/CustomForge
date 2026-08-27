@@ -53,14 +53,16 @@ pnpm dev
 
 ## npm Alpha 制品
 
-CustomForge 已准备通过 `alpha` dist-tag 公开发布。不同 alpha 版本之间的 API 和 Design JSON Schema 可能发生变化
+CustomForge 已通过 `alpha` dist-tag 发布到 npm Registry。不同 alpha 版本之间的 API 和 Design JSON Schema 可能发生变化
 
-首次发布完成后，使用以下命令安装当前 alpha 及其 peer dependencies：
+使用以下命令安装当前公开 alpha 及其 peer dependencies：
 
 ```powershell
 pnpm add customforge@alpha
 pnpm add fabric three
 ```
+
+包页面：[npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
 
 发布前如需进行独立于仓库源码的验证，可在仓库根目录构建并生成本地包：
 

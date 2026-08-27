@@ -53,14 +53,16 @@ The built-in demo appears with a UV workspace on the left and a live 3D preview 
 
 ## npm Alpha Package
 
-CustomForge is prepared for public alpha releases under the `alpha` dist-tag. The API and Design JSON Schema may change between alpha versions
+CustomForge is available from the npm Registry under the `alpha` dist-tag. The API and Design JSON Schema may change between alpha versions
 
-After the first release is published, install the current alpha and its peer dependencies with:
+Install the current public alpha and its peer dependencies with:
 
 ```powershell
 pnpm add customforge@alpha
 pnpm add fabric three
 ```
+
+Package page: [npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
 
 For repository-independent verification before publishing, build and create the local package from the repository root:
 
