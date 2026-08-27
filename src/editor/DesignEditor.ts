@@ -8,10 +8,13 @@ import { parseDesignDocument } from '../core/design'
 import type {
   AddImageOptions,
   AddTextOptions,
+  DesignImageRole,
   DesignDocument,
   DesignObject,
   DesignObjectTransform,
+  HistoryState,
 } from '../core/types'
+import { DesignHistory } from './DesignHistory'
 import {
   calculateContainmentOffset,
   calculateContainmentScale,
@@ -25,10 +28,14 @@ interface DesignEditorOptions {
 
   /** 画布逻辑高度，单位为像素 */
   height: number
+
+  /** 最多保留的撤销步骤数量 */
+  historyLimit: number
 }
 
 type RenderListener = () => void
 type SelectionListener = (objectIds: string[]) => void
+type HistoryListener = (state: HistoryState) => void
 
 /**
  * 基于 Fabric.js 的二维纹理编辑器
@@ -45,18 +52,24 @@ export class DesignEditor {
   private readonly height: number
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
+  private readonly historyListeners = new Set<HistoryListener>()
   private readonly objectIds = new WeakMap<FabricObject, string>()
   private readonly objectsById = new Map<string, FabricObject>()
   private readonly objectNames = new WeakMap<FabricObject, string>()
   private readonly objectLocks = new WeakMap<FabricObject, boolean>()
   private readonly usedObjectIds = new Set<string>()
   private readonly imageSources = new WeakMap<FabricImage, string>()
+  private readonly imageRoles = new WeakMap<FabricImage, DesignImageRole>()
   private readonly resizeObserver: ResizeObserver
+  private readonly history: DesignHistory<DesignDocument>
+  private historySignature: string
+  private historyTimer?: ReturnType<typeof setTimeout>
+  private historyBusy = false
   private objectIdSequence = 0
 
   /**
    * @param host 二维编辑器挂载容器
-   * @param options 画布逻辑尺寸
+   * @param options 画布逻辑尺寸和历史容量
    */
   constructor(host: HTMLElement, options: DesignEditorOptions) {
     this.host = host
@@ -75,6 +88,9 @@ export class DesignEditor {
       selectionColor: 'rgba(19, 113, 125, 0.12)',
       selectionBorderColor: '#13717d',
     })
+    const initialDesign = this.saveDesign()
+    this.history = new DesignHistory(initialDesign, options.historyLimit)
+    this.historySignature = JSON.stringify(initialDesign)
 
     this.canvas.wrapperEl.classList.add('customforge-design-canvas')
     this.host.dataset.renderState = 'pending'
@@ -97,8 +113,14 @@ export class DesignEditor {
     this.canvas.on('object:rotating', constrainTarget)
     this.canvas.on('object:skewing', constrainTarget)
     this.canvas.on('object:resizing', constrainTarget)
-    this.canvas.on('object:modified', constrainTarget)
-    this.canvas.on('text:changed', constrainTarget)
+    this.canvas.on('object:modified', ({ target }) => {
+      this.constrainObjectToCanvas(target)
+      this.commitHistory()
+    })
+    this.canvas.on('text:changed', ({ target }) => {
+      this.constrainObjectToCanvas(target)
+      this.scheduleHistoryCommit()
+    })
 
     this.resizeObserver = new ResizeObserver(() => this.resizeDisplay())
     this.resizeObserver.observe(host)
@@ -110,7 +132,7 @@ export class DesignEditor {
     return this.canvas.getElement()
   }
 
-  /** 当前画布中可编辑对象的数量，不包含背景纹理 */
+  /** 当前画布中设计对象的数量，不包含产品基础纹理 */
   get objectCount(): number {
     return this.canvas.getObjects().length
   }
@@ -135,6 +157,27 @@ export class DesignEditor {
   onSelectionChange(listener: SelectionListener): () => void {
     this.selectionListeners.add(listener)
     return () => this.selectionListeners.delete(listener)
+  }
+
+  /**
+   * 订阅撤销与重做可用状态变化
+   *
+   * @param listener 接收最新历史状态的函数
+   * @returns 用于取消本次订阅的函数
+   */
+  onHistoryChange(listener: HistoryListener): () => void {
+    this.historyListeners.add(listener)
+    return () => this.historyListeners.delete(listener)
+  }
+
+  /** 当前是否存在可以撤销的设计快照 */
+  get canUndo(): boolean {
+    return this.history.state.canUndo
+  }
+
+  /** 当前是否存在可以重做的设计快照 */
+  get canRedo(): boolean {
+    return this.history.state.canRedo
   }
 
   /**
@@ -179,6 +222,7 @@ export class DesignEditor {
    * @returns 是否找到并删除了对象
    */
   removeObject(id: string): boolean {
+    this.flushHistoryCommit()
     const object = this.objectsById.get(id)
     if (!object) {
       return false
@@ -192,6 +236,7 @@ export class DesignEditor {
     object.dispose()
     this.canvas.requestRenderAll()
     this.notifySelectionChange()
+    this.commitHistory()
     return true
   }
 
@@ -203,6 +248,7 @@ export class DesignEditor {
    * @returns 对象层级是否发生变化
    */
   moveObject(id: string, index: number): boolean {
+    this.flushHistoryCommit()
     const object = this.objectsById.get(id)
     const objects = this.canvas.getObjects()
     if (!object || !Number.isInteger(index) || objects.length === 0) {
@@ -210,13 +256,22 @@ export class DesignEditor {
     }
 
     const currentIndex = objects.indexOf(object)
-    const nextIndex = Math.min(Math.max(index, 0), objects.length - 1)
+    const role = object instanceof FabricImage
+      ? this.imageRoles.get(object) ?? 'element'
+      : 'element'
+    const backgroundCount = objects.filter(
+      (entry) => entry instanceof FabricImage && this.imageRoles.get(entry) === 'background',
+    ).length
+    const minimumIndex = role === 'background' ? 0 : backgroundCount
+    const maximumIndex = role === 'background' ? 0 : objects.length - 1
+    const nextIndex = Math.min(Math.max(index, minimumIndex), maximumIndex)
     if (currentIndex === nextIndex) {
       return false
     }
 
     this.canvas.moveObjectTo(object, nextIndex)
     this.canvas.requestRenderAll()
+    this.commitHistory()
     return true
   }
 
@@ -228,6 +283,7 @@ export class DesignEditor {
    * @returns 是否找到并更新了对象
    */
   renameObject(id: string, name: string): boolean {
+    this.flushHistoryCommit()
     const object = this.objectsById.get(id)
     const normalizedName = name.trim()
     if (!object || !normalizedName) {
@@ -236,6 +292,7 @@ export class DesignEditor {
 
     this.objectNames.set(object, normalizedName)
     this.canvas.requestRenderAll()
+    this.commitHistory()
     return true
   }
 
@@ -247,6 +304,7 @@ export class DesignEditor {
    * @returns 是否找到并更新了对象
    */
   setObjectVisibility(id: string, visible: boolean): boolean {
+    this.flushHistoryCommit()
     const object = this.objectsById.get(id)
     if (!object || object.visible === visible) {
       return Boolean(object)
@@ -258,6 +316,7 @@ export class DesignEditor {
     object.set({ visible })
     this.canvas.requestRenderAll()
     this.notifySelectionChange()
+    this.commitHistory()
     return true
   }
 
@@ -269,6 +328,7 @@ export class DesignEditor {
    * @returns 是否找到并更新了对象
    */
   setObjectLocked(id: string, locked: boolean): boolean {
+    this.flushHistoryCommit()
     const object = this.objectsById.get(id)
     if (!object) {
       return false
@@ -276,6 +336,7 @@ export class DesignEditor {
 
     this.applyObjectLock(object, locked)
     this.canvas.requestRenderAll()
+    this.commitHistory()
     return true
   }
 
@@ -324,6 +385,7 @@ export class DesignEditor {
    * @returns 创建的 Fabric Textbox
    */
   addText(options: AddTextOptions = {}): Textbox {
+    this.flushHistoryCommit()
     const text = new Textbox(options.text ?? 'Edit this text', {
       left: options.x ?? this.width * 0.18,
       top: options.y ?? this.height * 0.36,
@@ -343,13 +405,14 @@ export class DesignEditor {
       cornerSize: 16,
     })
 
-    this.addAndSelect(text)
+    this.addAndSelect(text, options.name)
     return text
   }
 
   /**
    * 加载、添加并选中一个图片对象
    *
+   * role 为 background 时替换已有设计背景、铺满画布并默认锁定在最底层
    * 图片位置使用画布像素坐标，原点位于图片中心
    * 对象过大时会等比缩小，越界时会自动移回画布
    * 远程图片必须提供正确的 CORS 响应头才能安全导出 PNG
@@ -359,18 +422,20 @@ export class DesignEditor {
    * @throws 图片加载失败或被 CORS 策略阻止时抛出错误
    */
   async addImage(options: AddImageOptions): Promise<FabricImage> {
+    this.flushHistoryCommit()
     const source = await resolvePersistentImageSource(options.src)
     const image = await this.loadImage(source)
+    const role = options.role ?? 'element'
     const targetWidth = options.width ?? this.width * 0.22
     const scale = targetWidth / Math.max(image.width, 1)
 
     image.set({
-      left: options.x ?? this.width * 0.62,
-      top: options.y ?? this.height * 0.29,
+      left: role === 'background' ? this.width / 2 : options.x ?? this.width * 0.62,
+      top: role === 'background' ? this.height / 2 : options.y ?? this.height * 0.29,
       originX: 'center',
       originY: 'center',
-      scaleX: scale,
-      scaleY: scale,
+      scaleX: role === 'background' ? this.width / Math.max(image.width, 1) : scale,
+      scaleY: role === 'background' ? this.height / Math.max(image.height, 1) : scale,
       transparentCorners: false,
       cornerColor: '#ffffff',
       cornerStrokeColor: '#13717d',
@@ -378,15 +443,18 @@ export class DesignEditor {
       cornerSize: 16,
     })
 
+    if (role === 'background') {
+      this.removeDesignBackgrounds()
+    }
     this.imageSources.set(image, source)
-    this.addAndSelect(image)
+    this.addAndSelect(image, options.name, role === 'background', role)
     return image
   }
 
   /**
    * 返回与 Fabric.js 无关的当前设计快照
    *
-   * 文档只包含可编辑对象和逻辑画布尺寸，不包含背景纹理或产品模型配置
+   * 文档包含设计背景等设计对象和逻辑画布尺寸，不包含产品基础纹理或模型配置
    *
    * @returns 可以安全传给 JSON.stringify 的 Design JSON 文档
    * @throws 画布包含不支持的对象或非字符串文字填充时抛出错误
@@ -408,6 +476,12 @@ export class DesignEditor {
    * @throws Schema 无效、画布尺寸不匹配或图片无法加载时抛出错误
    */
   async loadDesign(value: unknown): Promise<void> {
+    this.flushHistoryCommit()
+    await this.replaceDesign(value)
+    this.commitHistory()
+  }
+
+  private async replaceDesign(value: unknown): Promise<void> {
     const design = parseDesignDocument(value)
     if (design.canvas.width !== this.width || design.canvas.height !== this.height) {
       throw new RangeError(
@@ -421,6 +495,7 @@ export class DesignEditor {
       source?: string
       name?: string
       locked: boolean
+      role: DesignImageRole
     }> = []
 
     try {
@@ -431,6 +506,7 @@ export class DesignEditor {
           source: object.type === 'image' ? object.src : undefined,
           name: object.name,
           locked: object.locked ?? false,
+          role: object.type === 'image' ? object.role ?? 'element' : 'element',
         })
       }
     } catch (error) {
@@ -446,7 +522,13 @@ export class DesignEditor {
     this.objectsById.clear()
 
     for (const entry of entries) {
-      this.registerObject(entry.object, entry.id, entry.name, entry.locked)
+      this.registerObject(
+        entry.object,
+        entry.id,
+        entry.name,
+        entry.locked,
+        entry.role,
+      )
       if (entry.object instanceof FabricImage && entry.source) {
         this.imageSources.set(entry.object, entry.source)
       }
@@ -459,11 +541,69 @@ export class DesignEditor {
   }
 
   /**
+   * 恢复上一个设计快照
+   *
+   * @returns 是否成功恢复了一个历史步骤
+   */
+  async undo(): Promise<boolean> {
+    this.flushHistoryCommit()
+    const target = this.history.peekUndo()
+    if (!target || this.historyBusy) {
+      return false
+    }
+
+    this.historyBusy = true
+    try {
+      await this.replaceDesign(target)
+      this.history.confirmUndo()
+      this.historySignature = JSON.stringify(this.saveDesign())
+      this.notifyHistoryChange()
+      return true
+    } finally {
+      this.historyBusy = false
+    }
+  }
+
+  /**
+   * 恢复下一个设计快照
+   *
+   * @returns 是否成功恢复了一个历史步骤
+   */
+  async redo(): Promise<boolean> {
+    this.flushHistoryCommit()
+    const target = this.history.peekRedo()
+    if (!target || this.historyBusy) {
+      return false
+    }
+
+    this.historyBusy = true
+    try {
+      await this.replaceDesign(target)
+      this.history.confirmRedo()
+      this.historySignature = JSON.stringify(this.saveDesign())
+      this.notifyHistoryChange()
+      return true
+    } finally {
+      this.historyBusy = false
+    }
+  }
+
+  /** 以当前设计为起点清空撤销与重做历史 */
+  clearHistory(): void {
+    this.flushHistoryCommit()
+    const current = this.saveDesign()
+    this.history.reset(current)
+    this.historySignature = JSON.stringify(current)
+    this.notifyHistoryChange()
+  }
+
+  /**
    * 删除当前对象或多选选区
    *
    * @returns 是否删除了至少一个对象
    */
   deleteSelected(): boolean {
+    this.flushHistoryCommit()
     const selection = this.canvas.getActiveObjects()
     if (selection.length === 0) {
       return false
@@ -477,6 +617,7 @@ export class DesignEditor {
     this.canvas.discardActiveObject()
     this.canvas.requestRenderAll()
     this.notifySelectionChange()
+    this.commitHistory()
     return true
   }
 
@@ -501,22 +642,36 @@ export class DesignEditor {
 
   /** 释放 ResizeObserver、事件监听和 Fabric Canvas */
   destroy(): void {
+    if (this.historyTimer !== undefined) {
+      clearTimeout(this.historyTimer)
+      this.historyTimer = undefined
+    }
     this.resizeObserver.disconnect()
     this.renderListeners.clear()
     this.selectionListeners.clear()
+    this.historyListeners.clear()
     this.objectsById.clear()
     this.usedObjectIds.clear()
     this.canvas.dispose()
     this.host.replaceChildren()
   }
 
-  private addAndSelect(object: FabricObject): void {
-    this.registerObject(object)
+  private addAndSelect(
+    object: FabricObject,
+    name?: string,
+    locked = false,
+    role: DesignImageRole = 'element',
+  ): void {
+    this.registerObject(object, undefined, name, locked, role)
     this.canvas.add(object)
+    if (object instanceof FabricImage && role === 'background') {
+      this.canvas.moveObjectTo(object, 0)
+    }
     this.constrainObjectToCanvas(object)
     this.canvas.setActiveObject(object)
     this.canvas.requestRenderAll()
     this.notifySelectionChange()
+    this.commitHistory()
   }
 
   private registerObject(
@@ -524,6 +679,7 @@ export class DesignEditor {
     id = this.createObjectId(),
     name?: string,
     locked = false,
+    role: DesignImageRole = 'element',
   ): void {
     if (this.usedObjectIds.has(id)) {
       throw new Error(`Design object id is already in use: ${id}`)
@@ -533,6 +689,9 @@ export class DesignEditor {
     this.objectsById.set(id, object)
     if (name) {
       this.objectNames.set(object, name)
+    }
+    if (object instanceof FabricImage) {
+      this.imageRoles.set(object, role)
     }
     this.applyObjectLock(object, locked)
   }
@@ -587,7 +746,14 @@ export class DesignEditor {
       if (!src || src.startsWith('blob:')) {
         throw new Error(`Image object ${id} does not have a persistent source`)
       }
-      return { id, type: 'image', ...state, transform, src }
+      return {
+        id,
+        type: 'image',
+        ...state,
+        transform,
+        src,
+        role: this.imageRoles.get(object) ?? 'element',
+      }
     }
 
     throw new Error(`Design object ${id} has an unsupported type`)
@@ -678,6 +844,71 @@ export class DesignEditor {
   private notifySelectionChange(): void {
     const objectIds = this.getSelectedObjectIds()
     this.selectionListeners.forEach((listener) => listener(objectIds))
+  }
+
+  private removeDesignBackgrounds(): void {
+    const backgrounds = this.canvas.getObjects().filter(
+      (object): object is FabricImage =>
+        object instanceof FabricImage && this.imageRoles.get(object) === 'background',
+    )
+    if (backgrounds.length === 0) {
+      return
+    }
+
+    if (backgrounds.some((object) => this.canvas.getActiveObjects().includes(object))) {
+      this.canvas.discardActiveObject()
+    }
+    this.canvas.remove(...backgrounds)
+    backgrounds.forEach((object) => {
+      this.unregisterObject(object)
+      object.dispose()
+    })
+  }
+
+  private scheduleHistoryCommit(): void {
+    if (this.historyBusy) {
+      return
+    }
+    if (this.historyTimer !== undefined) {
+      clearTimeout(this.historyTimer)
+    }
+    this.historyTimer = setTimeout(() => {
+      this.historyTimer = undefined
+      this.commitHistory()
+    }, 320)
+  }
+
+  private flushHistoryCommit(): void {
+    if (this.historyTimer === undefined) {
+      return
+    }
+    clearTimeout(this.historyTimer)
+    this.historyTimer = undefined
+    this.commitHistory()
+  }
+
+  private commitHistory(): void {
+    if (this.historyBusy) {
+      return
+    }
+    if (this.historyTimer !== undefined) {
+      clearTimeout(this.historyTimer)
+      this.historyTimer = undefined
+    }
+
+    const snapshot = this.saveDesign()
+    const signature = JSON.stringify(snapshot)
+    if (signature === this.historySignature) {
+      return
+    }
+    this.history.push(snapshot)
+    this.historySignature = signature
+    this.notifyHistoryChange()
+  }
+
+  private notifyHistoryChange(): void {
+    const state = this.history.state
+    this.historyListeners.forEach((listener) => listener(state))
   }
 
   private constrainObjectToCanvas(object: FabricObject): void {

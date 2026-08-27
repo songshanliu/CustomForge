@@ -32,6 +32,7 @@ export class ProductCustomizer {
   private product: ReturnType<typeof normalizeProductConfiguration>
   private readonly stopSelectionListener: () => void
   private readonly stopRenderListener: () => void
+  private readonly stopHistoryListener: () => void
   private destroyed = false
 
   private constructor(options: CustomizerOptions) {
@@ -42,10 +43,16 @@ export class ProductCustomizer {
       throw new Error('Editor and viewer must use different elements')
     }
 
+    const historyLimit = options.historyLimit ?? 50
+    if (!Number.isInteger(historyLimit) || historyLimit < 1) {
+      throw new RangeError('historyLimit must be a positive integer')
+    }
+
     this.product = normalizeProductConfiguration(options.product)
     this.editor = new DesignEditor(editorHost, {
       width: options.editorWidth ?? 1024,
       height: options.editorHeight ?? 512,
+      historyLimit,
     })
     this.viewer = new ProductViewer(viewerHost)
     this.textureBridge = new TextureBridge(
@@ -62,6 +69,9 @@ export class ProductCustomizer {
     })
     this.stopRenderListener = this.editor.onRender(() => {
       this.emit('change', { objectCount: this.editor.objectCount })
+    })
+    this.stopHistoryListener = this.editor.onHistoryChange((state) => {
+      this.emit('historychange', state)
     })
   }
 
@@ -115,6 +125,7 @@ export class ProductCustomizer {
   /**
    * 加载图片并将其添加到二维画布
    *
+   * role 为 background 时会替换已有设计背景并默认锁定在最底层
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 图片地址、位置和显示宽度
@@ -249,6 +260,59 @@ export class ProductCustomizer {
     }
   }
 
+  /** 当前是否存在可以撤销的设计快照 */
+  canUndo(): boolean {
+    return this.editor.canUndo
+  }
+
+  /** 当前是否存在可以重做的设计快照 */
+  canRedo(): boolean {
+    return this.editor.canRedo
+  }
+
+  /**
+   * 恢复上一个设计快照
+   *
+   * @returns 是否成功恢复了一个历史步骤
+   * @throws 历史中的图片无法恢复时抛出错误
+   */
+  async undo(): Promise<boolean> {
+    try {
+      const changed = await this.editor.undo()
+      if (changed) {
+        this.emit('status', { message: 'Undo complete' })
+      }
+      return changed
+    } catch (error) {
+      this.reportError(error)
+      throw error
+    }
+  }
+
+  /**
+   * 恢复下一个设计快照
+   *
+   * @returns 是否成功恢复了一个历史步骤
+   * @throws 历史中的图片无法恢复时抛出错误
+   */
+  async redo(): Promise<boolean> {
+    try {
+      const changed = await this.editor.redo()
+      if (changed) {
+        this.emit('status', { message: 'Redo complete' })
+      }
+      return changed
+    } catch (error) {
+      this.reportError(error)
+      throw error
+    }
+  }
+
+  /** 以当前设计为起点清空撤销与重做历史 */
+  clearHistory(): void {
+    this.editor.clearHistory()
+  }
+
   /**
    * 将当前二维设计合成为 PNG 并触发浏览器下载
    *
@@ -267,6 +331,8 @@ export class ProductCustomizer {
   /**
    * 更换模型、基础纹理和接收纹理的目标 Mesh
    *
+   * 成功后保留当前设计对象，并将当前设计设为新的历史起点
+   *
    * @param product 新的产品配置
    * @throws 模型或纹理加载失败、目标 Mesh 不存在时抛出错误
    */
@@ -279,6 +345,7 @@ export class ProductCustomizer {
       await this.editor.setBackgroundTexture(nextProduct.textureUrl)
       this.textureBridge.setFlipY(nextProduct.textureFlipY)
       this.product = nextProduct
+      this.editor.clearHistory()
       this.emit('ready', { product: this.product })
       this.emit('status', { message: nextProduct.modelUrl ? 'Remote product ready' : 'Demo product ready' })
     } catch (error) {
@@ -300,6 +367,7 @@ export class ProductCustomizer {
     this.destroyed = true
     this.stopSelectionListener?.()
     this.stopRenderListener?.()
+    this.stopHistoryListener?.()
     this.textureBridge.destroy()
     this.editor.destroy()
     this.viewer.destroy()

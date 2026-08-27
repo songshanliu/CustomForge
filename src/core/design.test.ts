@@ -96,4 +96,63 @@ describe('parseDesignDocument', () => {
       }),
     ).toThrow('design.objects[0].visible must be a boolean')
   })
+
+  it('accepts a single bottom design background', () => {
+    const background = {
+      id: 'background-1',
+      type: 'image',
+      role: 'background',
+      transform: validDesign.objects[0].transform,
+      src: 'https://example.com/background.png',
+    }
+
+    expect(
+      parseDesignDocument({
+        ...validDesign,
+        objects: [background, validDesign.objects[0]],
+      }).objects[0],
+    ).toMatchObject({ id: 'background-1', role: 'background' })
+  })
+
+  it('rejects a design background above another object', () => {
+    expect(() =>
+      parseDesignDocument({
+        ...validDesign,
+        objects: [
+          validDesign.objects[0],
+          {
+            id: 'background-1',
+            type: 'image',
+            role: 'background',
+            transform: validDesign.objects[0].transform,
+            src: 'https://example.com/background.png',
+          },
+        ],
+      }),
+    ).toThrow('design background must be the first object')
+  })
+
+  it('rejects multiple design backgrounds', () => {
+    const background = {
+      id: 'background-1',
+      type: 'image',
+      role: 'background',
+      transform: validDesign.objects[0].transform,
+      src: 'https://example.com/background.png',
+    }
+
+    expect(() =>
+      parseDesignDocument({
+        ...validDesign,
+        objects: [
+          background,
+          {
+            ...background,
+            id: 'background-2',
+            src: 'https://example.com/background-2.png',
+          },
+        ],
+      }),
+    ).toThrow('design must not contain more than one background')
+  })
 })

@@ -1,6 +1,6 @@
 {
   "name": "customforge",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "A framework-agnostic browser library for live 2D-to-3D product customization",
   "license": "Apache-2.0",
   "private": false,
@@ -26,7 +26,8 @@
     "README.md",
     "README.zh-CN.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "LICENSES"
   ],
   "sideEffects": [
     "**/*.css"

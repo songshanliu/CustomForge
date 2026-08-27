@@ -1,4 +1,5 @@
 import type {
+  DesignImageRole,
   DesignDocument,
   DesignObject,
   DesignObjectState,
@@ -48,6 +49,13 @@ function readPositiveNumber(value: unknown, path: string): number {
 function readBoolean(value: unknown, path: string): boolean {
   if (typeof value !== 'boolean') {
     throw new TypeError(`${path} must be a boolean`)
+  }
+  return value
+}
+
+function readImageRole(value: unknown, path: string): DesignImageRole {
+  if (value !== 'element' && value !== 'background') {
+    throw new TypeError(`${path} must be element or background`)
   }
   return value
 }
@@ -110,7 +118,16 @@ function parseObject(value: unknown, index: number): DesignObject {
     if (src.startsWith('blob:')) {
       throw new TypeError(`${path}.src must not use a Blob URL`)
     }
-    return { id, type: 'image', ...state, transform, src }
+    return {
+      id,
+      type: 'image',
+      ...state,
+      transform,
+      src,
+      ...(object.role === undefined
+        ? {}
+        : { role: readImageRole(object.role, `${path}.role`) }),
+    }
   }
 
   throw new TypeError(`${path}.type is not supported`)
@@ -136,11 +153,21 @@ export function parseDesignDocument(value: unknown): DesignDocument {
 
   const objects = design.objects.map(parseObject)
   const ids = new Set<string>()
+  let backgroundCount = 0
   for (const object of objects) {
     if (ids.has(object.id)) {
       throw new TypeError(`design object id is duplicated: ${object.id}`)
     }
     ids.add(object.id)
+    if (object.type === 'image' && object.role === 'background') {
+      backgroundCount += 1
+      if (backgroundCount > 1) {
+        throw new TypeError('design must not contain more than one background')
+      }
+      if (objects.indexOf(object) !== 0) {
+        throw new TypeError('design background must be the first object')
+      }
+    }
   }
 
   return {

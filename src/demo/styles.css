@@ -22,12 +22,11 @@ body,
 }
 
 body {
-  padding: 10px;
   overflow: hidden;
 }
 
 #app {
-  height: calc(100dvh - 20px);
+  height: 100dvh;
 }
 
 @media (max-width: 1050px) {
@@ -37,6 +36,6 @@ body {
 
   #app {
     height: auto;
-    min-height: calc(100dvh - 20px);
+    min-height: 100dvh;
   }
 }

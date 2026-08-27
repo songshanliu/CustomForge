@@ -38,6 +38,9 @@ export interface CustomizerOptions {
 
   /** 初始化时加载的产品配置 */
   product?: ProductConfiguration
+
+  /** 可保留的撤销步骤数量，默认为 50 */
+  historyLimit?: number
 }
 
 /**
@@ -48,6 +51,9 @@ export interface CustomizerOptions {
 export interface AddTextOptions {
   /** 文字内容 */
   text?: string
+
+  /** 图层面板中显示的可选名称 */
+  name?: string
 
   /** 文字左上角在画布中的横坐标，单位为像素，越界时自动修正 */
   x?: number
@@ -76,6 +82,12 @@ export interface AddTextOptions {
 export interface AddImageOptions {
   /** 图片地址，支持远程地址、Data URL 和 Blob URL */
   src: string
+
+  /** 图层面板中显示的可选名称 */
+  name?: string
+
+  /** 图片在设计中的用途，背景会替换已有设计背景、忽略位置和宽度并默认锁定在最底层 */
+  role?: DesignImageRole
 
   /** 图片中心在画布中的横坐标，单位为像素，越界时自动修正 */
   x?: number
@@ -132,6 +144,9 @@ export interface DesignObjectState {
   locked?: boolean
 }
 
+/** Design JSON 图片对象在设计中的用途 */
+export type DesignImageRole = 'element' | 'background'
+
 /** Design JSON 中的文字对象 */
 export interface TextDesignObject extends DesignObjectState {
   /** 文档内稳定且唯一的对象标识 */
@@ -172,6 +187,9 @@ export interface ImageDesignObject extends DesignObjectState {
 
   /** 可重新加载的远程 URL 或 Data URL，不允许短生命周期 Blob URL */
   src: string
+
+  /** 图片用途，缺省时按普通装饰元素处理 */
+  role?: DesignImageRole
 }
 
 /** Design JSON 当前支持的可编辑对象 */
@@ -193,6 +211,15 @@ export interface DesignDocument {
   objects: DesignObject[]
 }
 
+/** 撤销与重做历史的可用状态 */
+export interface HistoryState {
+  /** 当前是否存在可以撤销的设计快照 */
+  canUndo: boolean
+
+  /** 当前是否存在可以重做的设计快照 */
+  canRedo: boolean
+}
+
 /**
  * 产品定制器事件及其载荷
  */
@@ -202,6 +229,9 @@ export interface CustomizerEventMap {
 
   /** 模型、纹理或图片处理失败 */
   error: { error: Error }
+
+  /** 撤销或重做可用状态发生变化 */
+  historychange: HistoryState
 
   /** 产品模型和纹理完成加载 */
   ready: { product: ProductConfiguration }

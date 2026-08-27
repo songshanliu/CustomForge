@@ -43,7 +43,7 @@ function collectImportSpecifiers(source) {
 const packageJson = JSON.parse(await readProjectFile('package.json'))
 
 assert(packageJson.name === 'customforge', 'Unexpected package name')
-assert(packageJson.version === '0.1.0-alpha.1', 'Unexpected package version')
+assert(packageJson.version === '0.1.0-alpha.2', 'Unexpected package version')
 assert(packageJson.private === false, 'Public alpha package must not be private')
 assert(packageJson.publishConfig?.access === 'public', 'Public package access is invalid')
 assert(packageJson.publishConfig?.tag === 'alpha', 'Public package tag must remain alpha')
@@ -78,6 +78,7 @@ const approvedPackageFiles = [
   'README.zh-CN.md',
   'CHANGELOG.md',
   'LICENSE',
+  'LICENSES',
 ]
 assert(
   Array.isArray(packageJson.files) &&
@@ -165,6 +166,12 @@ const coreStyle = await readProjectFile('dist/style.css')
 assert(coreStyle.includes('.customforge-design-canvas'), 'Editor core style is missing')
 assert(coreStyle.includes('.customforge-viewer-canvas'), 'Viewer core style is missing')
 assert(coreStyle.includes('.customforge-workbench'), 'Workbench style is missing')
+assert(coreStyle.includes('@font-face'), 'Bundled font declaration is missing')
+assert(coreStyle.includes('Nunito Sans'), 'Bundled Workbench font is missing')
+assert(
+  distFiles.some((file) => /NunitoSans.*\.ttf$/i.test(file)),
+  'Bundled Nunito Sans font asset is missing',
+)
 assert(
   !/(^|})\s*(?:\*|:root|html|body|button|input)(?:\b|\s|,|\{)/m.test(coreStyle),
   'Core style contains an unsupported global selector',
@@ -174,10 +181,25 @@ const rootDeclaration = await readProjectFile('dist/index.d.ts')
 assert(!rootDeclaration.includes('/src/'), 'Root declaration contains a source path')
 assert(!rootDeclaration.includes('/demo/'), 'Demo type leaked into root declaration')
 assert(rootDeclaration.includes('DesignDocument'), 'Design document type is missing')
+assert(rootDeclaration.includes('DesignImageRole'), 'Design image role type is missing')
+assert(rootDeclaration.includes('HistoryState'), 'History state type is missing')
+assert(rootDeclaration.includes('CustomizerEventMap'), 'Customizer event map type is missing')
+
+const coreTypesDeclaration = await readProjectFile('dist/core/types.d.ts')
+assert(coreTypesDeclaration.includes('historychange'), 'History event type is missing')
 
 const workbenchDeclaration = await readProjectFile('dist/workbench/index.d.ts')
 assert(workbenchDeclaration.includes('createWorkbench'), 'Workbench factory type is missing')
 assert(workbenchDeclaration.includes('WorkbenchOptions'), 'Workbench option type is missing')
+assert(workbenchDeclaration.includes('WorkbenchBranding'), 'Workbench branding type is missing')
+assert(workbenchDeclaration.includes('WorkbenchLabels'), 'Workbench label type is missing')
+assert(workbenchDeclaration.includes('WorkbenchTheme'), 'Workbench theme type is missing')
+assert(
+  workbenchDeclaration.includes('WorkbenchIconConfiguration'),
+  'Workbench icon type is missing',
+)
+assert(workbenchDeclaration.includes('WorkbenchTextPreset'), 'Workbench text preset type is missing')
+assert(workbenchDeclaration.includes('WorkbenchAsset'), 'Workbench asset type is missing')
 assert(!workbenchDeclaration.includes('/demo/'), 'Demo type leaked into Workbench declaration')
 
 const customizerDeclaration = await readProjectFile(
@@ -189,6 +211,16 @@ assert(customizerDeclaration.includes('saveDesign'), 'Design save method is miss
 assert(customizerDeclaration.includes('loadDesign'), 'Design load method is missing')
 assert(customizerDeclaration.includes('moveObject'), 'Object layer method is missing')
 assert(customizerDeclaration.includes('setObjectVisibility'), 'Object visibility method is missing')
+assert(customizerDeclaration.includes('canUndo'), 'History query method is missing')
+assert(customizerDeclaration.includes('canRedo'), 'Redo query method is missing')
+assert(customizerDeclaration.includes('undo'), 'Undo method is missing')
+assert(customizerDeclaration.includes('redo'), 'Redo method is missing')
+assert(customizerDeclaration.includes('clearHistory'), 'History reset method is missing')
+assert(
+  workbenchSource.includes('data:image/png') ||
+    distFiles.some((file) => /CustomForgeLogo.*\.png$/i.test(file)),
+  'Default Workbench logo is missing',
+)
 
 const expectedPackageFiles = [
   ...distFiles.map((file) => `dist/${file}`),
@@ -196,9 +228,12 @@ const expectedPackageFiles = [
   'package.json',
 ].sort()
 const expectedPackageFileSet = new Set(expectedPackageFiles)
+const nunitoLicense = await readProjectFile('LICENSES/NunitoSans-OFL.txt')
+assert(nunitoLicense.includes('SIL OPEN FONT LICENSE Version 1.1'), 'Nunito Sans OFL license is invalid')
 const requiredPackedFiles = [
   'CHANGELOG.md',
   'LICENSE',
+  'LICENSES',
   'README.md',
   'README.zh-CN.md',
   'dist/index.d.ts',

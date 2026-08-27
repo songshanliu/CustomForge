@@ -28,11 +28,18 @@ export async function createWorkbench(
 
 export { CustomForgeWorkbench }
 export type {
+  WorkbenchAsset,
+  WorkbenchAssetLibrary,
   WorkbenchBranding,
   WorkbenchFeatureName,
   WorkbenchFeatures,
+  WorkbenchIconConfiguration,
+  WorkbenchIconName,
+  WorkbenchLabels,
   WorkbenchLayout,
   WorkbenchLayoutName,
   WorkbenchOptions,
   WorkbenchStatusMode,
+  WorkbenchTextPreset,
+  WorkbenchTheme,
 } from './types'
