@@ -6,6 +6,82 @@
   font-weight: 200 1000;
 }
 
+@keyframes customforge-layer-selection {
+  0% {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: inset 0 0 0 var(--cfw-accent);
+  }
+
+  58% {
+    background-color: color-mix(in srgb, var(--cfw-accent) 12%, var(--cfw-surface));
+    border-color: color-mix(in srgb, var(--cfw-accent) 20%, var(--cfw-line));
+    box-shadow: inset 3px 0 0 var(--cfw-accent);
+  }
+
+  100% {
+    background-color: color-mix(in srgb, var(--cfw-accent) 8%, var(--cfw-surface));
+    border-color: color-mix(in srgb, var(--cfw-accent) 12%, var(--cfw-line));
+    box-shadow: inset 2px 0 0 var(--cfw-accent);
+  }
+}
+
+@keyframes customforge-layer-indicator {
+  from {
+    opacity: 0;
+    transform: scaleY(0.3);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes customforge-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes customforge-dialog-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+
+@keyframes customforge-backdrop-enter {
+  from {
+    background-color: rgb(17 24 30 / 0%);
+  }
+
+  to {
+    background-color: rgb(17 24 30 / 38%);
+  }
+}
+
+@keyframes customforge-backdrop-exit {
+  from {
+    background-color: rgb(17 24 30 / 38%);
+  }
+
+  to {
+    background-color: rgb(17 24 30 / 0%);
+  }
+}
+
 .customforge-workbench {
   --cfw-ink: #24272b;
   --cfw-muted: #747b84;
@@ -507,11 +583,8 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--cfw-control-radius);
-}
-
-.customforge-workbench__layer-item[data-selected="true"] {
-  background: color-mix(in srgb, var(--cfw-accent) 8%, var(--cfw-surface));
-  border-color: color-mix(in srgb, var(--cfw-accent) 12%, var(--cfw-line));
+  transition: background-color 160ms ease, border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .customforge-workbench__layer-item[data-visible="false"] {
@@ -521,6 +594,33 @@
 
 .customforge-workbench__layer-item[data-role="background"] {
   background: color-mix(in srgb, var(--cfw-surface-muted) 72%, var(--cfw-surface));
+}
+
+.customforge-workbench__layer-item::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 2px;
+  width: 2px;
+  background: var(--cfw-accent);
+  border-radius: 2px;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scaleY(0.3);
+  transform-origin: center;
+}
+
+.customforge-workbench__layer-item[data-selected="true"] {
+  background: color-mix(in srgb, var(--cfw-accent) 8%, var(--cfw-surface));
+  border-color: color-mix(in srgb, var(--cfw-accent) 12%, var(--cfw-line));
+  box-shadow: inset 2px 0 0 var(--cfw-accent);
+  animation: customforge-layer-selection 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.customforge-workbench__layer-item[data-selected="true"]::before {
+  animation: customforge-layer-indicator 220ms cubic-bezier(0.22, 1, 0.36, 1)
+    both;
 }
 
 .customforge-workbench__layer-item.is-dragging {
@@ -591,14 +691,14 @@
   opacity: 1;
 }
 
-.customforge-workbench__layer-item[data-selected="true"]
-  .customforge-workbench__layer-actions {
-  background: color-mix(in srgb, var(--cfw-accent) 8%, var(--cfw-surface));
-}
-
 .customforge-workbench__layer-item[data-role="background"]
   .customforge-workbench__layer-actions {
   background: color-mix(in srgb, var(--cfw-surface-muted) 70%, var(--cfw-surface));
+}
+
+.customforge-workbench__layer-item[data-selected="true"]
+  .customforge-workbench__layer-actions {
+  background: color-mix(in srgb, var(--cfw-accent) 8%, var(--cfw-surface));
 }
 
 .customforge-workbench__layer-action {
@@ -702,6 +802,16 @@
   border: 1px solid var(--cfw-line);
   border-radius: 8px;
   box-shadow: 0 22px 64px rgb(17 24 30 / 20%);
+  transform-origin: 50% 45%;
+}
+
+.customforge-workbench__dialog[open] {
+  animation: customforge-dialog-enter 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.customforge-workbench__dialog[open][data-closing="true"] {
+  pointer-events: none;
+  animation: customforge-dialog-exit 160ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .customforge-workbench__dialog--text,
@@ -711,6 +821,14 @@
 
 .customforge-workbench__dialog::backdrop {
   background: rgb(17 24 30 / 38%);
+}
+
+.customforge-workbench__dialog[open]::backdrop {
+  animation: customforge-backdrop-enter 190ms ease-out both;
+}
+
+.customforge-workbench__dialog[open][data-closing="true"]::backdrop {
+  animation: customforge-backdrop-exit 160ms ease-in both;
 }
 
 .customforge-workbench__dialog > form {
@@ -1182,5 +1300,18 @@
 
   .customforge-workbench__tabs button {
     flex: 1 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customforge-workbench__layer-item,
+  .customforge-workbench__layer-item[data-selected="true"],
+  .customforge-workbench__layer-item[data-selected="true"]::before,
+  .customforge-workbench__dialog[open],
+  .customforge-workbench__dialog[open][data-closing="true"],
+  .customforge-workbench__dialog[open]::backdrop,
+  .customforge-workbench__dialog[open][data-closing="true"]::backdrop {
+    transition: none;
+    animation: none;
   }
 }

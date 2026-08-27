@@ -23,6 +23,8 @@ import type {
 
 type ImageTab = 'upload' | 'backgrounds' | 'elements'
 
+const DIALOG_CLOSE_DELAY_MS = 180
+
 interface SelectedImage {
   src: string
   name: string
@@ -143,6 +145,7 @@ export class CustomForgeWorkbench {
 
   private readonly host: HTMLElement
   private readonly abortController = new AbortController()
+  private readonly dialogCloseTimers = new Map<HTMLDialogElement, number>()
   private readonly unsubscribe: Array<() => void> = []
   private readonly features: WorkbenchFeatures
   private readonly layout: WorkbenchLayout
@@ -267,13 +270,13 @@ export class CustomForgeWorkbench {
   setFeature(feature: WorkbenchFeatureName, enabled: boolean): void {
     this.features[feature] = enabled
     if (feature === 'loadRemoteProduct' && !enabled && this.productDialog.open) {
-      this.productDialog.close()
+      this.closeDialog(this.productDialog)
     }
     if (feature === 'addText' && !enabled && this.textDialog.open) {
-      this.textDialog.close()
+      this.closeDialog(this.textDialog)
     }
     if (feature === 'addImage' && !enabled && this.imageDialog.open) {
-      this.imageDialog.close()
+      this.closeDialog(this.imageDialog)
     }
     if (
       (feature === 'presetBackgrounds' && this.activeImageTab === 'backgrounds') ||
@@ -315,6 +318,8 @@ export class CustomForgeWorkbench {
 
     this.destroyed = true
     this.releaseImageSelection()
+    this.dialogCloseTimers.forEach((timer) => window.clearTimeout(timer))
+    this.dialogCloseTimers.clear()
     this.abortController.abort()
     this.unsubscribe.splice(0).forEach((stop) => stop())
     this.customizer.destroy()
@@ -394,6 +399,19 @@ export class CustomForgeWorkbench {
       () => this.resetImageSelection(),
       { signal },
     )
+    for (const dialog of [this.textDialog, this.imageDialog, this.productDialog]) {
+      dialog.addEventListener(
+        'cancel',
+        (event) => {
+          event.preventDefault()
+          this.closeDialog(dialog)
+        },
+        { signal },
+      )
+      dialog.addEventListener('close', () => this.clearDialogClose(dialog), {
+        signal,
+      })
+    }
     this.layerList.addEventListener(
       'dblclick',
       (event) => this.handleLayerRename(event),
@@ -487,14 +505,13 @@ export class CustomForgeWorkbench {
         this.showDialog(this.productDialog)
         break
       case 'close-text-dialog':
-        this.textDialog.close()
+        this.closeDialog(this.textDialog)
         break
       case 'close-image-dialog':
-        this.imageDialog.close()
-        this.resetImageSelection()
+        this.closeDialog(this.imageDialog)
         break
       case 'close-product-dialog':
-        this.productDialog.close()
+        this.closeDialog(this.productDialog)
         break
       case 'choose-image':
         this.imageInput.click()
@@ -563,9 +580,39 @@ export class CustomForgeWorkbench {
   }
 
   private showDialog(dialog: HTMLDialogElement): void {
+    this.clearDialogClose(dialog)
     if (!dialog.open) {
       dialog.showModal()
     }
+  }
+
+  private closeDialog(dialog: HTMLDialogElement): void {
+    if (!dialog.open || dialog.dataset.closing === 'true') {
+      return
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      dialog.close()
+      return
+    }
+
+    dialog.dataset.closing = 'true'
+    const timer = window.setTimeout(() => {
+      this.dialogCloseTimers.delete(dialog)
+      delete dialog.dataset.closing
+      if (dialog.open) {
+        dialog.close()
+      }
+    }, DIALOG_CLOSE_DELAY_MS)
+    this.dialogCloseTimers.set(dialog, timer)
+  }
+
+  private clearDialogClose(dialog: HTMLDialogElement): void {
+    const timer = this.dialogCloseTimers.get(dialog)
+    if (timer !== undefined) {
+      window.clearTimeout(timer)
+      this.dialogCloseTimers.delete(dialog)
+    }
+    delete dialog.dataset.closing
   }
 
   private applyVisibility(): void {
@@ -1109,7 +1156,7 @@ export class CustomForgeWorkbench {
           }
         : {}),
     })
-    this.textDialog.close()
+    this.closeDialog(this.textDialog)
     this.setStatus(this.labels.addTextConfirm)
   }
 
@@ -1238,9 +1285,8 @@ export class CustomForgeWorkbench {
         name: selection.name,
         role: selection.role,
       })
-      this.imageDialog.close()
+      this.closeDialog(this.imageDialog)
       this.setStatus(this.labels.addImageConfirm)
-      this.resetImageSelection()
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')
       this.imageSubmitButton.disabled = false
@@ -1296,7 +1342,7 @@ export class CustomForgeWorkbench {
     this.setStatus(this.labels.loadProduct, 'busy')
     try {
       await this.customizer.loadProduct({})
-      this.productDialog.close()
+      this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')
@@ -1332,7 +1378,7 @@ export class CustomForgeWorkbench {
           '[data-role="flip-texture"]',
         ).checked,
       })
-      this.productDialog.close()
+      this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')

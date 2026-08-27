@@ -24,6 +24,7 @@ All notable changes to CustomForge will be documented in this file
 - Default controls now use softer neutral surfaces, light selection states, and restrained 7px radii
 - Workbench now bundles the rounded Nunito Sans UI font with system font fallbacks
 - Solid accent buttons now consistently use the configured high-contrast text color
+- Layer selection and Dialog transitions now use subtle motion with reduced-motion support
 - The bundled CustomForge logo is now the default Workbench brand mark
 - Successful product changes reset design history while preserving current design objects
 
