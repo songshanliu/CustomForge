@@ -9,14 +9,8 @@ importers:
   .:
     dependencies:
       customforge:
-        specifier: file:../../customforge-0.1.0-alpha.0.tgz
-        version: file:../../customforge-0.1.0-alpha.0.tgz(fabric@7.4.0)(three@0.185.1)
-      fabric:
-        specifier: ^7.4.0
-        version: 7.4.0
-      three:
-        specifier: ^0.185.1
-        version: 0.185.1
+        specifier: file:../../customforge-0.1.0-alpha.1.tgz
+        version: file:../../customforge-0.1.0-alpha.1.tgz
     devDependencies:
       typescript:
         specifier: ^7.0.2
@@ -304,13 +298,10 @@ packages:
     resolution: {integrity: sha512-2z+rWdzbbSZv6/rhtvzvqeZQHrBaqgogqt85sqFNbabZOuFbCVFb8kPeEtZjiKkbrm395irpNKiYeFeLiQnFPg==}
     engines: {node: '>=18'}
 
-  customforge@file:../../customforge-0.1.0-alpha.0.tgz:
-    resolution: {integrity: sha512-fSQrWLQJJNmGKLH9bn5MS0w15bSaHbGQfa5po0IVyCRLgBdljZBUs5sk+pr8Auv8xd72WYagD2/QcZzU3I1caw==, tarball: file:../../customforge-0.1.0-alpha.0.tgz}
-    version: 0.1.0-alpha.0
+  customforge@file:../../customforge-0.1.0-alpha.1.tgz:
+    resolution: {integrity: sha512-9qqzEELHg5b71P4pu8vi9XJrVSu4jNKMWWeTD+y4p97rSDN2x1VqxZ3ht1tb7Ocj6y9oBGQMiTsRYvcOZAW7kQ==, tarball: file:../../customforge-0.1.0-alpha.1.tgz}
+    version: 0.1.0-alpha.1
     engines: {node: '>=22.12.0'}
-    peerDependencies:
-      fabric: ^7.4.0
-      three: ^0.185.1
 
   data-urls@5.0.0:
     resolution: {integrity: sha512-ZYP5VBHshaDAiVZxjbRVcFJpc+4xGgT0bK3vzy1HLN8jTO975HEbuYzZJcHoQEY5K1a0z8YayJkyVETa08eNTg==}
@@ -906,10 +897,14 @@ snapshots:
       rrweb-cssom: 0.8.0
     optional: true
 
-  customforge@file:../../customforge-0.1.0-alpha.0.tgz(fabric@7.4.0)(three@0.185.1):
+  customforge@file:../../customforge-0.1.0-alpha.1.tgz:
     dependencies:
       fabric: 7.4.0
       three: 0.185.1
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   data-urls@5.0.0:
     dependencies:

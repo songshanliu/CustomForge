@@ -4,6 +4,14 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-08-27
+
+### Changed
+
+- Fabric.js and Three.js are installed automatically as runtime dependencies
+- Consumers no longer need to install Fabric.js and Three.js separately
+- Library builds continue to keep both engines external
+
 ## [0.1.0-alpha.0] - 2026-08-27
 
 ### Added

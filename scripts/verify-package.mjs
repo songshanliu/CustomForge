@@ -43,7 +43,7 @@ function collectImportSpecifiers(source) {
 const packageJson = JSON.parse(await readProjectFile('package.json'))
 
 assert(packageJson.name === 'customforge', 'Unexpected package name')
-assert(packageJson.version === '0.1.0-alpha.0', 'Unexpected package version')
+assert(packageJson.version === '0.1.0-alpha.1', 'Unexpected package version')
 assert(packageJson.private === false, 'Public alpha package must not be private')
 assert(packageJson.publishConfig?.access === 'public', 'Public package access is invalid')
 assert(packageJson.publishConfig?.tag === 'alpha', 'Public package tag must remain alpha')
@@ -52,10 +52,10 @@ assert(packageJson.types === './dist/index.d.ts', 'Package types entry is invali
 assert(packageJson.exports?.['.']?.import === './dist/index.js', 'ESM export is invalid')
 assert(packageJson.exports?.['.']?.types === './dist/index.d.ts', 'Types export is invalid')
 assert(packageJson.exports?.['./style.css'] === './dist/style.css', 'Style export is invalid')
-assert(packageJson.peerDependencies?.fabric, 'Fabric.js must be a peer dependency')
-assert(packageJson.peerDependencies?.three, 'Three.js must be a peer dependency')
-assert(!packageJson.dependencies?.fabric, 'Fabric.js must not be a runtime dependency')
-assert(!packageJson.dependencies?.three, 'Three.js must not be a runtime dependency')
+assert(packageJson.dependencies?.fabric, 'Fabric.js must be a runtime dependency')
+assert(packageJson.dependencies?.three, 'Three.js must be a runtime dependency')
+assert(!packageJson.peerDependencies?.fabric, 'Fabric.js must not be a peer dependency')
+assert(!packageJson.peerDependencies?.three, 'Three.js must not be a peer dependency')
 assert(!packageJson.dependencies?.lucide, 'Demo icon package must not be a runtime dependency')
 
 const changelog = await readProjectFile('CHANGELOG.md')
@@ -114,7 +114,7 @@ assert(!importSpecifiers.some((specifier) => specifier === 'lucide'), 'Demo depe
 assert(!librarySource.includes('Texture pipeline prototype'), 'Demo source leaked into bundle')
 
 const libraryStats = await stat(new URL('dist/index.js', projectRoot))
-assert(libraryStats.size < 250_000, 'Library bundle is too large; peer dependencies may be bundled')
+assert(libraryStats.size < 250_000, 'Library bundle is too large; external dependencies may be bundled')
 
 const sourceMap = JSON.parse(await readProjectFile('dist/index.js.map'))
 for (const source of sourceMap.sources ?? []) {

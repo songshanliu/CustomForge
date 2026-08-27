@@ -53,13 +53,28 @@ The built-in demo appears with a UV workspace on the left and a live 3D preview 
 
 ## npm Alpha Package
 
-CustomForge is available from the npm Registry under the `alpha` dist-tag. The API and Design JSON Schema may change between alpha versions
+CustomForge is available from the npm Registry under the `alpha` dist-tag and the API and Design JSON Schema may change between alpha versions
 
-Install the current public alpha and its peer dependencies with:
+Install the current public alpha with:
 
 ```powershell
 pnpm add customforge@alpha
-pnpm add fabric three
+```
+
+Fabric.js and Three.js are installed automatically as transitive dependencies
+
+pnpm may report that the optional native `canvas` build script was ignored
+
+CustomForge runs in the browser and does not use Node native canvas, so `pnpm approve-builds` is not required
+
+Consumer projects can explicitly acknowledge this browser-only choice in `package.json`:
+
+```json
+{
+  "pnpm": {
+    "ignoredBuiltDependencies": ["canvas"]
+  }
+}
 ```
 
 Package page: [npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
@@ -73,14 +88,13 @@ pnpm pack:local
 The command builds JavaScript, TypeScript declarations, and core styles, checks the npm file list, and creates:
 
 ```text
-customforge-0.1.0-alpha.0.tgz
+customforge-0.1.0-alpha.1.tgz
 ```
 
-Install that local package and its peer dependencies in an independent Vite TypeScript project:
+Install that local package in an independent Vite TypeScript project:
 
 ```powershell
-pnpm add D:\project\CustomForge\CustomForge\customforge-0.1.0-alpha.0.tgz
-pnpm add fabric three
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.1.tgz
 ```
 
 The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace

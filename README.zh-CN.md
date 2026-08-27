@@ -53,13 +53,26 @@ pnpm dev
 
 ## npm Alpha 制品
 
-CustomForge 已通过 `alpha` dist-tag 发布到 npm Registry。不同 alpha 版本之间的 API 和 Design JSON Schema 可能发生变化
+CustomForge 已通过 `alpha` dist-tag 发布到 npm Registry，不同 alpha 版本之间的 API 和 Design JSON Schema 可能发生变化
 
-使用以下命令安装当前公开 alpha 及其 peer dependencies：
+使用以下命令安装当前公开 alpha：
 
 ```powershell
 pnpm add customforge@alpha
-pnpm add fabric three
+```
+
+Fabric.js 和 Three.js 会作为传递依赖自动安装
+
+pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略，CustomForge 运行在浏览器中，不使用 Node 原生 canvas，因此不需要执行 `pnpm approve-builds`
+
+消费项目可以在 `package.json` 中明确记录这一浏览器端选择：
+
+```json
+{
+  "pnpm": {
+    "ignoredBuiltDependencies": ["canvas"]
+  }
+}
 ```
 
 包页面：[npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
@@ -73,14 +86,13 @@ pnpm pack:local
 命令依次生成 JavaScript、TypeScript 声明、核心样式，检查 npm 文件清单，并创建：
 
 ```text
-customforge-0.1.0-alpha.0.tgz
+customforge-0.1.0-alpha.1.tgz
 ```
 
-在独立 Vite TypeScript 项目中安装该本地制品及其 peer dependencies：
+在独立 Vite TypeScript 项目中安装该本地制品：
 
 ```powershell
-pnpm add D:\project\CustomForge\CustomForge\customforge-0.1.0-alpha.0.tgz
-pnpm add fabric three
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.1.tgz
 ```
 
 仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装

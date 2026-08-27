@@ -9,9 +9,7 @@
     "check": "tsc --noEmit --pretty false"
   },
   "dependencies": {
-    "customforge": "file:../../customforge-0.1.0-alpha.0.tgz",
-    "fabric": "^7.4.0",
-    "three": "^0.185.1"
+    "customforge": "file:../../customforge-0.1.0-alpha.1.tgz"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
