@@ -171,6 +171,61 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 The public package uses the same root and style imports as the local `.tgz`; pin an exact alpha version when reproducible installs are required
 
+## Ready-made Workbench
+
+Use the optional Workbench entry when a complete default interface is preferable to building controls from scratch
+
+The host element must have an explicit height so both editing surfaces can measure their available space
+
+```html
+<div id="customforge-workbench" style="height: 720px"></div>
+```
+
+```ts
+import { createWorkbench } from 'customforge/workbench'
+import 'customforge/style.css'
+
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    surfaceMesh: 'PrintArea',
+  },
+  features: {
+    addText: false,
+    loadRemoteProduct: false,
+  },
+  layout: {
+    header: false,
+    layers: true,
+  },
+})
+```
+
+Feature and layout switches can also be changed after initialization
+
+```ts
+workbench.setFeature('addText', true)
+workbench.setLayout('header', true)
+```
+
+Feature switches only control the built-in Workbench controls and do not remove methods from `workbench.customizer`
+
+| Feature switch | Controls |
+| --- | --- |
+| `addText`, `addImage`, `deleteSelection` | Object creation and deletion |
+| `saveDesign`, `loadDesign` | Design JSON actions |
+| `loadRemoteProduct`, `exportTexture`, `resetView` | Product and output actions |
+| `reorderObjects`, `toggleObjectVisibility`, `lockObjects`, `renameObjects` | Layer management |
+
+| Layout switch | Region |
+| --- | --- |
+| `header` | Brand and global product actions |
+| `editorHeader`, `viewerHeader` | Workspace panel headings |
+| `toolbar` | Design tool controls |
+| `layers` | Object layer panel |
+| `status` | Runtime status and object count |
+
 ## Design JSON
 
 `saveDesign()` returns a Library-owned, JSON-safe document instead of exposing Fabric.js serialization. `loadDesign()` validates unknown input and restores the editable object stack asynchronously:
@@ -185,7 +240,7 @@ if (savedDesign) {
 }
 ```
 
-The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs and center-based transforms
+The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs, names, visibility, locking, and center-based transforms
 
 Design JSON intentionally excludes the product model, target mesh, and base texture. A document can only be loaded into an editor with exactly the same logical width and height
 
@@ -199,6 +254,14 @@ The Schema is still an alpha contract and may change in later alpha versions
 | --- | --- |
 | `addText(options)` | Add and select editable text, constrained to the canvas |
 | `addImage(options)` | Load and select an image, constrained to the canvas |
+| `getObjects()` | Return the current objects in back-to-front layer order |
+| `getSelectedObjectIds()` | Return stable IDs for the current selection |
+| `selectObject(id)` | Select a visible object by stable ID |
+| `removeObject(id)` | Remove an object by stable ID |
+| `moveObject(id, index)` | Move an object to a zero-based layer index |
+| `renameObject(id, name)` | Change the object name shown in layer tools |
+| `setObjectVisibility(id, visible)` | Include or exclude an object from rendering |
+| `setObjectLocked(id, locked)` | Lock or unlock canvas transformations |
 | `deleteSelected()` | Remove the active object or selection |
 | `saveDesign()` | Return the current versioned Design JSON document |
 | `loadDesign(value)` | Validate and transactionally restore Design JSON |
@@ -210,7 +273,7 @@ The Schema is still an alpha contract and may change in later alpha versions
 
 Available events are `ready`, `change`, `selectionchange`, `status`, and `error`
 
-The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, and the configuration, event, and Design JSON types exported from the package root
+The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, the `customforge/workbench` entry, and the configuration, event, Workbench, and Design JSON types exported from declared package entries
 
 `ProductCustomizer` does not expose its Fabric.js editor or Three.js viewer instances; consumers interact through the facade API
 
@@ -239,7 +302,7 @@ ProductCustomizer
 
 `ProductCustomizer` coordinates the modules while keeping Fabric.js and Three.js details behind a small instance API
 
-The demo UI uses Vanilla TypeScript; the core does not depend on Vue, React, or another UI framework
+The optional Workbench and demo use Vanilla TypeScript; the core does not depend on Vue, React, or another UI framework
 
 ## Model Contract
 
@@ -263,8 +326,9 @@ src/
 |-- demo/             Runnable workbench UI
 |-- editor/           Fabric.js design surface
 |-- style.css         Public Library style entry
-|-- styles/           Library core styles
+|-- styles/           Core and Workbench styles
 |-- viewer/           Three.js product preview
+|-- workbench/        Optional configurable default UI
 `-- index.ts          Framework-independent source entry
 
 examples/
@@ -280,7 +344,7 @@ scripts/
 pnpm check       # TypeScript project check
 pnpm test        # Unit tests
 pnpm build       # Type-check and production build
-pnpm build:lib   # Build ESM, declarations, and core styles
+pnpm build:lib   # Build core and Workbench ESM, declarations, and styles
 pnpm verify:package # Check dist and the npm file list
 pnpm pack:local  # Build, verify, and create the local .tgz
 pnpm release:check # Run checks, tests, package build, verification, and local pack
@@ -303,6 +367,7 @@ Multi-surface products, undo/redo, and framework adapters are not implemented ye
 
 - [Fabric.js](https://fabricjs.com/) for the 2D editing surface
 - [Three.js](https://threejs.org/) for model loading and real-time 3D rendering
+- [Lucide](https://lucide.dev/) for bundled Workbench controls
 - [Vite](https://vite.dev/) for development and application builds
 - [TypeScript](https://www.typescriptlang.org/) with strict checking enabled
 

@@ -15,6 +15,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./workbench": {
+      "types": "./dist/workbench/index.d.ts",
+      "import": "./dist/workbench.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "files": [

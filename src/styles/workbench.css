@@ -1,0 +1,730 @@
+.customforge-workbench {
+  --cfw-ink: #182023;
+  --cfw-muted: #687377;
+  --cfw-faint: #8c9699;
+  --cfw-line: #d9dedc;
+  --cfw-line-strong: #c6cecb;
+  --cfw-surface: #ffffff;
+  --cfw-surface-soft: #f5f7f6;
+  --cfw-stage: #e5e9e7;
+  --cfw-accent: #0e737d;
+  --cfw-accent-dark: #095a62;
+  --cfw-coral: #df5144;
+  --cfw-danger: #b94338;
+  container-name: customforge-workbench;
+  container-type: inline-size;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  min-height: 600px;
+  overflow: hidden;
+  color: var(--cfw-ink);
+  background: var(--cfw-surface);
+  border: 1px solid var(--cfw-line);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-synthesis: none;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+}
+
+.customforge-workbench [hidden] {
+  display: none !important;
+}
+
+.customforge-workbench,
+.customforge-workbench * {
+  box-sizing: border-box;
+}
+
+.customforge-workbench button,
+.customforge-workbench input {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.customforge-workbench button {
+  color: inherit;
+}
+
+.customforge-workbench button:focus-visible,
+.customforge-workbench input:focus-visible {
+  outline: 2px solid var(--cfw-accent);
+  outline-offset: 2px;
+}
+
+.customforge-workbench__topbar {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 56px;
+  padding: 8px 14px;
+  background: var(--cfw-surface);
+  border-bottom: 1px solid var(--cfw-line);
+}
+
+.customforge-workbench__brand,
+.customforge-workbench__brand-copy,
+.customforge-workbench__global-actions,
+.customforge-workbench__panel-title,
+.customforge-workbench__layers-header,
+.customforge-workbench__layers-header > span,
+.customforge-workbench__statusbar,
+.customforge-workbench__button,
+.customforge-workbench__tool-button,
+.customforge-workbench__layer-item,
+.customforge-workbench__layer-main,
+.customforge-workbench__layer-actions,
+.customforge-workbench__dialog-header,
+.customforge-workbench__dialog-header > div,
+.customforge-workbench__dialog-actions,
+.customforge-workbench__input-shell,
+.customforge-workbench__check-field {
+  display: flex;
+  align-items: center;
+}
+
+.customforge-workbench__brand {
+  min-width: 0;
+  gap: 10px;
+}
+
+.customforge-workbench__brand-mark {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  color: #ffffff;
+  background: var(--cfw-coral);
+  border-radius: 4px;
+  place-items: center;
+}
+
+.customforge-workbench__brand-copy {
+  align-items: flex-start;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.customforge-workbench__brand-copy strong,
+.customforge-workbench__brand-copy span {
+  overflow: hidden;
+  max-width: 280px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customforge-workbench__brand-copy strong {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.customforge-workbench__brand-copy span {
+  color: var(--cfw-muted);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.customforge-workbench__global-actions {
+  gap: 7px;
+}
+
+.customforge-workbench__button,
+.customforge-workbench__tool-button,
+.customforge-workbench__icon-button,
+.customforge-workbench__layer-action {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
+}
+
+.customforge-workbench__button {
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.customforge-workbench__button--primary {
+  color: #ffffff;
+  background: var(--cfw-accent);
+  border-color: var(--cfw-accent);
+}
+
+.customforge-workbench__button--primary:hover:not(:disabled) {
+  background: var(--cfw-accent-dark);
+  border-color: var(--cfw-accent-dark);
+}
+
+.customforge-workbench__button--secondary {
+  color: #344044;
+  background: var(--cfw-surface);
+  border-color: var(--cfw-line-strong);
+}
+
+.customforge-workbench__button--secondary:hover:not(:disabled),
+.customforge-workbench__tool-button:hover:not(:disabled),
+.customforge-workbench__icon-button:hover:not(:disabled),
+.customforge-workbench__layer-action:hover:not(:disabled) {
+  color: var(--cfw-accent-dark);
+  background: #edf6f6;
+  border-color: #a6cdd0;
+}
+
+.customforge-workbench__button:disabled,
+.customforge-workbench__tool-button:disabled,
+.customforge-workbench__icon-button:disabled,
+.customforge-workbench__layer-action:disabled {
+  color: #aeb7b4;
+  cursor: not-allowed;
+}
+
+.customforge-workbench__workspace {
+  display: grid;
+  grid-template-columns: minmax(480px, 1fr) minmax(440px, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.customforge-workbench__panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--cfw-surface);
+}
+
+.customforge-workbench__panel--editor {
+  border-right: 1px solid var(--cfw-line);
+}
+
+.customforge-workbench__panel--viewer {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.customforge-workbench__panelbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 13px;
+  background: var(--cfw-surface-soft);
+  border-bottom: 1px solid var(--cfw-line);
+}
+
+.customforge-workbench__panel-title {
+  min-width: 0;
+  gap: 9px;
+}
+
+.customforge-workbench__panel-index,
+.customforge-workbench__resolution,
+.customforge-workbench__eyebrow {
+  color: var(--cfw-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.customforge-workbench__panel-index,
+.customforge-workbench__eyebrow {
+  color: var(--cfw-accent);
+}
+
+.customforge-workbench__panelbar h1,
+.customforge-workbench__panelbar h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customforge-workbench__resolution {
+  padding: 4px 7px;
+  background: #e9edeb;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.customforge-workbench__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 46px;
+  padding: 6px 10px;
+  background: var(--cfw-surface);
+  border-bottom: 1px solid var(--cfw-line);
+}
+
+.customforge-workbench__tool-button {
+  gap: 7px;
+  padding: 0 10px;
+  color: #3b474b;
+  background: var(--cfw-surface);
+  border-color: var(--cfw-line-strong);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.customforge-workbench__icon-button,
+.customforge-workbench__layer-action {
+  display: grid;
+  width: 34px;
+  padding: 0;
+  color: #586367;
+  background: transparent;
+  place-items: center;
+}
+
+.customforge-workbench__icon-button {
+  flex: 0 0 34px;
+}
+
+.customforge-workbench__separator {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: var(--cfw-line);
+}
+
+.customforge-workbench__editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 232px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.customforge-workbench[data-layers="hidden"] .customforge-workbench__editor-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.customforge-workbench__editor-stage {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--cfw-stage);
+  background-image: linear-gradient(45deg, rgb(255 255 255 / 38%) 25%, transparent 25%),
+    linear-gradient(-45deg, rgb(255 255 255 / 38%) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 38%) 75%),
+    linear-gradient(-45deg, transparent 75%, rgb(255 255 255 / 38%) 75%);
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-size: 20px 20px;
+  place-items: center;
+}
+
+.customforge-workbench__editor-stage .customforge-design-canvas {
+  max-width: calc(100% - 28px);
+  max-height: calc(100% - 28px);
+  border: 1px solid #bac3c0;
+  border-radius: 3px;
+  box-shadow: 0 10px 28px rgb(32 43 46 / 12%);
+}
+
+.customforge-workbench__layers {
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: #fafbfa;
+  border-left: 1px solid var(--cfw-line);
+}
+
+.customforge-workbench__layers-header {
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  color: #3f4a4e;
+  border-bottom: 1px solid var(--cfw-line);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.customforge-workbench__layers-header > span {
+  gap: 6px;
+}
+
+.customforge-workbench__layers-header > span:last-child {
+  min-width: 22px;
+  height: 20px;
+  justify-content: center;
+  color: var(--cfw-muted);
+  background: #e9edeb;
+  border-radius: 3px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.customforge-workbench__layer-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.customforge-workbench__layer-list:empty::after {
+  display: grid;
+  min-height: 96px;
+  color: var(--cfw-faint);
+  content: "No objects";
+  font-size: 10px;
+  place-items: center;
+}
+
+.customforge-workbench__layer-item {
+  position: relative;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 5px 0 8px;
+  background: var(--cfw-surface);
+  border-bottom: 1px solid #e4e8e6;
+}
+
+.customforge-workbench__layer-item[data-selected="true"] {
+  background: #edf6f6;
+  box-shadow: inset 3px 0 0 var(--cfw-accent);
+}
+
+.customforge-workbench__layer-item[data-visible="false"] {
+  color: var(--cfw-faint);
+}
+
+.customforge-workbench__layer-item.is-dragging {
+  opacity: 0.45;
+}
+
+.customforge-workbench__layer-item.is-drag-target {
+  box-shadow: inset 0 2px 0 var(--cfw-accent);
+}
+
+.customforge-workbench__layer-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 8px;
+  height: 44px;
+  padding: 0 3px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.customforge-workbench__layer-main > svg {
+  flex: 0 0 16px;
+  width: 16px;
+  color: var(--cfw-accent);
+}
+
+.customforge-workbench__layer-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.customforge-workbench__layer-copy strong,
+.customforge-workbench__layer-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customforge-workbench__layer-copy strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.customforge-workbench__layer-copy span {
+  color: var(--cfw-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.customforge-workbench__layer-actions {
+  position: absolute;
+  right: 5px;
+  gap: 1px;
+  padding-left: 8px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--cfw-surface) 14%);
+  transition: opacity 120ms ease;
+}
+
+.customforge-workbench__layer-item:hover .customforge-workbench__layer-actions,
+.customforge-workbench__layer-item:focus-within .customforge-workbench__layer-actions,
+.customforge-workbench__layer-item[data-selected="true"]
+  .customforge-workbench__layer-actions {
+  opacity: 1;
+}
+
+.customforge-workbench__layer-item[data-selected="true"]
+  .customforge-workbench__layer-actions {
+  background: linear-gradient(90deg, transparent, #edf6f6 14%);
+}
+
+.customforge-workbench__layer-action {
+  width: 25px;
+  min-height: 28px;
+  border-radius: 3px;
+}
+
+.customforge-workbench__layer-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.customforge-workbench__layer-name-input {
+  min-width: 0;
+  height: 30px;
+  flex: 1 1 auto;
+  padding: 0 7px;
+  color: var(--cfw-ink);
+  background: var(--cfw-surface);
+  border: 1px solid var(--cfw-accent);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.customforge-workbench__viewer-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #eef1ef;
+}
+
+.customforge-workbench__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  color: var(--cfw-muted);
+  font-size: 12px;
+  place-items: center;
+}
+
+.customforge-workbench__statusbar {
+  z-index: 4;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 12px;
+  color: var(--cfw-muted);
+  background: #f8f9f8;
+  border-top: 1px solid var(--cfw-line);
+  font-size: 10px;
+}
+
+.customforge-workbench__status-indicator {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  background: #3dbb72;
+  border-radius: 50%;
+}
+
+.customforge-workbench[data-status="busy"]
+  .customforge-workbench__status-indicator {
+  background: #d99d25;
+}
+
+.customforge-workbench[data-status="error"]
+  .customforge-workbench__status-indicator {
+  background: var(--cfw-danger);
+}
+
+.customforge-workbench__object-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.customforge-workbench__statusbar [data-role="status-label"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customforge-workbench__dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  color: var(--cfw-ink);
+  background: var(--cfw-surface);
+  border: 1px solid var(--cfw-line-strong);
+  border-radius: 6px;
+  box-shadow: 0 24px 72px rgb(18 29 32 / 24%);
+}
+
+.customforge-workbench__dialog::backdrop {
+  background: rgb(20 29 32 / 54%);
+}
+
+.customforge-workbench__dialog-header {
+  justify-content: space-between;
+  gap: 20px;
+  padding: 17px 18px;
+  border-bottom: 1px solid var(--cfw-line);
+}
+
+.customforge-workbench__dialog-header > div {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.customforge-workbench__dialog-header h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 23px;
+}
+
+.customforge-workbench__form-fields {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.customforge-workbench__form-fields label:not(.customforge-workbench__check-field) {
+  display: grid;
+  gap: 6px;
+  color: #475256;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.customforge-workbench__form-fields input[type="text"],
+.customforge-workbench__form-fields input[type="url"] {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  color: var(--cfw-ink);
+  background: var(--cfw-surface);
+  border: 1px solid var(--cfw-line-strong);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 450;
+}
+
+.customforge-workbench__input-shell {
+  position: relative;
+}
+
+.customforge-workbench__input-shell svg {
+  position: absolute;
+  left: 10px;
+  color: var(--cfw-muted);
+  pointer-events: none;
+}
+
+.customforge-workbench__input-shell input {
+  padding-left: 37px !important;
+}
+
+.customforge-workbench__check-field {
+  gap: 8px;
+  color: #475256;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.customforge-workbench__check-field input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cfw-accent);
+}
+
+.customforge-workbench__dialog-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 13px 18px;
+  background: var(--cfw-surface-soft);
+  border-top: 1px solid var(--cfw-line);
+}
+
+@container customforge-workbench (max-width: 1050px) {
+  .customforge-workbench__workspace {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .customforge-workbench__panel {
+    min-height: 520px;
+  }
+
+  .customforge-workbench__panel--editor {
+    border-right: 0;
+    border-bottom: 1px solid var(--cfw-line);
+  }
+}
+
+@container customforge-workbench (max-width: 690px) {
+  .customforge-workbench__topbar {
+    gap: 8px;
+    padding: 7px 9px;
+  }
+
+  .customforge-workbench__brand-copy span,
+  .customforge-workbench__button--secondary span {
+    display: none;
+  }
+
+  .customforge-workbench__brand-copy strong {
+    max-width: 120px;
+  }
+
+  .customforge-workbench__global-actions {
+    gap: 4px;
+  }
+
+  .customforge-workbench__topbar .customforge-workbench__button {
+    min-width: 34px;
+    padding: 0 8px;
+  }
+
+  .customforge-workbench__resolution {
+    display: none;
+  }
+
+  .customforge-workbench__tool-button {
+    flex: 0 0 34px;
+    width: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .customforge-workbench__tool-button span {
+    display: none;
+  }
+
+  .customforge-workbench__editor-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(300px, 1fr) minmax(160px, auto);
+  }
+
+  .customforge-workbench__layers {
+    max-height: 220px;
+    border-top: 1px solid var(--cfw-line);
+    border-left: 0;
+  }
+
+  .customforge-workbench__layer-actions {
+    opacity: 1;
+  }
+
+  .customforge-workbench__dialog-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+}

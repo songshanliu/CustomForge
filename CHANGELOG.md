@@ -4,6 +4,17 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+### Added
+
+- Optional configurable Workbench UI exported from `customforge/workbench`
+- Public object querying, selection, removal, naming, visibility, locking, and layer ordering APIs
+- Object names, visibility, and locking state in backward-compatible Design JSON version 1 documents
+
+### Changed
+
+- Built-in demo now consumes the same public Workbench available to package users
+- Workbench presentation uses a quieter application shell with responsive layer management
+
 ## [0.1.0-alpha.1] - 2026-08-27
 
 ### Changed

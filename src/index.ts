@@ -40,6 +40,7 @@ export type {
   DesignCanvas,
   DesignDocument,
   DesignObject,
+  DesignObjectState,
   DesignObjectTransform,
   ImageDesignObject,
   ProductConfiguration,

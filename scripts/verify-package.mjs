@@ -51,12 +51,20 @@ assert(packageJson.type === 'module', 'Package must use ESM')
 assert(packageJson.types === './dist/index.d.ts', 'Package types entry is invalid')
 assert(packageJson.exports?.['.']?.import === './dist/index.js', 'ESM export is invalid')
 assert(packageJson.exports?.['.']?.types === './dist/index.d.ts', 'Types export is invalid')
+assert(
+  packageJson.exports?.['./workbench']?.import === './dist/workbench.js',
+  'Workbench ESM export is invalid',
+)
+assert(
+  packageJson.exports?.['./workbench']?.types === './dist/workbench/index.d.ts',
+  'Workbench types export is invalid',
+)
 assert(packageJson.exports?.['./style.css'] === './dist/style.css', 'Style export is invalid')
 assert(packageJson.dependencies?.fabric, 'Fabric.js must be a runtime dependency')
 assert(packageJson.dependencies?.three, 'Three.js must be a runtime dependency')
 assert(!packageJson.peerDependencies?.fabric, 'Fabric.js must not be a peer dependency')
 assert(!packageJson.peerDependencies?.three, 'Three.js must not be a peer dependency')
-assert(!packageJson.dependencies?.lucide, 'Demo icon package must not be a runtime dependency')
+assert(!packageJson.dependencies?.lucide, 'Bundled icon package must not be a runtime dependency')
 
 const changelog = await readProjectFile('CHANGELOG.md')
 assert(
@@ -86,6 +94,11 @@ const requiredDistFiles = [
   'style.css',
   'core/types.d.ts',
   'customizer/ProductCustomizer.d.ts',
+  'workbench.js',
+  'workbench.js.map',
+  'workbench/CustomForgeWorkbench.d.ts',
+  'workbench/index.d.ts',
+  'workbench/types.d.ts',
 ]
 const distUrl = new URL('dist/', projectRoot)
 const distFiles = await listFiles(distUrl)
@@ -102,29 +115,56 @@ for (const file of distFiles) {
 
 const librarySource = await readProjectFile('dist/index.js')
 const importSpecifiers = collectImportSpecifiers(librarySource)
+const runtimeJavaScriptFiles = distFiles.filter((file) => file.endsWith('.js'))
+const runtimeSources = await Promise.all(
+  runtimeJavaScriptFiles.map((file) => readProjectFile(`dist/${file}`)),
+)
+const runtimeImportSpecifiers = runtimeSources.flatMap(collectImportSpecifiers)
 assert(
-  importSpecifiers.some((specifier) => specifier === 'fabric' || specifier.startsWith('fabric/')),
+  runtimeImportSpecifiers.some(
+    (specifier) => specifier === 'fabric' || specifier.startsWith('fabric/'),
+  ),
   'Fabric.js is missing as an external import',
 )
 assert(
-  importSpecifiers.some((specifier) => specifier === 'three' || specifier.startsWith('three/')),
+  runtimeImportSpecifiers.some(
+    (specifier) => specifier === 'three' || specifier.startsWith('three/'),
+  ),
   'Three.js is missing as an external import',
 )
-assert(!importSpecifiers.some((specifier) => specifier === 'lucide'), 'Demo dependency leaked into bundle')
+assert(!importSpecifiers.some((specifier) => specifier === 'lucide'), 'Workbench icon dependency leaked into the core bundle')
 assert(!librarySource.includes('Texture pipeline prototype'), 'Demo source leaked into bundle')
 
 const libraryStats = await stat(new URL('dist/index.js', projectRoot))
 assert(libraryStats.size < 250_000, 'Library bundle is too large; external dependencies may be bundled')
 
-const sourceMap = JSON.parse(await readProjectFile('dist/index.js.map'))
-for (const source of sourceMap.sources ?? []) {
-  assert(!source.includes('/demo/'), `Demo source leaked into source map: ${source}`)
-  assert(!source.includes('.test.'), `Test source leaked into source map: ${source}`)
+const workbenchSource = await readProjectFile('dist/workbench.js')
+assert(
+  workbenchSource.includes('CustomForgeWorkbench'),
+  'Workbench class is missing from its public entry',
+)
+assert(
+  !runtimeImportSpecifiers.some((specifier) => specifier === 'lucide'),
+  'Workbench icons must be bundled instead of becoming a consumer dependency',
+)
+let runtimeJavaScriptSize = 0
+for (const file of runtimeJavaScriptFiles) {
+  runtimeJavaScriptSize += (await stat(new URL(`dist/${file}`, projectRoot))).size
+}
+assert(runtimeJavaScriptSize < 500_000, 'Library JavaScript output is unexpectedly large')
+
+for (const file of distFiles.filter((entry) => entry.endsWith('.js.map'))) {
+  const sourceMap = JSON.parse(await readProjectFile(`dist/${file}`))
+  for (const source of sourceMap.sources ?? []) {
+    assert(!source.includes('/demo/'), `Demo source leaked into source map: ${source}`)
+    assert(!source.includes('.test.'), `Test source leaked into source map: ${source}`)
+  }
 }
 
 const coreStyle = await readProjectFile('dist/style.css')
 assert(coreStyle.includes('.customforge-design-canvas'), 'Editor core style is missing')
 assert(coreStyle.includes('.customforge-viewer-canvas'), 'Viewer core style is missing')
+assert(coreStyle.includes('.customforge-workbench'), 'Workbench style is missing')
 assert(
   !/(^|})\s*(?:\*|:root|html|body|button|input)(?:\b|\s|,|\{)/m.test(coreStyle),
   'Core style contains an unsupported global selector',
@@ -135,6 +175,11 @@ assert(!rootDeclaration.includes('/src/'), 'Root declaration contains a source p
 assert(!rootDeclaration.includes('/demo/'), 'Demo type leaked into root declaration')
 assert(rootDeclaration.includes('DesignDocument'), 'Design document type is missing')
 
+const workbenchDeclaration = await readProjectFile('dist/workbench/index.d.ts')
+assert(workbenchDeclaration.includes('createWorkbench'), 'Workbench factory type is missing')
+assert(workbenchDeclaration.includes('WorkbenchOptions'), 'Workbench option type is missing')
+assert(!workbenchDeclaration.includes('/demo/'), 'Demo type leaked into Workbench declaration')
+
 const customizerDeclaration = await readProjectFile(
   'dist/customizer/ProductCustomizer.d.ts',
 )
@@ -142,6 +187,8 @@ assert(!customizerDeclaration.includes('DesignEditor'), 'Editor type leaked into
 assert(!customizerDeclaration.includes('ProductViewer'), 'Viewer type leaked into public class')
 assert(customizerDeclaration.includes('saveDesign'), 'Design save method is missing')
 assert(customizerDeclaration.includes('loadDesign'), 'Design load method is missing')
+assert(customizerDeclaration.includes('moveObject'), 'Object layer method is missing')
+assert(customizerDeclaration.includes('setObjectVisibility'), 'Object visibility method is missing')
 
 const expectedPackageFiles = [
   ...distFiles.map((file) => `dist/${file}`),
@@ -157,6 +204,10 @@ const requiredPackedFiles = [
   'dist/index.d.ts',
   'dist/index.js',
   'dist/style.css',
+  'dist/workbench.js',
+  'dist/workbench/CustomForgeWorkbench.d.ts',
+  'dist/workbench/index.d.ts',
+  'dist/workbench/types.d.ts',
   'package.json',
 ]
 
@@ -171,7 +222,7 @@ const forbiddenPackedPaths = [
   /^scripts\//,
   /^src\//,
   /\.test\./,
-  /(?:^|\/)vite(?:\.lib)?\.config\.ts$/,
+  /(?:^|\/)vite(?:\.[^.]+)?\.config\.ts$/,
 ]
 
 for (const file of expectedPackageFileSet) {

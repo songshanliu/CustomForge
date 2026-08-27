@@ -169,6 +169,61 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 公开包与本地 `.tgz` 使用相同的根入口和样式入口；需要可重复安装时应固定具体 alpha 版本
 
+## 开箱即用的 Workbench
+
+不希望从零编写控制界面时，可以使用可选的 Workbench 入口
+
+挂载元素必须设置明确高度，二维和三维区域才能正确计算可用空间
+
+```html
+<div id="customforge-workbench" style="height: 720px"></div>
+```
+
+```ts
+import { createWorkbench } from 'customforge/workbench'
+import 'customforge/style.css'
+
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    surfaceMesh: 'PrintArea',
+  },
+  features: {
+    addText: false,
+    loadRemoteProduct: false,
+  },
+  layout: {
+    header: false,
+    layers: true,
+  },
+})
+```
+
+功能和布局开关也可以在初始化后动态调整
+
+```ts
+workbench.setFeature('addText', true)
+workbench.setLayout('header', true)
+```
+
+功能开关只控制 Workbench 自带控件，不会移除 `workbench.customizer` 上的底层方法
+
+| 功能开关 | 控制内容 |
+| --- | --- |
+| `addText`、`addImage`、`deleteSelection` | 对象创建和删除 |
+| `saveDesign`、`loadDesign` | Design JSON 操作 |
+| `loadRemoteProduct`、`exportTexture`、`resetView` | 产品和输出操作 |
+| `reorderObjects`、`toggleObjectVisibility`、`lockObjects`、`renameObjects` | 图层管理 |
+
+| 布局开关 | 控制区域 |
+| --- | --- |
+| `header` | 品牌和全局产品操作 |
+| `editorHeader`、`viewerHeader` | 工作区面板标题栏 |
+| `toolbar` | 设计工具栏 |
+| `layers` | 对象图层面板 |
+| `status` | 运行状态和对象数量 |
+
 ## Design JSON
 
 `saveDesign()` 返回由 Library 自身定义、可安全写入 JSON 的文档，不暴露 Fabric.js 序列化格式。`loadDesign()` 校验未知输入，并异步恢复可编辑对象栈：
@@ -183,7 +238,7 @@ if (savedDesign) {
 }
 ```
 
-当前 Schema 版本为 `1`。文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID 与基于中心点的变换
+当前 Schema 版本为 `1`，文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID、名称、显隐、锁定状态与基于中心点的变换
 
 Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只能加载到逻辑宽高完全相同的编辑器中
 
@@ -197,6 +252,14 @@ Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只�
 | --- | --- |
 | `addText(options)` | 添加并选中文字，自动约束在画布内 |
 | `addImage(options)` | 加载并选中图片，自动约束在画布内 |
+| `getObjects()` | 按从后到前的图层顺序返回当前对象 |
+| `getSelectedObjectIds()` | 返回当前选区中的稳定对象 ID |
+| `selectObject(id)` | 根据稳定 ID 选中可见对象 |
+| `removeObject(id)` | 根据稳定 ID 删除对象 |
+| `moveObject(id, index)` | 将对象移动到从 0 开始的图层索引 |
+| `renameObject(id, name)` | 修改图层工具中显示的对象名称 |
+| `setObjectVisibility(id, visible)` | 设置对象是否参与渲染 |
+| `setObjectLocked(id, locked)` | 锁定或解锁画布变换 |
 | `deleteSelected()` | 删除当前对象或选区 |
 | `saveDesign()` | 返回当前版本化 Design JSON 文档 |
 | `loadDesign(value)` | 校验并以事务方式恢复 Design JSON |
@@ -208,7 +271,7 @@ Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只�
 
 当前事件包括 `ready`、`change`、`selectionchange`、`status` 和 `error`
 
-首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer` 以及从根入口导出的配置、事件和 Design JSON 类型
+首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer`、`customforge/workbench` 入口，以及从已声明入口导出的配置、事件、Workbench 和 Design JSON 类型
 
 `ProductCustomizer` 不公开 Fabric.js 编辑器和 Three.js 查看器实例，使用方只通过门面 API 操作定制器
 
@@ -237,7 +300,7 @@ ProductCustomizer
 
 `ProductCustomizer` 负责协调各模块，并将 Fabric.js 和 Three.js 的实现细节隐藏在小型实例 API 后面
 
-演示界面使用原生 TypeScript，核心不依赖 Vue、React 或其他 UI 框架
+可选 Workbench 和演示界面使用原生 TypeScript，核心不依赖 Vue、React 或其他 UI 框架
 
 ## 模型约定
 
@@ -261,8 +324,9 @@ src/
 |-- demo/             可运行的工作台界面
 |-- editor/           Fabric.js 设计画布
 |-- style.css         Library 公开样式入口
-|-- styles/           Library 核心样式
+|-- styles/           核心和 Workbench 样式
 |-- viewer/           Three.js 产品预览
+|-- workbench/        可选的可配置默认界面
 `-- index.ts          与框架无关的源码入口
 
 examples/
@@ -278,7 +342,7 @@ scripts/
 pnpm check       # TypeScript 项目检查
 pnpm test        # 单元测试
 pnpm build       # 类型检查和生产构建
-pnpm build:lib   # 构建 ESM、类型声明和核心样式
+pnpm build:lib   # 构建核心与 Workbench ESM、类型声明和样式
 pnpm verify:package # 检查 dist 和 npm 文件清单
 pnpm pack:local  # 构建、检查并生成本地 .tgz
 pnpm release:check # 执行检查、测试、制品构建、校验和本地打包
@@ -301,6 +365,7 @@ pnpm preview     # 预览生产构建
 
 - [Fabric.js](https://fabricjs.com/)：二维编辑画布
 - [Three.js](https://threejs.org/)：模型加载和实时三维渲染
+- [Lucide](https://lucide.dev/)：打包到 Workbench 中的界面图标
 - [Vite](https://vite.dev/)：开发环境和应用构建
 - [TypeScript](https://www.typescriptlang.org/)：启用严格类型检查
 

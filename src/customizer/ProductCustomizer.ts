@@ -54,8 +54,11 @@ export class ProductCustomizer {
       this.product.textureFlipY,
     )
 
-    this.stopSelectionListener = this.editor.onSelectionChange((hasSelection) => {
-      this.emit('selectionchange', { hasSelection })
+    this.stopSelectionListener = this.editor.onSelectionChange((objectIds) => {
+      this.emit('selectionchange', {
+        hasSelection: objectIds.length > 0,
+        objectIds,
+      })
     })
     this.stopRenderListener = this.editor.onRender(() => {
       this.emit('change', { objectCount: this.editor.objectCount })
@@ -124,6 +127,84 @@ export class ProductCustomizer {
       this.reportError(error)
       throw error
     }
+  }
+
+  /**
+   * 返回当前可编辑对象的独立快照
+   *
+   * @returns 按画布层级从后到前排列的 Design JSON 对象
+   */
+  getObjects(): DesignDocument['objects'] {
+    return this.editor.getObjects()
+  }
+
+  /** 当前选中对象的 ID，按画布层级从后到前排列 */
+  getSelectedObjectIds(): string[] {
+    return this.editor.getSelectedObjectIds()
+  }
+
+  /**
+   * 按稳定 ID 选中一个可见对象
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到并选中了对象
+   */
+  selectObject(id: string): boolean {
+    return this.editor.selectObject(id)
+  }
+
+  /**
+   * 按稳定 ID 删除一个对象
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到并删除了对象
+   */
+  removeObject(id: string): boolean {
+    return this.editor.removeObject(id)
+  }
+
+  /**
+   * 将对象移动到指定图层索引
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param index 从 0 开始的索引，0 表示最底层
+   * @returns 对象层级是否发生变化
+   */
+  moveObject(id: string, index: number): boolean {
+    return this.editor.moveObject(id, index)
+  }
+
+  /**
+   * 修改对象在图层面板中的名称
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param name 非空图层名称
+   * @returns 是否找到并更新了对象
+   */
+  renameObject(id: string, name: string): boolean {
+    return this.editor.renameObject(id, name)
+  }
+
+  /**
+   * 修改对象是否参与渲染
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param visible 是否参与二维画布、三维纹理和 PNG 渲染
+   * @returns 是否找到并更新了对象
+   */
+  setObjectVisibility(id: string, visible: boolean): boolean {
+    return this.editor.setObjectVisibility(id, visible)
+  }
+
+  /**
+   * 修改对象是否允许通过画布控件变换
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param locked 是否锁定移动、缩放、旋转、倾斜和文字编辑
+   * @returns 是否找到并更新了对象
+   */
+  setObjectLocked(id: string, locked: boolean): boolean {
+    return this.editor.setObjectLocked(id, locked)
   }
 
   /**

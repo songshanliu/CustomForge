@@ -1,6 +1,7 @@
 import type {
   DesignDocument,
   DesignObject,
+  DesignObjectState,
   DesignObjectTransform,
 } from './types'
 
@@ -51,6 +52,25 @@ function readBoolean(value: unknown, path: string): boolean {
   return value
 }
 
+function parseObjectState(
+  object: Record<string, unknown>,
+  path: string,
+): DesignObjectState {
+  return {
+    ...(object.name === undefined
+      ? {}
+      : { name: readString(object.name, `${path}.name`).trim() }),
+    visible:
+      object.visible === undefined
+        ? true
+        : readBoolean(object.visible, `${path}.visible`),
+    locked:
+      object.locked === undefined
+        ? false
+        : readBoolean(object.locked, `${path}.locked`),
+  }
+}
+
 function parseTransform(value: unknown, path: string): DesignObjectTransform {
   const transform = readRecord(value, path)
   return {
@@ -69,11 +89,13 @@ function parseObject(value: unknown, index: number): DesignObject {
   const object = readRecord(value, path)
   const id = readString(object.id, `${path}.id`)
   const transform = parseTransform(object.transform, `${path}.transform`)
+  const state = parseObjectState(object, path)
 
   if (object.type === 'text') {
     return {
       id,
       type: 'text',
+      ...state,
       transform,
       text: readString(object.text, `${path}.text`, true),
       width: readPositiveNumber(object.width, `${path}.width`),
@@ -88,7 +110,7 @@ function parseObject(value: unknown, index: number): DesignObject {
     if (src.startsWith('blob:')) {
       throw new TypeError(`${path}.src must not use a Blob URL`)
     }
-    return { id, type: 'image', transform, src }
+    return { id, type: 'image', ...state, transform, src }
   }
 
   throw new TypeError(`${path}.type is not supported`)

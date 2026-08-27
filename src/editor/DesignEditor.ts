@@ -28,7 +28,7 @@ interface DesignEditorOptions {
 }
 
 type RenderListener = () => void
-type SelectionListener = (hasSelection: boolean) => void
+type SelectionListener = (objectIds: string[]) => void
 
 /**
  * 基于 Fabric.js 的二维纹理编辑器
@@ -46,6 +46,9 @@ export class DesignEditor {
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
   private readonly objectIds = new WeakMap<FabricObject, string>()
+  private readonly objectsById = new Map<string, FabricObject>()
+  private readonly objectNames = new WeakMap<FabricObject, string>()
+  private readonly objectLocks = new WeakMap<FabricObject, boolean>()
   private readonly usedObjectIds = new Set<string>()
   private readonly imageSources = new WeakMap<FabricImage, string>()
   private readonly resizeObserver: ResizeObserver
@@ -80,10 +83,7 @@ export class DesignEditor {
       this.renderListeners.forEach((listener) => listener())
     })
 
-    const notifySelection = () => {
-      const hasSelection = Boolean(this.canvas.getActiveObject())
-      this.selectionListeners.forEach((listener) => listener(hasSelection))
-    }
+    const notifySelection = () => this.notifySelectionChange()
 
     this.canvas.on('selection:created', notifySelection)
     this.canvas.on('selection:updated', notifySelection)
@@ -129,12 +129,154 @@ export class DesignEditor {
   /**
    * 订阅画布选中状态变化
    *
-   * @param listener 接收当前是否存在选区的函数
+   * @param listener 接收当前选中对象 ID 的函数
    * @returns 用于取消本次订阅的函数
    */
   onSelectionChange(listener: SelectionListener): () => void {
     this.selectionListeners.add(listener)
     return () => this.selectionListeners.delete(listener)
+  }
+
+  /**
+   * 返回当前对象的独立 Design JSON 快照
+   *
+   * @returns 按画布层级从后到前排列的对象数组
+   */
+  getObjects(): DesignObject[] {
+    return this.canvas.getObjects().map((object) => this.serializeObject(object))
+  }
+
+  /** 当前选中对象的 ID，按画布层级从后到前排列 */
+  getSelectedObjectIds(): string[] {
+    return this.canvas
+      .getActiveObjects()
+      .map((object) => this.objectIds.get(object))
+      .filter((id): id is string => Boolean(id))
+  }
+
+  /**
+   * 按稳定 ID 选中一个可见对象
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到并选中了对象
+   */
+  selectObject(id: string): boolean {
+    const object = this.objectsById.get(id)
+    if (!object || !object.visible) {
+      return false
+    }
+
+    this.canvas.setActiveObject(object)
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
+    return true
+  }
+
+  /**
+   * 按稳定 ID 删除一个对象
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到并删除了对象
+   */
+  removeObject(id: string): boolean {
+    const object = this.objectsById.get(id)
+    if (!object) {
+      return false
+    }
+
+    if (this.canvas.getActiveObjects().includes(object)) {
+      this.canvas.discardActiveObject()
+    }
+    this.canvas.remove(object)
+    this.unregisterObject(object)
+    object.dispose()
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
+    return true
+  }
+
+  /**
+   * 将对象移动到指定图层索引
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param index 从 0 开始的索引，0 表示最底层
+   * @returns 对象层级是否发生变化
+   */
+  moveObject(id: string, index: number): boolean {
+    const object = this.objectsById.get(id)
+    const objects = this.canvas.getObjects()
+    if (!object || !Number.isInteger(index) || objects.length === 0) {
+      return false
+    }
+
+    const currentIndex = objects.indexOf(object)
+    const nextIndex = Math.min(Math.max(index, 0), objects.length - 1)
+    if (currentIndex === nextIndex) {
+      return false
+    }
+
+    this.canvas.moveObjectTo(object, nextIndex)
+    this.canvas.requestRenderAll()
+    return true
+  }
+
+  /**
+   * 修改对象在图层面板中的名称
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param name 非空图层名称
+   * @returns 是否找到并更新了对象
+   */
+  renameObject(id: string, name: string): boolean {
+    const object = this.objectsById.get(id)
+    const normalizedName = name.trim()
+    if (!object || !normalizedName) {
+      return false
+    }
+
+    this.objectNames.set(object, normalizedName)
+    this.canvas.requestRenderAll()
+    return true
+  }
+
+  /**
+   * 修改对象是否参与渲染
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param visible 是否参与二维画布、三维纹理和 PNG 渲染
+   * @returns 是否找到并更新了对象
+   */
+  setObjectVisibility(id: string, visible: boolean): boolean {
+    const object = this.objectsById.get(id)
+    if (!object || object.visible === visible) {
+      return Boolean(object)
+    }
+
+    if (!visible && this.canvas.getActiveObjects().includes(object)) {
+      this.canvas.discardActiveObject()
+    }
+    object.set({ visible })
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
+    return true
+  }
+
+  /**
+   * 修改对象是否允许通过画布控件变换
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param locked 是否锁定移动、缩放、旋转、倾斜和文字编辑
+   * @returns 是否找到并更新了对象
+   */
+  setObjectLocked(id: string, locked: boolean): boolean {
+    const object = this.objectsById.get(id)
+    if (!object) {
+      return false
+    }
+
+    this.applyObjectLock(object, locked)
+    this.canvas.requestRenderAll()
+    return true
   }
 
   /**
@@ -253,7 +395,7 @@ export class DesignEditor {
     return {
       version: 1,
       canvas: { width: this.width, height: this.height },
-      objects: this.canvas.getObjects().map((object) => this.serializeObject(object)),
+      objects: this.getObjects(),
     }
   }
 
@@ -277,6 +419,8 @@ export class DesignEditor {
       id: string
       object: FabricObject
       source?: string
+      name?: string
+      locked: boolean
     }> = []
 
     try {
@@ -285,6 +429,8 @@ export class DesignEditor {
           id: object.id,
           object: await this.createObjectFromDesign(object),
           source: object.type === 'image' ? object.src : undefined,
+          name: object.name,
+          locked: object.locked ?? false,
         })
       }
     } catch (error) {
@@ -297,9 +443,10 @@ export class DesignEditor {
     this.canvas.remove(...previousObjects)
     previousObjects.forEach((object) => object.dispose())
     this.usedObjectIds.clear()
+    this.objectsById.clear()
 
     for (const entry of entries) {
-      this.registerObject(entry.object, entry.id)
+      this.registerObject(entry.object, entry.id, entry.name, entry.locked)
       if (entry.object instanceof FabricImage && entry.source) {
         this.imageSources.set(entry.object, entry.source)
       }
@@ -308,7 +455,7 @@ export class DesignEditor {
     }
 
     this.canvas.requestRenderAll()
-    this.selectionListeners.forEach((listener) => listener(false))
+    this.notifySelectionChange()
   }
 
   /**
@@ -323,9 +470,13 @@ export class DesignEditor {
     }
 
     this.canvas.remove(...selection)
+    selection.forEach((object) => {
+      this.unregisterObject(object)
+      object.dispose()
+    })
     this.canvas.discardActiveObject()
     this.canvas.requestRenderAll()
-    this.selectionListeners.forEach((listener) => listener(false))
+    this.notifySelectionChange()
     return true
   }
 
@@ -353,6 +504,8 @@ export class DesignEditor {
     this.resizeObserver.disconnect()
     this.renderListeners.clear()
     this.selectionListeners.clear()
+    this.objectsById.clear()
+    this.usedObjectIds.clear()
     this.canvas.dispose()
     this.host.replaceChildren()
   }
@@ -363,15 +516,32 @@ export class DesignEditor {
     this.constrainObjectToCanvas(object)
     this.canvas.setActiveObject(object)
     this.canvas.requestRenderAll()
-    this.selectionListeners.forEach((listener) => listener(true))
+    this.notifySelectionChange()
   }
 
-  private registerObject(object: FabricObject, id = this.createObjectId()): void {
+  private registerObject(
+    object: FabricObject,
+    id = this.createObjectId(),
+    name?: string,
+    locked = false,
+  ): void {
     if (this.usedObjectIds.has(id)) {
       throw new Error(`Design object id is already in use: ${id}`)
     }
     this.usedObjectIds.add(id)
     this.objectIds.set(object, id)
+    this.objectsById.set(id, object)
+    if (name) {
+      this.objectNames.set(object, name)
+    }
+    this.applyObjectLock(object, locked)
+  }
+
+  private unregisterObject(object: FabricObject): void {
+    const id = this.objectIds.get(object)
+    if (id) {
+      this.objectsById.delete(id)
+    }
   }
 
   private createObjectId(): string {
@@ -390,6 +560,11 @@ export class DesignEditor {
     }
 
     const transform = this.serializeTransform(object)
+    const state = {
+      name: this.objectNames.get(object) ?? this.createObjectName(object),
+      visible: object.visible,
+      locked: this.objectLocks.get(object) ?? false,
+    }
     if (object instanceof Textbox) {
       if (typeof object.fill !== 'string') {
         throw new Error(`Text object ${id} uses an unsupported non-string fill`)
@@ -397,6 +572,7 @@ export class DesignEditor {
       return {
         id,
         type: 'text',
+        ...state,
         transform,
         text: object.text,
         width: object.width,
@@ -411,7 +587,7 @@ export class DesignEditor {
       if (!src || src.startsWith('blob:')) {
         throw new Error(`Image object ${id} does not have a persistent source`)
       }
-      return { id, type: 'image', transform, src }
+      return { id, type: 'image', ...state, transform, src }
     }
 
     throw new Error(`Design object ${id} has an unsupported type`)
@@ -441,6 +617,7 @@ export class DesignEditor {
       angle: design.transform.rotation,
       flipX: design.transform.flipX,
       flipY: design.transform.flipY,
+      visible: design.visible ?? true,
       transparentCorners: false,
       cornerColor: '#ffffff',
       cornerStrokeColor: '#13717d',
@@ -471,6 +648,36 @@ export class DesignEditor {
       source,
       source.startsWith('data:') ? undefined : { crossOrigin: 'anonymous' },
     )
+  }
+
+  private createObjectName(object: FabricObject): string {
+    if (object instanceof Textbox) {
+      return object.text.trim().slice(0, 48) || 'Text'
+    }
+    return object instanceof FabricImage ? 'Image' : 'Object'
+  }
+
+  private applyObjectLock(object: FabricObject, locked: boolean): void {
+    this.objectLocks.set(object, locked)
+    object.set({
+      hasBorders: !locked,
+      hasControls: !locked,
+      lockMovementX: locked,
+      lockMovementY: locked,
+      lockRotation: locked,
+      lockScalingX: locked,
+      lockScalingY: locked,
+      lockSkewingX: locked,
+      lockSkewingY: locked,
+    })
+    if (object instanceof Textbox) {
+      object.set({ editable: !locked })
+    }
+  }
+
+  private notifySelectionChange(): void {
+    const objectIds = this.getSelectedObjectIds()
+    this.selectionListeners.forEach((listener) => listener(objectIds))
   }
 
   private constrainObjectToCanvas(object: FabricObject): void {

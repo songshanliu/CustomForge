@@ -120,8 +120,20 @@ export interface DesignObjectTransform {
   flipY: boolean
 }
 
+/** Design JSON 中可编辑对象共用的图层状态 */
+export interface DesignObjectState {
+  /** 图层面板使用的可选名称，缺省时由对象内容生成 */
+  name?: string
+
+  /** 对象是否参与二维画布、三维纹理和 PNG 渲染，默认为 true */
+  visible?: boolean
+
+  /** 对象是否禁止通过画布控件变换，默认为 false */
+  locked?: boolean
+}
+
 /** Design JSON 中的文字对象 */
-export interface TextDesignObject {
+export interface TextDesignObject extends DesignObjectState {
   /** 文档内稳定且唯一的对象标识 */
   id: string
 
@@ -148,7 +160,7 @@ export interface TextDesignObject {
 }
 
 /** Design JSON 中的图片对象 */
-export interface ImageDesignObject {
+export interface ImageDesignObject extends DesignObjectState {
   /** 文档内稳定且唯一的对象标识 */
   id: string
 
@@ -185,7 +197,7 @@ export interface DesignDocument {
  * 产品定制器事件及其载荷
  */
 export interface CustomizerEventMap {
-  /** 二维设计发生变化 */
+  /** 二维设计内容或图层状态发生变化 */
   change: { objectCount: number }
 
   /** 模型、纹理或图片处理失败 */
@@ -194,8 +206,8 @@ export interface CustomizerEventMap {
   /** 产品模型和纹理完成加载 */
   ready: { product: ProductConfiguration }
 
-  /** 二维编辑器的选中状态发生变化 */
-  selectionchange: { hasSelection: boolean }
+  /** 二维编辑器的选中状态发生变化，objectIds 按画布层级从后到前排列 */
+  selectionchange: { hasSelection: boolean; objectIds: string[] }
 
   /** 加载或运行状态发生变化 */
   status: { message: string }
