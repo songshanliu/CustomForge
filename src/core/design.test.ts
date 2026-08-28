@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDesignDocument } from './design'
+import { parseDesignDocument, parseProductDesignDocument } from './design'
 
 const validDesign = {
   version: 1,
@@ -154,5 +154,48 @@ describe('parseDesignDocument', () => {
         ],
       }),
     ).toThrow('design must not contain more than one background')
+  })
+})
+
+describe('parseProductDesignDocument', () => {
+  const productDesign = {
+    version: 2,
+    modelFingerprint: 'cf-12345678',
+    processorVersion: '1',
+    activeAreaId: 'area-1',
+    areas: [
+      {
+        areaId: 'area-1',
+        areaFingerprint: 'area-1',
+        canvas: validDesign.canvas,
+        objects: validDesign.objects,
+      },
+      {
+        areaId: 'area-2',
+        areaFingerprint: 'area-2',
+        canvas: validDesign.canvas,
+        objects: [],
+      },
+    ],
+  }
+
+  it('sanitizes every area in a version 2 product document', () => {
+    expect(parseProductDesignDocument(productDesign)).toEqual(productDesign)
+  })
+
+  it('rejects duplicate areas and an unknown active area', () => {
+    expect(() =>
+      parseProductDesignDocument({
+        ...productDesign,
+        areas: [productDesign.areas[0], productDesign.areas[0]],
+      }),
+    ).toThrow('design area id is duplicated: area-1')
+
+    expect(() =>
+      parseProductDesignDocument({
+        ...productDesign,
+        activeAreaId: 'area-3',
+      }),
+    ).toThrow('design.activeAreaId must reference design.areas')
   })
 })

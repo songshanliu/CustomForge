@@ -4,10 +4,14 @@ import type {
   DesignObject,
   DesignObjectState,
   DesignObjectTransform,
+  ProductDesignDocument,
 } from './types'
 
 /** 当前支持的 Design JSON Schema 版本 */
 export const DESIGN_SCHEMA_VERSION = 1
+
+/** 当前支持的多区域产品 Design JSON Schema 版本 */
+export const PRODUCT_DESIGN_SCHEMA_VERSION = 2
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -177,5 +181,72 @@ export function parseDesignDocument(value: unknown): DesignDocument {
       height: readPositiveNumber(canvas.height, 'design.canvas.height'),
     },
     objects,
+  }
+}
+
+/**
+ * 校验并净化外部多区域产品 Design JSON
+ *
+ * 区域内部对象复用 version 1 单画布解析规则，模型与区域指纹的匹配由产品实例负责
+ *
+ * @param value JSON.parse 结果或其他未知输入
+ * @returns 只包含当前多区域 Schema 字段的新产品设计文档
+ * @throws 文档版本、区域字段或嵌套设计对象不符合契约时抛出 TypeError
+ */
+export function parseProductDesignDocument(
+  value: unknown,
+): ProductDesignDocument {
+  const product = readRecord(value, 'design')
+  if (product.version !== PRODUCT_DESIGN_SCHEMA_VERSION) {
+    throw new TypeError(
+      'design.version must be ' + PRODUCT_DESIGN_SCHEMA_VERSION,
+    )
+  }
+  const modelFingerprint = readString(
+    product.modelFingerprint,
+    'design.modelFingerprint',
+  )
+  const processorVersion = readString(
+    product.processorVersion,
+    'design.processorVersion',
+  )
+  const activeAreaId = readString(product.activeAreaId, 'design.activeAreaId')
+  if (!Array.isArray(product.areas) || product.areas.length === 0) {
+    throw new TypeError('design.areas must be a non-empty array')
+  }
+
+  const areaIds = new Set<string>()
+  const areas = product.areas.map((value, index) => {
+    const path = 'design.areas[' + index + ']'
+    const area = readRecord(value, path)
+    const areaId = readString(area.areaId, path + '.areaId')
+    if (areaIds.has(areaId)) {
+      throw new TypeError('design area id is duplicated: ' + areaId)
+    }
+    areaIds.add(areaId)
+    const parsed = parseDesignDocument({
+      version: DESIGN_SCHEMA_VERSION,
+      canvas: area.canvas,
+      objects: area.objects,
+    })
+    return {
+      areaId,
+      areaFingerprint: readString(
+        area.areaFingerprint,
+        path + '.areaFingerprint',
+      ),
+      canvas: parsed.canvas,
+      objects: parsed.objects,
+    }
+  })
+  if (!areaIds.has(activeAreaId)) {
+    throw new TypeError('design.activeAreaId must reference design.areas')
+  }
+  return {
+    version: PRODUCT_DESIGN_SCHEMA_VERSION,
+    modelFingerprint,
+    processorVersion,
+    activeAreaId,
+    areas,
   }
 }

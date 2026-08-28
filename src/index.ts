@@ -20,7 +20,6 @@ import type { CustomizerOptions } from './core/types'
  *   viewer: '#viewer',
  *   product: {
  *     modelUrl: 'https://example.com/product.glb',
- *     surfaceMesh: 'PrintArea',
  *   },
  * })
  * ```
@@ -38,6 +37,11 @@ export type {
   CustomizerEventMap,
   CustomizerOptions,
   DesignCanvas,
+  DesignArea,
+  DesignAreaMetrics,
+  DesignAreaSource,
+  DesignAreaViewport,
+  DesignGuideArea,
   DesignDocument,
   DesignImageRole,
   DesignObject,
@@ -46,5 +50,13 @@ export type {
   ImageDesignObject,
   HistoryState,
   ProductConfiguration,
+  ProductDesignAreaConfiguration,
+  ProductDesignAreaDocument,
+  ProductDesignAreaStrategy,
+  ProductDesignDocument,
+  ProductDesignGuideConfiguration,
+  ProductModelSource,
+  ProductProcessingProgress,
+  ProductProcessingStage,
   TextDesignObject,
 } from './core/types'

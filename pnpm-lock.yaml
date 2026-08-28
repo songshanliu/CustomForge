@@ -14,6 +14,12 @@ importers:
       three:
         specifier: ^0.185.1
         version: 0.185.1
+      xatlas-three:
+        specifier: 0.2.1
+        version: 0.2.1
+      xatlasjs:
+        specifier: 0.2.0
+        version: 0.2.0
     devDependencies:
       '@types/three':
         specifier: ^0.185.4
@@ -30,6 +36,7 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(jsdom@26.1.0(canvas@3.2.3))(vite@8.2.2)
+
 packages:
 
   '@asamuzakjp/css-color@3.2.0':
@@ -371,6 +378,9 @@ packages:
 
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
+
+  comlink@4.4.2:
+    resolution: {integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==}
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
@@ -882,6 +892,12 @@ packages:
       utf-8-validate:
         optional: true
 
+  xatlas-three@0.2.1:
+    resolution: {integrity: sha512-lSdakwxt2AzGmEP2dnYqmS8KqM8ErxBzwAwuEtrbOLxVpWaSJZB5FAUZ4+cT/kKSLlyHZVm866rTCtT+9RjJgg==}
+
+  xatlasjs@0.2.0:
+    resolution: {integrity: sha512-3YxdpuDY4X2Kjn/Zm2c5648x/hYAP/X5YIx7nc1ify65kroSX+CFyzkhbBkIq9RDpjhA2prPRyhJZzYPUE1WgQ==}
+
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -1135,6 +1151,9 @@ snapshots:
   chai@6.2.2: {}
 
   chownr@1.1.4:
+    optional: true
+
+  comlink@4.4.2:
     optional: true
 
   convert-source-map@2.0.0: {}
@@ -1647,6 +1666,12 @@ snapshots:
 
   ws@8.21.3:
     optional: true
+
+  xatlas-three@0.2.1: {}
+
+  xatlasjs@0.2.0:
+    optionalDependencies:
+      comlink: 4.4.2
 
   xml-name-validator@5.0.0:
     optional: true

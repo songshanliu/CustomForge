@@ -3,21 +3,172 @@
  */
 export type ElementTarget = HTMLElement | string
 
-/**
- * 产品配置
- */
+/** 设计辅助区域在纹理画布中的归一化矩形 */
+export interface DesignGuideArea {
+  /** 左边界相对画布宽度的比例，范围为 0-1 */
+  x: number
+
+  /** 上边界相对画布高度的比例，范围为 0-1 */
+  y: number
+
+  /** 区域宽度相对画布宽度的比例，必须大于 0 且不越过右边界 */
+  width: number
+
+  /** 区域高度相对画布高度的比例，必须大于 0 且不越过下边界 */
+  height: number
+}
+
+/** 二维画布中只供定位参考且不进入三维纹理或 PNG 的产品辅助配置 */
+export interface ProductDesignGuideConfiguration {
+  /** 初次加载产品时是否显示辅助层，默认为 true */
+  visible?: boolean
+
+  /** 是否从目标 Mesh 自动提取并显示 UV 岛边界，默认为 true */
+  showUv?: boolean
+
+  /** 覆盖整个编辑区的可选 SVG 或 PNG 模板地址，需允许跨域读取 */
+  templateUrl?: string
+
+  /** 推荐放置重要文字和图形的可选安全区 */
+  safeArea?: DesignGuideArea
+
+  /** 包含裁切余量的可选出血区 */
+  bleedArea?: DesignGuideArea
+}
+
+/** 浏览器可以直接读取的产品模型来源 */
+export type ProductModelSource = string | Blob | ArrayBuffer
+
+/** 自动区域候选的评分侧重 */
+export type ProductDesignAreaStrategy = 'balanced' | 'flat' | 'visible'
+
+/** 产品设计区域的生成配置 */
+export interface ProductDesignAreaConfiguration {
+  /**
+   * 设计区域来源，远程模型未指定 surfaceMesh 时默认为 auto，
+   * 显式提供 surfaceMesh 或使用内置演示模型时默认为 existing-uv
+   */
+  mode?: 'auto' | 'existing-uv'
+
+  /** 自动模式最多保留的候选区域数量，默认为 4，范围为 1-8 */
+  maxAreas?: number
+
+  /** 每个自动区域纹理的建议边长，单位为像素，默认为 1024 */
+  textureSize?: number
+
+  /** 自动候选评分侧重，默认为 balanced */
+  strategy?: ProductDesignAreaStrategy
+
+  /** 是否允许通过三维模型点击切换自动候选区域，默认为 true */
+  allowSurfacePick?: boolean
+}
+
+/** 产品配置 */
 export interface ProductConfiguration {
-  /** GLB 或 GLTF 模型的远程地址，不传时使用内置演示模型 */
+  /**
+   * GLB 或 GLTF 模型来源，Blob 和 ArrayBuffer 只支持资源自包含的 GLB
+   *
+   * 不能与 modelUrl 同时提供，读取 Blob 不会创建长期存在的对象 URL
+   */
+  model?: ProductModelSource
+
+  /** GLB 或 GLTF 模型的兼容远程地址，不传 model 和 modelUrl 时使用内置演示模型 */
   modelUrl?: string
 
   /** 二维编辑器使用的可选基础纹理地址 */
   textureUrl?: string
 
-  /** 接收实时纹理的模型 Mesh 名称，默认为 PrintArea */
+  /** existing-uv 模式下接收实时纹理的 Mesh 名称，默认为 PrintArea */
   surfaceMesh?: string
 
-  /** 是否在映射到三维模型前垂直翻转纹理 */
+  /** existing-uv 模式是否垂直翻转纹理；自动模式忽略该值并固定为 false */
   textureFlipY?: boolean
+
+  /** 不参与三维纹理和 PNG 导出的二维模板与 UV 辅助配置 */
+  designGuide?: ProductDesignGuideConfiguration
+
+  /** 自动生成区域或使用模型已有 UV 的配置 */
+  designAreas?: ProductDesignAreaConfiguration
+}
+
+/** 设计区域的创建来源 */
+export type DesignAreaSource = 'auto' | 'picked' | 'configured'
+
+/** 设计区域的几何与参数化质量指标 */
+export interface DesignAreaMetrics {
+  /** 区域在模型局部坐标中的表面积 */
+  surfaceArea: number
+
+  /** 视角采样可见度，尚未采样时为 0 */
+  visibility: number
+
+  /** UV 轮廓紧凑度，范围为 0-1 */
+  compactness: number
+
+  /** 角度畸变估计，越接近 0 越好 */
+  angleDistortion: number
+
+  /** 面积畸变估计，越接近 0 越好 */
+  areaDistortion: number
+}
+
+/** 可以独立编辑并映射到三维模型局部表面的设计区域 */
+export interface DesignArea {
+  /** 相同模型、配置和处理器版本下保持稳定的区域标识 */
+  id: string
+
+  /** 面向界面的稳定区域名称，不推断商品部件语义 */
+  label: string
+
+  /** 区域的创建来源 */
+  source: DesignAreaSource
+
+  /** 自动候选综合评分，范围为 0-1 */
+  score: number
+
+  /** 自动选择可信度，范围为 0-1 */
+  confidence: number
+
+  /** 区域纹理的建议边长，单位为像素 */
+  textureSize: number
+
+  /** 区域几何与 UV 质量指标 */
+  metrics: DesignAreaMetrics
+}
+
+/** 二维编辑区域的显示视口，不改变设计坐标或纹理内容 */
+export interface DesignAreaViewport {
+  /** 相对于自动适配尺寸的缩放倍数，范围为 0.25-4 */
+  zoom: number
+
+  /** 相对于自动适配中心的水平平移，单位为 CSS 像素 */
+  panX: number
+
+  /** 相对于自动适配中心的垂直平移，单位为 CSS 像素 */
+  panY: number
+}
+
+/** 自动产品处理阶段 */
+export type ProductProcessingStage =
+  | 'loading-model'
+  | 'inspecting-geometry'
+  | 'finding-design-areas'
+  | 'unwrapping-surface'
+  | 'preparing-editor'
+
+/** 自动产品处理进度 */
+export interface ProductProcessingProgress {
+  /** 当前处理阶段 */
+  stage: ProductProcessingStage
+
+  /** 当前阶段完成比例，范围为 0-1 */
+  progress: number
+
+  /** 当前阶段已完成的工作项数量 */
+  completed: number
+
+  /** 当前阶段工作项总数 */
+  total: number
 }
 
 /**
@@ -211,6 +362,43 @@ export interface DesignDocument {
   objects: DesignObject[]
 }
 
+/** 多区域产品设计文档中的单个区域内容 */
+export interface ProductDesignAreaDocument {
+  /** 保存时对应的稳定区域 ID */
+  areaId: string
+
+  /** 由来源三角形和最终 UV 生成、用于检测处理结果变化的区域指纹 */
+  areaFingerprint: string
+
+  /** 保存区域设计时使用的逻辑画布尺寸 */
+  canvas: DesignCanvas
+
+  /** 按渲染层级从后到前排列的区域设计对象 */
+  objects: DesignObject[]
+}
+
+/**
+ * 可持久化并恢复的多区域产品设计文档
+ *
+ * 加载时模型指纹和区域指纹必须与当前产品一致，避免设计映射到错误表面
+ */
+export interface ProductDesignDocument {
+  /** Schema 版本，当前固定为 2 */
+  version: 2
+
+  /** 由静态 Mesh 路径、位置、索引和材质分组生成的模型指纹 */
+  modelFingerprint: string
+
+  /** 自动区域处理器版本 */
+  processorVersion: string
+
+  /** 保存时正在编辑的区域 ID */
+  activeAreaId: string
+
+  /** 当前产品全部区域的设计内容 */
+  areas: ProductDesignAreaDocument[]
+}
+
 /** 撤销与重做历史的可用状态 */
 export interface HistoryState {
   /** 当前是否存在可以撤销的设计快照 */
@@ -232,6 +420,24 @@ export interface CustomizerEventMap {
 
   /** 撤销或重做可用状态发生变化 */
   historychange: HistoryState
+
+  /** 产品设计辅助层的显示状态发生变化 */
+  designguidechange: { visible: boolean }
+
+  /** 自动模型分析或 UV 参数化进度发生变化 */
+  processingprogress: ProductProcessingProgress
+
+  /** 当前产品可用设计区域列表发生变化 */
+  designareaschange: { areas: DesignArea[] }
+
+  /** 当前二维编辑器切换到另一个设计区域 */
+  activeareachange: { area: DesignArea }
+
+  /** 三维表面点击选择模式发生变化 */
+  surfacepickchange: { active: boolean }
+
+  /** 二维编辑视口缩放或平移发生变化 */
+  editorviewportchange: DesignAreaViewport
 
   /** 产品模型和纹理完成加载 */
   ready: { product: ProductConfiguration }

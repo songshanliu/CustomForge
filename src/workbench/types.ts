@@ -29,6 +29,18 @@ export interface WorkbenchFeatures {
   /** 是否显示三维视角重置控件，默认为 true */
   resetView: boolean
 
+  /** 是否显示产品模板和 UV 辅助层开关，默认为 true */
+  designGuide: boolean
+
+  /** 是否显示自动设计区域切换控件，默认为 true */
+  designAreas: boolean
+
+  /** 是否显示二维编辑区域缩放和平移控件，默认为 true */
+  editorViewport: boolean
+
+  /** 是否显示三维表面候选选择控件，默认为 true */
+  surfacePick: boolean
+
   /** 是否允许通过图层面板调整对象顺序，默认为 true */
   reorderObjects: boolean
 
@@ -140,6 +152,39 @@ export interface WorkbenchLabels {
   /** 重置三维视角命令 */
   resetView: string
 
+  /** 显示产品模板和 UV 辅助层命令 */
+  showDesignGuide: string
+
+  /** 隐藏产品模板和 UV 辅助层命令 */
+  hideDesignGuide: string
+
+  /** 设计区域选择器名称 */
+  designArea: string
+
+  /** 切换到上一个设计区域命令 */
+  previousArea: string
+
+  /** 切换到下一个设计区域命令 */
+  nextArea: string
+
+  /** 放大二维编辑区域命令 */
+  zoomIn: string
+
+  /** 缩小二维编辑区域命令 */
+  zoomOut: string
+
+  /** 完整适配当前设计区域命令 */
+  fitDesignArea: string
+
+  /** 以自动适配基准的 100% 比例显示命令 */
+  actualSize: string
+
+  /** 在三维模型上选择设计区域命令 */
+  selectSurface: string
+
+  /** 取消三维表面选择命令 */
+  cancelSurfacePick: string
+
   /** 文字图层类型名称 */
   textObject: string
 
@@ -148,6 +193,12 @@ export interface WorkbenchLabels {
 
   /** 设计背景图层类型名称 */
   backgroundObject: string
+
+  /** 产品设计模板地址字段标签 */
+  designGuideTemplateUrl: string
+
+  /** 自动显示目标 Mesh 的 UV 岛边界字段标签 */
+  showUvGuide: string
 
   /** 显示图层命令 */
   showLayer: string
@@ -233,6 +284,15 @@ export interface WorkbenchLabels {
   /** 模型地址字段标签 */
   modelUrl: string
 
+  /** 本地 GLB 文件字段标签 */
+  modelFile: string
+
+  /** 自动生成设计区域模式名称 */
+  automaticMode: string
+
+  /** 使用指定 Mesh 已有 UV 模式名称 */
+  existingUvMode: string
+
   /** 基础纹理地址字段标签 */
   textureUrl: string
 
@@ -250,6 +310,21 @@ export interface WorkbenchLabels {
 
   /** 产品就绪状态文案 */
   productReady: string
+
+  /** 正在加载模型状态文案 */
+  loadingModel: string
+
+  /** 正在检查几何体状态文案 */
+  inspectingGeometry: string
+
+  /** 正在查找设计区域状态文案 */
+  findingDesignAreas: string
+
+  /** 正在展开设计表面状态文案 */
+  unwrappingSurface: string
+
+  /** 正在准备编辑器状态文案 */
+  preparingEditor: string
 
   /** 设计保存成功状态文案 */
   designSaved: string
@@ -316,6 +391,8 @@ export type WorkbenchIconName =
   | 'backgroundObject'
   | 'close'
   | 'deleteSelection'
+  | 'designGuide'
+  | 'fitDesignArea'
   | 'exportTexture'
   | 'hideLayer'
   | 'imageObject'
@@ -325,14 +402,19 @@ export type WorkbenchIconName =
   | 'lock'
   | 'moveBackward'
   | 'moveForward'
+  | 'nextArea'
+  | 'previousArea'
   | 'redo'
   | 'resetView'
   | 'saveDesign'
+  | 'selectSurface'
   | 'showLayer'
   | 'textObject'
   | 'undo'
   | 'unlock'
   | 'upload'
+  | 'zoomIn'
+  | 'zoomOut'
 
 /** Workbench 图标配置 */
 export interface WorkbenchIconConfiguration {

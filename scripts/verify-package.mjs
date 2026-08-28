@@ -103,6 +103,14 @@ assert(
 assert(packageJson.exports?.['./style.css'] === './dist/style.css', 'Style export is invalid')
 assert(packageJson.dependencies?.fabric, 'Fabric.js must be a runtime dependency')
 assert(packageJson.dependencies?.three, 'Three.js must be a runtime dependency')
+assert(
+  packageJson.dependencies?.['xatlas-three'] === '0.2.1',
+  'xatlas-three runtime dependency is invalid',
+)
+assert(
+  packageJson.dependencies?.xatlasjs === '0.2.0',
+  'xatlasjs runtime dependency is invalid',
+)
 assert(!packageJson.peerDependencies?.fabric, 'Fabric.js must not be a peer dependency')
 assert(!packageJson.peerDependencies?.three, 'Three.js must not be a peer dependency')
 assert(!packageJson.dependencies?.lucide, 'Bundled icon package must not be a runtime dependency')
@@ -135,7 +143,12 @@ const requiredDistFiles = [
   'index.js.map',
   'style.css',
   'core/types.d.ts',
+  'bridge/AreaTextureBridge.d.ts',
   'customizer/ProductCustomizer.d.ts',
+  'design-area/XAtlasParameterizer.d.ts',
+  'processing/SurfaceAnalysisCoordinator.d.ts',
+  'processing/types.d.ts',
+  'viewer/uvLayout.d.ts',
   'workbench.js',
   'workbench.js.map',
   'workbench/CustomForgeWorkbench.d.ts',
@@ -175,6 +188,13 @@ assert(
   'Three.js is missing as an external import',
 )
 assert(!importSpecifiers.some((specifier) => specifier === 'lucide'), 'Workbench icon dependency leaked into the core bundle')
+assert(
+  !runtimeImportSpecifiers.some(
+    (specifier) =>
+      specifier === 'xatlas-three' || specifier.startsWith('xatlasjs/'),
+  ),
+  'xatlas runtime must be bundled with its Worker and WASM assets',
+)
 assert(!librarySource.includes('Texture pipeline prototype'), 'Demo source leaked into bundle')
 
 const libraryStats = await stat(new URL('dist/index.js', projectRoot))
@@ -194,6 +214,18 @@ for (const file of runtimeJavaScriptFiles) {
   runtimeJavaScriptSize += (await stat(new URL(`dist/${file}`, projectRoot))).size
 }
 assert(runtimeJavaScriptSize < 500_000, 'Library JavaScript output is unexpectedly large')
+const surfaceWorkerFile = distFiles.find(
+  (file) => /surfaceAnalysis\.worker.*\.js$/i.test(file),
+)
+const xatlasWorkerFile = distFiles.find(
+  (file) => /(?:^|\/)xatlas[^/]*\.js$/i.test(file),
+)
+const xatlasWasmFile = distFiles.find(
+  (file) => /(?:^|\/)xatlas[^/]*\.wasm$/i.test(file),
+)
+assert(surfaceWorkerFile, 'Surface analysis Worker asset is missing')
+assert(xatlasWorkerFile, 'xatlas Worker asset is missing')
+assert(xatlasWasmFile, 'xatlas WASM asset is missing')
 
 for (const file of distFiles.filter((entry) => entry.endsWith('.js.map'))) {
   const sourceMap = JSON.parse(await readProjectFile(`dist/${file}`))
@@ -205,6 +237,7 @@ for (const file of distFiles.filter((entry) => entry.endsWith('.js.map'))) {
 
 const coreStyle = await readProjectFile('dist/style.css')
 assert(coreStyle.includes('.customforge-design-canvas'), 'Editor core style is missing')
+assert(coreStyle.includes('.customforge-design-guide'), 'Design guide style is missing')
 assert(coreStyle.includes('.customforge-viewer-canvas'), 'Viewer core style is missing')
 assert(coreStyle.includes('.customforge-workbench'), 'Workbench style is missing')
 assert(coreStyle.includes('@font-face'), 'Bundled font declaration is missing')
@@ -224,12 +257,38 @@ const rootDeclaration = await readProjectFile('dist/index.d.ts')
 assert(!rootDeclaration.includes('/src/'), 'Root declaration contains a source path')
 assert(!rootDeclaration.includes('/demo/'), 'Demo type leaked into root declaration')
 assert(rootDeclaration.includes('DesignDocument'), 'Design document type is missing')
+assert(rootDeclaration.includes('DesignArea'), 'Design area type is missing')
+assert(
+  rootDeclaration.includes('ProductDesignDocument'),
+  'Product design document type is missing',
+)
+assert(
+  rootDeclaration.includes('ProductModelSource'),
+  'Product model source type is missing',
+)
+assert(rootDeclaration.includes('DesignGuideArea'), 'Design guide area type is missing')
+assert(
+  rootDeclaration.includes('ProductDesignGuideConfiguration'),
+  'Product design guide configuration type is missing',
+)
 assert(rootDeclaration.includes('DesignImageRole'), 'Design image role type is missing')
 assert(rootDeclaration.includes('HistoryState'), 'History state type is missing')
 assert(rootDeclaration.includes('CustomizerEventMap'), 'Customizer event map type is missing')
 
 const coreTypesDeclaration = await readProjectFile('dist/core/types.d.ts')
 assert(coreTypesDeclaration.includes('historychange'), 'History event type is missing')
+assert(
+  coreTypesDeclaration.includes('designguidechange'),
+  'Design guide event type is missing',
+)
+assert(
+  coreTypesDeclaration.includes('processingprogress') &&
+    coreTypesDeclaration.includes('designareaschange') &&
+    coreTypesDeclaration.includes('activeareachange') &&
+    coreTypesDeclaration.includes('surfacepickchange') &&
+    coreTypesDeclaration.includes('editorviewportchange'),
+  'Automatic design area event types are missing',
+)
 
 const workbenchDeclaration = await readProjectFile('dist/workbench/index.d.ts')
 assert(workbenchDeclaration.includes('createWorkbench'), 'Workbench factory type is missing')
@@ -244,6 +303,11 @@ assert(
 assert(workbenchDeclaration.includes('WorkbenchTextPreset'), 'Workbench text preset type is missing')
 assert(workbenchDeclaration.includes('WorkbenchAsset'), 'Workbench asset type is missing')
 assert(!workbenchDeclaration.includes('/demo/'), 'Demo type leaked into Workbench declaration')
+const workbenchTypesDeclaration = await readProjectFile('dist/workbench/types.d.ts')
+assert(
+  workbenchTypesDeclaration.includes('designGuide'),
+  'Workbench design guide feature type is missing',
+)
 
 const customizerDeclaration = await readProjectFile(
   'dist/customizer/ProductCustomizer.d.ts',
@@ -259,6 +323,30 @@ assert(customizerDeclaration.includes('canRedo'), 'Redo query method is missing'
 assert(customizerDeclaration.includes('undo'), 'Undo method is missing')
 assert(customizerDeclaration.includes('redo'), 'Redo method is missing')
 assert(customizerDeclaration.includes('clearHistory'), 'History reset method is missing')
+assert(
+  customizerDeclaration.includes('isDesignGuideVisible'),
+  'Design guide visibility query is missing',
+)
+assert(
+  customizerDeclaration.includes('setDesignGuideVisible'),
+  'Design guide visibility method is missing',
+)
+for (const method of [
+  'getDesignAreas',
+  'getActiveDesignAreaId',
+  'setActiveDesignArea',
+  'isSurfacePickAllowed',
+  'beginSurfacePick',
+  'cancelSurfacePick',
+  'getEditorViewport',
+  'setEditorViewport',
+  'fitActiveDesignArea',
+]) {
+  assert(
+    customizerDeclaration.includes(method),
+    `Automatic design area method is missing: ${method}`,
+  )
+}
 assert(
   workbenchSource.includes('data:image/png') ||
     distFiles.some((file) => /CustomForgeLogo.*\.png$/i.test(file)),
@@ -278,10 +366,31 @@ const expectedPackageFiles = [
 const expectedPackageFileSet = new Set(expectedPackageFiles)
 const nunitoLicense = await readProjectFile('LICENSES/NunitoSans-OFL.txt')
 assert(nunitoLicense.includes('SIL OPEN FONT LICENSE Version 1.1'), 'Nunito Sans OFL license is invalid')
+const xatlasThreeLicense = await readProjectFile('LICENSES/xatlas-three-MIT.txt')
+const xatlasJsLicense = await readProjectFile('LICENSES/xatlasjs-MIT.txt')
+const comlinkNotice = await readProjectFile(
+  'LICENSES/Comlink-Apache-2.0-NOTICE.txt',
+)
+assert(
+  xatlasThreeLicense.includes('Copyright (c) 2022 Palash Bansal'),
+  'xatlas-three MIT license is invalid',
+)
+assert(
+  xatlasJsLicense.includes('Copyright (c) 2018-2020 Jonathan Young'),
+  'xatlasjs MIT license is invalid',
+)
+assert(
+  comlinkNotice.includes('Copyright 2019 Google LLC') &&
+    comlinkNotice.includes('Apache-2.0'),
+  'Comlink Apache 2.0 notice is invalid',
+)
 const requiredPackedFiles = [
   'CHANGELOG.md',
   'LICENSE',
   'LICENSES/NunitoSans-OFL.txt',
+  'LICENSES/xatlas-three-MIT.txt',
+  'LICENSES/xatlasjs-MIT.txt',
+  'LICENSES/Comlink-Apache-2.0-NOTICE.txt',
   'README.md',
   'README.zh-CN.md',
   'dist/index.d.ts',

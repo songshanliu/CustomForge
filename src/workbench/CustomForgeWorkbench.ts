@@ -1,5 +1,10 @@
 import { resolveElement } from '../core/dom'
-import type { DesignImageRole, DesignObject } from '../core/types'
+import type {
+  DesignAreaViewport,
+  DesignImageRole,
+  DesignObject,
+  ProductProcessingStage,
+} from '../core/types'
 import { ProductCustomizer } from '../customizer/ProductCustomizer'
 import {
   normalizeWorkbenchOptions,
@@ -45,6 +50,11 @@ function requiredElement<T extends HTMLElement>(
     throw new Error(`Workbench element was not found: ${selector}`)
   }
   return element
+}
+
+function isKeyboardControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement &&
+    target.closest('button, input, select, textarea, [contenteditable="true"]') !== null
 }
 
 function downloadJson(filename: string, value: unknown): void {
@@ -158,6 +168,13 @@ export class CustomForgeWorkbench {
   private readonly deleteButton: HTMLButtonElement
   private readonly undoButton: HTMLButtonElement
   private readonly redoButton: HTMLButtonElement
+  private readonly designGuideButton: HTMLButtonElement
+  private readonly areaSelect: HTMLSelectElement
+  private readonly previousAreaButton: HTMLButtonElement
+  private readonly nextAreaButton: HTMLButtonElement
+  private readonly zoomValue: HTMLButtonElement
+  private readonly surfacePickButton: HTMLButtonElement
+  private readonly editorStage: HTMLElement
   private readonly statusLabel: HTMLElement
   private readonly objectCountLabel: HTMLElement
   private readonly imageInput: HTMLInputElement
@@ -177,6 +194,9 @@ export class CustomForgeWorkbench {
   private activeImageTab: ImageTab = 'upload'
   private layerSignature = ''
   private draggedObjectId?: string
+  private panPointerId?: number
+  private panStart?: { clientX: number; clientY: number; panX: number; panY: number }
+  private spacePressed = false
   private destroyed = false
 
   private constructor(
@@ -200,6 +220,13 @@ export class CustomForgeWorkbench {
     this.deleteButton = this.action('delete-selection')
     this.undoButton = this.action('undo')
     this.redoButton = this.action('redo')
+    this.designGuideButton = this.action('toggle-design-guide')
+    this.areaSelect = requiredElement(element, '[data-role="area-select"]')
+    this.previousAreaButton = this.action('previous-area')
+    this.nextAreaButton = this.action('next-area')
+    this.zoomValue = requiredElement(element, '[data-role="zoom-value"]')
+    this.surfacePickButton = this.action('select-surface')
+    this.editorStage = requiredElement(element, '[data-role="editor-host"]')
     this.statusLabel = requiredElement(element, '[data-role="status-label"]')
     this.objectCountLabel = requiredElement(element, '[data-role="object-count"]')
     this.imageInput = requiredElement(element, '[data-role="image-input"]')
@@ -220,6 +247,11 @@ export class CustomForgeWorkbench {
     this.applyVisibility()
     this.setImageTab('upload')
     this.updateHistoryButtons()
+    this.updateDesignGuideButton(this.customizer.isDesignGuideVisible())
+    this.renderDesignAreas()
+    this.updateEditorViewport(this.customizer.getEditorViewport())
+    this.updateSurfacePickButton(false)
+    this.updateProductMode()
     this.renderLayers(true)
     this.setStatus(this.labels.productReady)
   }
@@ -277,6 +309,9 @@ export class CustomForgeWorkbench {
     }
     if (feature === 'addImage' && !enabled && this.imageDialog.open) {
       this.closeDialog(this.imageDialog)
+    }
+    if (feature === 'surfacePick' && !enabled) {
+      this.customizer.cancelSurfacePick()
     }
     if (
       (feature === 'presetBackgrounds' && this.activeImageTab === 'backgrounds') ||
@@ -340,6 +375,30 @@ export class CustomForgeWorkbench {
         this.renderLayers()
       }),
       this.customizer.on('historychange', () => this.updateHistoryButtons()),
+      this.customizer.on('designguidechange', ({ visible }) =>
+        this.updateDesignGuideButton(visible),
+      ),
+      this.customizer.on('designareaschange', () => this.renderDesignAreas()),
+      this.customizer.on('activeareachange', ({ area }) => {
+        this.areaSelect.value = area.id
+        this.updateAreaButtons()
+        this.renderLayers(true)
+      }),
+      this.customizer.on('editorviewportchange', (viewport) =>
+        this.updateEditorViewport(viewport),
+      ),
+      this.customizer.on('surfacepickchange', ({ active }) =>
+        this.updateSurfacePickButton(active),
+      ),
+      this.customizer.on('processingprogress', (progress) => {
+        this.setStatus(
+          this.localizeProcessingStage(progress.stage) +
+            ' ' +
+            Math.round(progress.progress * 100) +
+            '%',
+          'busy',
+        )
+      }),
       this.customizer.on('status', ({ message }) =>
         this.setStatus(this.localizeStatus(message)),
       ),
@@ -356,9 +415,65 @@ export class CustomForgeWorkbench {
     this.element.addEventListener(
       'keydown',
       (event) => {
+        if (event.code === 'Space' && !isKeyboardControl(event.target)) {
+          this.spacePressed = true
+        }
         this.handleImageTabShortcut(event)
         this.handleHistoryShortcut(event)
       },
+      { signal },
+    )
+    window.addEventListener(
+      'blur',
+      () => this.resetEditorInput(),
+      { signal },
+    )
+    this.element.addEventListener(
+      'keyup',
+      (event) => {
+        if (event.code === 'Space') {
+          this.spacePressed = false
+        }
+      },
+      { signal },
+    )
+    this.areaSelect.addEventListener(
+      'change',
+      () => void this.selectDesignArea(this.areaSelect.value),
+      { signal },
+    )
+    this.remoteForm.addEventListener(
+      'change',
+      (event) => {
+        if ((event.target as HTMLInputElement).name === 'areaMode') {
+          this.updateProductMode()
+        }
+      },
+      { signal },
+    )
+    this.editorStage.addEventListener(
+      'wheel',
+      (event) => this.handleEditorWheel(event),
+      { passive: false, signal },
+    )
+    this.editorStage.addEventListener(
+      'pointerdown',
+      (event) => this.beginEditorPan(event),
+      { signal },
+    )
+    this.editorStage.addEventListener(
+      'pointermove',
+      (event) => this.moveEditorPan(event),
+      { signal },
+    )
+    this.editorStage.addEventListener(
+      'pointerup',
+      (event) => this.endEditorPan(event),
+      { signal },
+    )
+    this.editorStage.addEventListener(
+      'pointercancel',
+      (event) => this.endEditorPan(event),
       { signal },
     )
     this.textForm.addEventListener(
@@ -495,6 +610,41 @@ export class CustomForgeWorkbench {
       case 'delete-selection':
         this.customizer.deleteSelected()
         break
+      case 'toggle-design-guide':
+        this.customizer.setDesignGuideVisible(
+          !this.customizer.isDesignGuideVisible(),
+        )
+        break
+      case 'previous-area':
+        void this.selectAdjacentArea(-1)
+        break
+      case 'next-area':
+        void this.selectAdjacentArea(1)
+        break
+      case 'zoom-out':
+        this.zoomEditorBy(1 / 1.2)
+        break
+      case 'zoom-in':
+        this.zoomEditorBy(1.2)
+        break
+      case 'actual-size':
+        this.customizer.setEditorViewport({
+          ...this.customizer.getEditorViewport(),
+          zoom: 1,
+        })
+        break
+      case 'fit-design-area':
+        this.customizer.fitActiveDesignArea()
+        break
+      case 'select-surface':
+        if (this.customizer.isSurfacePickAllowed()) {
+          if (this.surfacePickButton.getAttribute('aria-pressed') === 'true') {
+            this.customizer.cancelSurfacePick()
+          } else {
+            this.customizer.beginSurfacePick()
+          }
+        }
+        break
       case 'reset-view':
         this.customizer.resetView()
         break
@@ -629,20 +779,42 @@ export class CustomForgeWorkbench {
     const insertVisible = this.features.addText || this.features.addImage
     const documentVisible = this.features.saveDesign || this.features.loadDesign
     const selectionVisible = this.features.deleteSelection
+    const guideVisible = this.features.designGuide
+    const viewportVisible = this.features.editorViewport
+    const primaryToolsVisible =
+      historyVisible ||
+      insertVisible ||
+      documentVisible ||
+      selectionVisible ||
+      viewportVisible
     this.toolGroup('history').hidden = !historyVisible
     this.toolGroup('insert').hidden = !insertVisible
     this.toolGroup('document').hidden = !documentVisible
+    this.toolGroup('guide').hidden = !guideVisible
+    this.toolGroup('viewport').hidden = !viewportVisible
     this.toolGroup('history-separator').hidden =
       !historyVisible || (!insertVisible && !documentVisible && !selectionVisible)
     this.toolGroup('document-separator').hidden =
       !insertVisible || (!documentVisible && !selectionVisible)
     this.toolGroup('selection-separator').hidden =
       !selectionVisible || (!historyVisible && !insertVisible && !documentVisible)
+    this.toolGroup('guide-separator').hidden =
+      !guideVisible || !primaryToolsVisible
+    this.toolGroup('viewport-separator').hidden =
+      !viewportVisible ||
+      (!historyVisible &&
+        !insertVisible &&
+        !documentVisible &&
+        !selectionVisible &&
+        !guideVisible)
 
-    const toolbar = requiredElement<HTMLElement>(this.element, '[data-layout="toolbar"]')
+    const toolbar = requiredElement<HTMLElement>(
+      this.element,
+      '[data-layout="toolbar"]',
+    )
     toolbar.hidden =
       !this.layout.toolbar ||
-      (!historyVisible && !insertVisible && !documentVisible && !selectionVisible)
+      (!primaryToolsVisible && !guideVisible && !viewportVisible)
     this.element.dataset.layers = this.layout.layers ? 'visible' : 'hidden'
 
     const brandHidden = requiredElement(this.element, '[data-role="brand"]').hidden
@@ -667,6 +839,207 @@ export class CustomForgeWorkbench {
   private updateHistoryButtons(): void {
     this.undoButton.disabled = !this.customizer.canUndo()
     this.redoButton.disabled = !this.customizer.canRedo()
+  }
+
+  private updateDesignGuideButton(visible: boolean): void {
+    const label = visible
+      ? this.labels.hideDesignGuide
+      : this.labels.showDesignGuide
+    this.designGuideButton.setAttribute('aria-pressed', String(visible))
+    this.designGuideButton.setAttribute('aria-label', label)
+    this.designGuideButton.title = label
+    const text = this.designGuideButton.querySelector<HTMLElement>(
+      '.customforge-workbench__icon-label',
+    )
+    if (text) {
+      text.textContent = label
+    }
+  }
+
+  private renderDesignAreas(): void {
+    const areas = this.customizer.getDesignAreas()
+    const activeAreaId = this.customizer.getActiveDesignAreaId()
+    this.areaSelect.replaceChildren(
+      ...areas.map((area) => {
+        const option = document.createElement('option')
+        option.value = area.id
+        option.textContent = area.label
+        return option
+      }),
+    )
+    if (activeAreaId) {
+      this.areaSelect.value = activeAreaId
+    }
+    this.areaSelect.disabled = areas.length < 2
+    this.updateAreaButtons()
+    this.surfacePickButton.disabled = !this.customizer.isSurfacePickAllowed()
+  }
+
+  private updateAreaButtons(): void {
+    const options = [...this.areaSelect.options]
+    const index = options.findIndex((option) => option.value === this.areaSelect.value)
+    this.previousAreaButton.disabled = index <= 0
+    this.nextAreaButton.disabled = index < 0 || index >= options.length - 1
+  }
+
+  private async selectAdjacentArea(offset: -1 | 1): Promise<void> {
+    const options = [...this.areaSelect.options]
+    const index = options.findIndex((option) => option.value === this.areaSelect.value)
+    const target = options[index + offset]
+    if (target) {
+      await this.selectDesignArea(target.value)
+    }
+  }
+
+  private async selectDesignArea(areaId: string): Promise<void> {
+    const previousId = this.customizer.getActiveDesignAreaId()
+    this.areaSelect.disabled = true
+    this.previousAreaButton.disabled = true
+    this.nextAreaButton.disabled = true
+    this.setStatus(this.labels.preparingEditor, 'busy')
+    try {
+      await this.customizer.setActiveDesignArea(areaId)
+      this.setStatus(this.labels.productReady)
+    } catch (error) {
+      if (previousId) {
+        this.areaSelect.value = previousId
+      }
+      this.setStatus(errorMessage(error), 'error')
+    } finally {
+      this.renderDesignAreas()
+    }
+  }
+
+  private updateEditorViewport(viewport: DesignAreaViewport): void {
+    this.zoomValue.textContent = Math.round(viewport.zoom * 100) + '%'
+    this.editorStage.dataset.panned =
+      viewport.panX !== 0 || viewport.panY !== 0 ? 'true' : 'false'
+  }
+
+  private zoomEditorBy(factor: number): void {
+    const viewport = this.customizer.getEditorViewport()
+    this.customizer.setEditorViewport({
+      ...viewport,
+      zoom: Math.min(Math.max(viewport.zoom * factor, 0.25), 4),
+    })
+  }
+
+  private handleEditorWheel(event: WheelEvent): void {
+    event.preventDefault()
+    const viewport = this.customizer.getEditorViewport()
+    const nextZoom = Math.min(
+      Math.max(viewport.zoom * Math.exp(-event.deltaY * 0.0015), 0.25),
+      4,
+    )
+    const bounds = this.editorStage.getBoundingClientRect()
+    const pointerX = event.clientX - (bounds.left + bounds.width / 2)
+    const pointerY = event.clientY - (bounds.top + bounds.height / 2)
+    const ratio = nextZoom / viewport.zoom
+    this.customizer.setEditorViewport({
+      zoom: nextZoom,
+      panX: pointerX - (pointerX - viewport.panX) * ratio,
+      panY: pointerY - (pointerY - viewport.panY) * ratio,
+    })
+  }
+
+  private beginEditorPan(event: PointerEvent): void {
+    const shouldPan = event.button === 1 || (event.button === 0 && this.spacePressed)
+    if (!shouldPan) {
+      return
+    }
+    event.preventDefault()
+    const viewport = this.customizer.getEditorViewport()
+    this.panPointerId = event.pointerId
+    this.panStart = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      panX: viewport.panX,
+      panY: viewport.panY,
+    }
+    this.editorStage.setPointerCapture(event.pointerId)
+    this.editorStage.dataset.panning = 'true'
+  }
+
+  private moveEditorPan(event: PointerEvent): void {
+    if (event.pointerId !== this.panPointerId || !this.panStart) {
+      return
+    }
+    this.customizer.setEditorViewport({
+      zoom: this.customizer.getEditorViewport().zoom,
+      panX: this.panStart.panX + event.clientX - this.panStart.clientX,
+      panY: this.panStart.panY + event.clientY - this.panStart.clientY,
+    })
+  }
+
+  private endEditorPan(event: PointerEvent): void {
+    if (event.pointerId !== this.panPointerId) {
+      return
+    }
+    if (this.editorStage.hasPointerCapture(event.pointerId)) {
+      this.editorStage.releasePointerCapture(event.pointerId)
+    }
+    this.panPointerId = undefined
+    this.panStart = undefined
+    delete this.editorStage.dataset.panning
+  }
+
+  private resetEditorInput(): void {
+    this.spacePressed = false
+    if (
+      this.panPointerId !== undefined &&
+      this.editorStage.hasPointerCapture(this.panPointerId)
+    ) {
+      this.editorStage.releasePointerCapture(this.panPointerId)
+    }
+    this.panPointerId = undefined
+    this.panStart = undefined
+    delete this.editorStage.dataset.panning
+  }
+
+  private updateSurfacePickButton(active: boolean): void {
+    const label = active
+      ? this.labels.cancelSurfacePick
+      : this.labels.selectSurface
+    this.surfacePickButton.setAttribute('aria-pressed', String(active))
+    this.surfacePickButton.setAttribute('aria-label', label)
+    this.surfacePickButton.title = label
+  }
+
+  private updateProductMode(): void {
+    const mode = requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="area-mode"]:checked',
+    ).value
+    const meshField = requiredElement<HTMLElement>(
+      this.element,
+      '[data-role="mesh-field"]',
+    )
+    const meshInput = requiredElement<HTMLInputElement>(
+      meshField,
+      '[data-role="mesh-name"]',
+    )
+    const flipField = requiredElement<HTMLElement>(
+      this.element,
+      '[data-role="flip-field"]',
+    )
+    meshField.hidden = mode !== 'existing-uv'
+    meshInput.required = mode === 'existing-uv'
+    flipField.hidden = mode !== 'existing-uv'
+  }
+
+  private localizeProcessingStage(stage: ProductProcessingStage): string {
+    switch (stage) {
+      case 'loading-model':
+        return this.labels.loadingModel
+      case 'inspecting-geometry':
+        return this.labels.inspectingGeometry
+      case 'finding-design-areas':
+        return this.labels.findingDesignAreas
+      case 'unwrapping-surface':
+        return this.labels.unwrappingSurface
+      case 'preparing-editor':
+        return this.labels.preparingEditor
+    }
   }
 
   private localizeStatus(message: string): string {
@@ -1353,30 +1726,69 @@ export class CustomForgeWorkbench {
 
   private async loadRemoteProduct(event: SubmitEvent): Promise<void> {
     event.preventDefault()
+    const modelUrl = requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="model-url"]',
+    ).value.trim()
+    const modelFile = requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="model-file"]',
+    ).files?.[0]
+    requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="model-url"]',
+    ).setCustomValidity('')
+    if (!modelUrl && !modelFile) {
+      requiredElement<HTMLInputElement>(
+        this.element,
+        '[data-role="model-url"]',
+      ).setCustomValidity('Provide a model URL or local GLB file')
+    }
     if (!this.remoteForm.reportValidity()) {
       return
     }
+    requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="model-url"]',
+    ).setCustomValidity('')
 
     this.submitProductButton.disabled = true
     this.setStatus(this.labels.loadProduct, 'busy')
     try {
+      const designAreaMode = requiredElement<HTMLInputElement>(
+        this.element,
+        '[data-role="area-mode"]:checked',
+      ).value as 'auto' | 'existing-uv'
       await this.customizer.loadProduct({
-        modelUrl: requiredElement<HTMLInputElement>(
-          this.element,
-          '[data-role="model-url"]',
-        ).value,
+        model: modelFile ?? modelUrl,
         textureUrl: requiredElement<HTMLInputElement>(
           this.element,
           '[data-role="texture-url"]',
         ).value,
-        surfaceMesh: requiredElement<HTMLInputElement>(
-          this.element,
-          '[data-role="mesh-name"]',
-        ).value,
-        textureFlipY: requiredElement<HTMLInputElement>(
-          this.element,
-          '[data-role="flip-texture"]',
-        ).checked,
+        designGuide: {
+          templateUrl: requiredElement<HTMLInputElement>(
+            this.element,
+            '[data-role="guide-template-url"]',
+          ).value,
+          showUv: requiredElement<HTMLInputElement>(
+            this.element,
+            '[data-role="show-uv-guide"]',
+          ).checked,
+        },
+        surfaceMesh: designAreaMode === 'existing-uv'
+          ? requiredElement<HTMLInputElement>(
+              this.element,
+              '[data-role="mesh-name"]',
+            ).value
+          : undefined,
+        designAreas: {
+          mode: designAreaMode,
+        },
+        textureFlipY: designAreaMode === 'existing-uv' &&
+          requiredElement<HTMLInputElement>(
+            this.element,
+            '[data-role="flip-texture"]',
+          ).checked,
       })
       this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)

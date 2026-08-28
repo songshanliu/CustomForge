@@ -47,6 +47,29 @@ describe('DesignHistory', () => {
     expect(history.peekRedo()).toBeUndefined()
   })
 
+  it('restores an independent area history stack', () => {
+    const history = new DesignHistory('initial', 5)
+    history.push('second')
+    const snapshot = history.snapshot()
+    history.push('third')
+
+    history.restore(snapshot)
+
+    expect(history.peekUndo()).toBe('initial')
+    expect(history.peekRedo()).toBeUndefined()
+  })
+
+  it('rejects malformed history snapshots', () => {
+    const history = new DesignHistory('initial', 2)
+
+    expect(() => history.restore({ entries: [], index: 0 })).toThrow(
+      'History snapshot is invalid',
+    )
+    expect(() =>
+      history.restore({ entries: ['one'], index: 1 }),
+    ).toThrow('History snapshot is invalid')
+  })
+
   it('rejects an invalid history limit', () => {
     expect(() => new DesignHistory('initial', 0)).toThrow(
       'History limit must be a positive integer',

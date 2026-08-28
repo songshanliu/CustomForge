@@ -6,6 +6,10 @@ dist/
 coverage/
 *.tgz
 
+# Local model stress-test assets with unreviewed redistribution terms
+/public/models/plain-mug/
+/public/models/shoe-test/
+
 # Local environment files
 .env
 .env.*

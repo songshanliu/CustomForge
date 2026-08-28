@@ -1,0 +1,6 @@
+Comlink is bundled through the xatlas-three and xatlasjs runtime assets.
+
+Copyright 2019 Google LLC
+SPDX-License-Identifier: Apache-2.0
+
+The full Apache License 2.0 text is included in the package root LICENSE file.

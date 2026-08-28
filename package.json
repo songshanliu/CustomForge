@@ -47,7 +47,9 @@
   },
   "dependencies": {
     "fabric": "^7.4.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "xatlas-three": "0.2.1",
+    "xatlasjs": "0.2.0"
   },
   "engines": {
     "node": ">=22.12.0"

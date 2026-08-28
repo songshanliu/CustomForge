@@ -30,7 +30,23 @@ export function createWorkbenchElement(): HTMLElement {
             <span class="customforge-workbench__panel-kicker">2D</span>
             <h1 data-label="editorTitle"></h1>
           </div>
-          <span class="customforge-workbench__resolution" data-role="resolution">1024 x 512</span>
+          <div class="customforge-workbench__panel-actions">
+            <div class="customforge-workbench__area-switcher" data-feature="designAreas">
+              <button class="customforge-workbench__icon-button" data-action="previous-area" data-control-label="previousArea" type="button">
+                <i data-customforge-icon="chevron-left" data-icon-slot="previousArea"></i>
+                <span class="customforge-workbench__icon-label" data-label="previousArea"></span>
+              </button>
+              <label>
+                <span class="customforge-workbench__sr-only" data-label="designArea"></span>
+                <select data-role="area-select" data-control-label="designArea"></select>
+              </label>
+              <button class="customforge-workbench__icon-button" data-action="next-area" data-control-label="nextArea" type="button">
+                <i data-customforge-icon="chevron-right" data-icon-slot="nextArea"></i>
+                <span class="customforge-workbench__icon-label" data-label="nextArea"></span>
+              </button>
+            </div>
+            <span class="customforge-workbench__resolution" data-role="resolution">1024 x 512</span>
+          </div>
         </header>
 
         <div class="customforge-workbench__toolbar" data-layout="toolbar" data-region-label="workbench" role="toolbar">
@@ -71,6 +87,29 @@ export function createWorkbenchElement(): HTMLElement {
             <i data-customforge-icon="trash-2" data-icon-slot="deleteSelection"></i>
             <span class="customforge-workbench__icon-label" data-label="deleteSelection"></span>
           </button>
+          <span class="customforge-workbench__separator" data-tool-group="guide-separator" aria-hidden="true"></span>
+          <div class="customforge-workbench__tool-group" data-tool-group="guide">
+            <button class="customforge-workbench__icon-button" data-action="toggle-design-guide" data-feature="designGuide" data-control-label="showDesignGuide" type="button" aria-pressed="true">
+              <i data-customforge-icon="scan-line" data-icon-slot="designGuide"></i>
+              <span class="customforge-workbench__icon-label" data-label="showDesignGuide"></span>
+            </button>
+          </div>
+          <span class="customforge-workbench__separator" data-tool-group="viewport-separator" aria-hidden="true"></span>
+          <div class="customforge-workbench__tool-group" data-tool-group="viewport">
+            <button class="customforge-workbench__icon-button" data-action="zoom-out" data-feature="editorViewport" data-control-label="zoomOut" type="button">
+              <i data-customforge-icon="zoom-out" data-icon-slot="zoomOut"></i>
+              <span class="customforge-workbench__icon-label" data-label="zoomOut"></span>
+            </button>
+            <button class="customforge-workbench__zoom-value" data-action="actual-size" data-feature="editorViewport" data-control-label="actualSize" data-role="zoom-value" type="button">100%</button>
+            <button class="customforge-workbench__icon-button" data-action="zoom-in" data-feature="editorViewport" data-control-label="zoomIn" type="button">
+              <i data-customforge-icon="zoom-in" data-icon-slot="zoomIn"></i>
+              <span class="customforge-workbench__icon-label" data-label="zoomIn"></span>
+            </button>
+            <button class="customforge-workbench__icon-button" data-action="fit-design-area" data-feature="editorViewport" data-control-label="fitDesignArea" type="button">
+              <i data-customforge-icon="maximize-2" data-icon-slot="fitDesignArea"></i>
+              <span class="customforge-workbench__icon-label" data-label="fitDesignArea"></span>
+            </button>
+          </div>
         </div>
 
         <div class="customforge-workbench__editor-body">
@@ -94,10 +133,16 @@ export function createWorkbenchElement(): HTMLElement {
             <span class="customforge-workbench__panel-kicker">3D</span>
             <h2 data-label="viewerTitle"></h2>
           </div>
-          <button class="customforge-workbench__icon-button" data-action="reset-view" data-feature="resetView" data-control-label="resetView" type="button">
-            <i data-customforge-icon="rotate-ccw" data-icon-slot="resetView"></i>
-            <span class="customforge-workbench__icon-label" data-label="resetView"></span>
-          </button>
+          <div class="customforge-workbench__panel-actions">
+            <button class="customforge-workbench__icon-button" data-action="select-surface" data-feature="surfacePick" data-control-label="selectSurface" type="button" aria-pressed="false">
+              <i data-customforge-icon="mouse-pointer-2" data-icon-slot="selectSurface"></i>
+              <span class="customforge-workbench__icon-label" data-label="selectSurface"></span>
+            </button>
+            <button class="customforge-workbench__icon-button" data-action="reset-view" data-feature="resetView" data-control-label="resetView" type="button">
+              <i data-customforge-icon="rotate-ccw" data-icon-slot="resetView"></i>
+              <span class="customforge-workbench__icon-label" data-label="resetView"></span>
+            </button>
+          </div>
         </header>
         <div class="customforge-workbench__viewer-stage" data-role="viewer-host"></div>
       </section>
@@ -202,9 +247,26 @@ export function createWorkbenchElement(): HTMLElement {
             <span data-label="modelUrl"></span>
             <div class="customforge-workbench__input-shell">
               <i data-customforge-icon="link-2" data-icon-slot="loadProduct"></i>
-              <input data-role="model-url" name="modelUrl" type="url" placeholder="https://example.com/product.glb" required>
+              <input data-role="model-url" name="modelUrl" type="url" placeholder="https://example.com/product.glb">
             </div>
           </label>
+          <label class="customforge-workbench__field">
+            <span data-label="modelFile"></span>
+            <input data-role="model-file" name="modelFile" type="file" accept=".glb,model/gltf-binary">
+          </label>
+          <fieldset class="customforge-workbench__fieldset">
+            <legend data-label="designArea"></legend>
+            <div class="customforge-workbench__segmented">
+              <label>
+                <input data-role="area-mode" name="areaMode" type="radio" value="auto" checked>
+                <span data-label="automaticMode"></span>
+              </label>
+              <label>
+                <input data-role="area-mode" name="areaMode" type="radio" value="existing-uv">
+                <span data-label="existingUvMode"></span>
+              </label>
+            </div>
+          </fieldset>
           <label class="customforge-workbench__field">
             <span data-label="textureUrl"></span>
             <div class="customforge-workbench__input-shell">
@@ -213,12 +275,23 @@ export function createWorkbenchElement(): HTMLElement {
             </div>
           </label>
           <label class="customforge-workbench__field">
-            <span data-label="surfaceMesh"></span>
-            <input data-role="mesh-name" name="meshName" type="text" value="PrintArea" required>
+            <span data-label="designGuideTemplateUrl"></span>
+            <div class="customforge-workbench__input-shell">
+              <i data-customforge-icon="scan-line" data-icon-slot="designGuide"></i>
+              <input data-role="guide-template-url" name="guideTemplateUrl" type="url" placeholder="https://example.com/design-guide.svg">
+            </div>
           </label>
-          <label class="customforge-workbench__check-field">
+          <label class="customforge-workbench__field" data-role="mesh-field">
+            <span data-label="surfaceMesh"></span>
+            <input data-role="mesh-name" name="meshName" type="text" value="PrintArea">
+          </label>
+          <label class="customforge-workbench__check-field" data-role="flip-field">
             <input data-role="flip-texture" name="flipTexture" type="checkbox">
             <span data-label="flipTexture"></span>
+          </label>
+          <label class="customforge-workbench__check-field">
+            <input data-role="show-uv-guide" name="showUvGuide" type="checkbox" checked>
+            <span data-label="showUvGuide"></span>
           </label>
         </div>
         <footer class="customforge-workbench__dialog-actions">

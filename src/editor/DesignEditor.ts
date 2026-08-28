@@ -4,17 +4,23 @@ import {
   Textbox,
   type FabricObject,
 } from 'fabric'
+import type { NormalizedProductDesignGuideConfiguration } from '../core/config'
 import { parseDesignDocument } from '../core/design'
 import type {
   AddImageOptions,
   AddTextOptions,
   DesignImageRole,
+  DesignAreaViewport,
   DesignDocument,
   DesignObject,
   DesignObjectTransform,
   HistoryState,
 } from '../core/types'
-import { DesignHistory } from './DesignHistory'
+import type { UvGuideLayout } from '../viewer/uvLayout'
+import {
+  DesignHistory,
+  type DesignHistorySnapshot,
+} from './DesignHistory'
 import {
   calculateContainmentOffset,
   calculateContainmentScale,
@@ -37,6 +43,20 @@ type RenderListener = () => void
 type SelectionListener = (objectIds: string[]) => void
 type HistoryListener = (state: HistoryState) => void
 
+function loadGuideImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.addEventListener('load', () => resolve(image), { once: true })
+    image.addEventListener(
+      'error',
+      () => reject(new Error(`Design guide image failed to load: ${url}`)),
+      { once: true },
+    )
+    image.src = url
+  })
+}
+
 /**
  * 基于 Fabric.js 的二维纹理编辑器
  *
@@ -48,6 +68,7 @@ export class DesignEditor {
   readonly canvas: Canvas
 
   private readonly host: HTMLElement
+  private readonly guideCanvas: HTMLCanvasElement
   private readonly width: number
   private readonly height: number
   private readonly renderListeners = new Set<RenderListener>()
@@ -66,6 +87,14 @@ export class DesignEditor {
   private historyTimer?: ReturnType<typeof setTimeout>
   private historyBusy = false
   private objectIdSequence = 0
+  private guideLayout?: UvGuideLayout
+  private guideConfiguration?: NormalizedProductDesignGuideConfiguration
+  private guideImage?: HTMLImageElement
+  private guideFlipY = false
+  private guideVisible = true
+  private guideLoadSequence = 0
+  private transparentOutput = false
+  private viewport: DesignAreaViewport = { zoom: 1, panX: 0, panY: 0 }
 
   /**
    * @param host 二维编辑器挂载容器
@@ -93,6 +122,12 @@ export class DesignEditor {
     this.historySignature = JSON.stringify(initialDesign)
 
     this.canvas.wrapperEl.classList.add('customforge-design-canvas')
+    this.guideCanvas = document.createElement('canvas')
+    this.guideCanvas.className = 'customforge-design-guide'
+    this.guideCanvas.width = this.width
+    this.guideCanvas.height = this.height
+    this.guideCanvas.setAttribute('aria-hidden', 'true')
+    this.canvas.wrapperEl.insertBefore(this.guideCanvas, this.canvas.upperCanvasEl)
     this.host.dataset.renderState = 'pending'
     this.canvas.on('after:render', () => {
       this.markRenderState()
@@ -135,6 +170,91 @@ export class DesignEditor {
   /** 当前画布中设计对象的数量，不包含产品基础纹理 */
   get objectCount(): number {
     return this.canvas.getObjects().length
+  }
+
+  /** 返回不影响设计坐标和纹理输出的当前显示视口 */
+  getEditorViewport(): DesignAreaViewport {
+    return { ...this.viewport }
+  }
+
+  /**
+   * 设置二维画布的显示缩放和平移
+   *
+   * 变换只应用到画布 DOM，不修改 Fabric 对象、Design JSON 或 CanvasTexture
+   *
+   * @param viewport 相对于自动适配尺寸的缩放与 CSS 像素平移
+   */
+  setEditorViewport(viewport: DesignAreaViewport): void {
+    this.viewport = { ...viewport }
+    this.applyViewport()
+  }
+
+  /** 将二维画布恢复为完整适配编辑区域的视口 */
+  fitEditorViewport(): void {
+    this.setEditorViewport({ zoom: 1, panX: 0, panY: 0 })
+  }
+
+  /**
+   * 设置画布空白区域是否保持透明
+   *
+   * 自动覆盖 Mesh 使用透明输出以保留原模型材质，existing-uv 模式保持原有浅色底
+   *
+   * @param transparent 是否让未设计像素的 Alpha 保持为 0
+   */
+  setOutputTransparency(transparent: boolean): void {
+    this.transparentOutput = transparent
+    if (!this.canvas.backgroundImage) {
+      this.canvas.backgroundColor = transparent
+        ? 'rgba(0, 0, 0, 0)'
+        : '#f7f7f5'
+    }
+    this.canvas.requestRenderAll()
+  }
+
+  /** 当前是否显示产品模板、UV、安全区和出血区辅助层 */
+  isDesignGuideVisible(): boolean {
+    return this.guideVisible
+  }
+
+  /**
+   * 设置仅供编辑定位且不进入三维纹理或 PNG 的产品辅助层
+   *
+   * @param layout 从目标 Mesh 提取的 UV 岛边界
+   * @param configuration 模板地址、区域和初始显示配置
+   * @param flipY 是否按最终 CanvasTexture 方向垂直翻转 UV
+   * @throws 模板图片无法读取或被 CORS 策略阻止时抛出错误
+   */
+  async setDesignGuide(
+    layout: UvGuideLayout,
+    configuration: NormalizedProductDesignGuideConfiguration,
+    flipY: boolean,
+  ): Promise<void> {
+    const sequence = ++this.guideLoadSequence
+    const image = configuration.templateUrl
+      ? await loadGuideImage(configuration.templateUrl)
+      : undefined
+    if (sequence !== this.guideLoadSequence) {
+      return
+    }
+
+    this.guideLayout = layout
+    this.guideConfiguration = configuration
+    this.guideImage = image
+    this.guideFlipY = flipY
+    this.setDesignGuideVisible(configuration.visible)
+    this.renderDesignGuide()
+  }
+
+  /**
+   * 显示或隐藏产品设计辅助层
+   *
+   * 该操作不修改设计对象、撤销历史、三维纹理或 PNG 导出结果
+   *
+   * @param visible 是否显示辅助层
+   */
+  setDesignGuideVisible(visible: boolean): void {
+    this.guideVisible = visible
+    this.guideCanvas.hidden = !visible
   }
 
   /**
@@ -351,7 +471,9 @@ export class DesignEditor {
   async setBackgroundTexture(url?: string): Promise<void> {
     if (!url) {
       this.canvas.backgroundImage = undefined
-      this.canvas.backgroundColor = '#f7f7f5'
+      this.canvas.backgroundColor = this.transparentOutput
+        ? 'rgba(0, 0, 0, 0)'
+        : '#f7f7f5'
       this.canvas.requestRenderAll()
       return
     }
@@ -597,6 +719,29 @@ export class DesignEditor {
     this.notifyHistoryChange()
   }
 
+  /** 返回包含当前未延迟提交内容的独立历史栈快照 */
+  getHistorySnapshot(): DesignHistorySnapshot<DesignDocument> {
+    this.flushHistoryCommit()
+    return structuredClone(this.history.snapshot())
+  }
+
+  /**
+   * 恢复设计区域先前保存的撤销与重做历史
+   *
+   * 当前画布内容必须与快照的当前条目对应；该方法只替换历史栈，不加载对象
+   *
+   * @param snapshot 由 getHistorySnapshot 返回的区域历史
+   * @throws 快照容量或当前索引无效时抛出错误
+   */
+  restoreHistorySnapshot(
+    snapshot: DesignHistorySnapshot<DesignDocument>,
+  ): void {
+    this.flushHistoryCommit()
+    this.history.restore(structuredClone(snapshot))
+    this.historySignature = JSON.stringify(this.saveDesign())
+    this.notifyHistoryChange()
+  }
+
   /**
    * 删除当前对象或多选选区
    *
@@ -642,6 +787,7 @@ export class DesignEditor {
 
   /** 释放 ResizeObserver、事件监听和 Fabric Canvas */
   destroy(): void {
+    this.guideLoadSequence += 1
     if (this.historyTimer !== undefined) {
       clearTimeout(this.historyTimer)
       this.historyTimer = undefined
@@ -650,10 +796,70 @@ export class DesignEditor {
     this.renderListeners.clear()
     this.selectionListeners.clear()
     this.historyListeners.clear()
+    this.guideImage = undefined
     this.objectsById.clear()
     this.usedObjectIds.clear()
     this.canvas.dispose()
     this.host.replaceChildren()
+  }
+
+  private renderDesignGuide(): void {
+    const context = this.guideCanvas.getContext('2d')
+    const configuration = this.guideConfiguration
+    const layout = this.guideLayout
+    if (!context || !configuration || !layout) {
+      return
+    }
+
+    context.clearRect(0, 0, this.width, this.height)
+    if (this.guideImage) {
+      context.save()
+      context.globalAlpha = 0.72
+      context.drawImage(this.guideImage, 0, 0, this.width, this.height)
+      context.restore()
+    }
+
+    if (configuration.showUv && layout.segments.length > 0) {
+      context.save()
+      context.beginPath()
+      context.strokeStyle = 'rgba(19, 113, 125, 0.48)'
+      context.lineWidth = Math.max(this.width / 1024, 0.8)
+      for (const segment of layout.segments) {
+        const y1 = (this.guideFlipY ? 1 - segment.v1 : segment.v1) * this.height
+        const y2 = (this.guideFlipY ? 1 - segment.v2 : segment.v2) * this.height
+        context.moveTo(segment.u1 * this.width, y1)
+        context.lineTo(segment.u2 * this.width, y2)
+      }
+      context.stroke()
+      context.restore()
+    }
+
+    if (configuration.bleedArea) {
+      this.drawGuideArea(context, configuration.bleedArea, false)
+    }
+    if (configuration.safeArea) {
+      this.drawGuideArea(context, configuration.safeArea, true)
+    }
+  }
+
+  private drawGuideArea(
+    context: CanvasRenderingContext2D,
+    area: NonNullable<NormalizedProductDesignGuideConfiguration['safeArea']>,
+    dashed: boolean,
+  ): void {
+    context.save()
+    context.strokeStyle = dashed
+      ? 'rgba(32, 48, 53, 0.72)'
+      : 'rgba(32, 48, 53, 0.48)'
+    context.lineWidth = Math.max(this.width / 1024, 0.9)
+    context.setLineDash(dashed ? [6, 5] : [])
+    context.strokeRect(
+      area.x * this.width,
+      area.y * this.height,
+      area.width * this.width,
+      area.height * this.height,
+    )
+    context.restore()
   }
 
   private addAndSelect(
@@ -951,6 +1157,14 @@ export class DesignEditor {
       },
       { cssOnly: true },
     )
+    this.applyViewport()
+  }
+
+  private applyViewport(): void {
+    const { zoom, panX, panY } = this.viewport
+    this.canvas.wrapperEl.style.transform =
+      'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')'
+    this.canvas.wrapperEl.style.transformOrigin = 'center'
   }
 
   private markRenderState(): void {
