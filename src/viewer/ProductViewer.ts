@@ -1,21 +1,15 @@
 import {
   ACESFilmicToneMapping,
+  AmbientLight,
   Box3,
-  CircleGeometry,
-  Color,
-  CylinderGeometry,
   DirectionalLight,
-  Group,
-  HemisphereLight,
   MathUtils,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
-  PlaneGeometry,
   Scene,
   SRGBColorSpace,
-  TorusGeometry,
   Vector3,
   WebGLRenderer,
   type CanvasTexture,
@@ -24,6 +18,12 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { NormalizedProductConfiguration } from '../core/config'
+import type { UvLayout } from '../core/uv'
+import defaultProductModelUrl from './assets/cup_decal_narrow.glb?url&no-inline'
+import { extractUvLayout } from './uvLayout'
+
+const DEFAULT_PRODUCT_HEIGHT = 2.35
+const DEFAULT_PRODUCT_BASE_Y = -1.17
 
 /**
  * 基于 Three.js 的三维产品查看器
@@ -56,13 +56,11 @@ export class ProductViewer {
     this.renderer.outputColorSpace = SRGBColorSpace
     this.renderer.toneMapping = ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
-    this.renderer.shadowMap.enabled = true
     this.renderer.domElement.setAttribute('aria-label', 'Interactive 3D product preview')
     this.renderer.domElement.classList.add('customforge-viewer-canvas')
     host.append(this.renderer.domElement)
     host.dataset.renderState = 'pending'
 
-    this.scene.background = new Color('#eef0ef')
     this.camera.position.set(4.6, 2.8, 5.8)
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
@@ -71,7 +69,7 @@ export class ProductViewer {
     this.controls.maxDistance = 11
     this.controls.target.set(0, 0, 0)
 
-    this.addEnvironment()
+    this.addStudioLighting()
     this.resizeObserver = new ResizeObserver(() => this.resize())
     this.resizeObserver.observe(host)
     this.resize()
@@ -79,12 +77,13 @@ export class ProductViewer {
   }
 
   /**
-   * 加载远程模型或创建内置演示模型
+   * 加载远程模型或随包提供的默认 GLB 模型
    *
    * @param product 已完成默认值补全的产品配置
-   * @throws 模型加载失败或找不到目标 Mesh 时抛出错误
+   * @returns 目标 Mesh 第一个材质槽使用的 UV 三角形布局
+   * @throws 模型加载失败、找不到目标 Mesh 或目标 Mesh 缺少有效 UV 时抛出错误
    */
-  async loadProduct(product: NormalizedProductConfiguration): Promise<void> {
+  async loadProduct(product: NormalizedProductConfiguration): Promise<UvLayout> {
     this.removeProduct()
 
     if (product.modelUrl) {
@@ -92,16 +91,24 @@ export class ProductViewer {
       this.productRoot = gltf.scene
       this.surface = this.findSurface(gltf.scene, product.surfaceMesh)
     } else {
-      const demo = this.createDemoProduct()
-      this.productRoot = demo.root
-      this.surface = demo.surface
+      const gltf = await this.loader.loadAsync(defaultProductModelUrl)
+      this.productRoot = gltf.scene
+      this.surface = this.findSurface(gltf.scene, product.surfaceMesh)
+      this.prepareBundledProduct(gltf.scene, this.surface)
     }
+
+    const surface = this.surface
+    if (!surface) {
+      throw new Error('Customizable mesh was not initialized')
+    }
+    const uvLayout = extractUvLayout(surface)
 
     this.scene.add(this.productRoot)
     if (this.texture) {
       this.attachTexture(this.texture)
     }
     this.fitCamera(this.productRoot)
+    return uvLayout
   }
 
   /**
@@ -135,71 +142,50 @@ export class ProductViewer {
     this.renderer.domElement.remove()
   }
 
-  private addEnvironment(): void {
-    const sky = new HemisphereLight('#ffffff', '#7c8581', 2.2)
-    this.scene.add(sky)
+  private addStudioLighting(): void {
+    this.scene.add(new AmbientLight('#ffffff', 0.9))
 
-    const key = new DirectionalLight('#ffffff', 3.8)
-    key.position.set(4, 6, 5)
-    key.castShadow = true
+    const key = new DirectionalLight('#ffffff', 2.1)
+    key.position.set(4, 5, 6)
     this.scene.add(key)
 
-    const fill = new DirectionalLight('#b7dce0', 1.2)
-    fill.position.set(-5, 2, 3)
+    const fill = new DirectionalLight('#e8f0f2', 1.15)
+    fill.position.set(-5, 2, 4)
     this.scene.add(fill)
 
-    const floor = new Mesh(
-      new PlaneGeometry(30, 30),
-      new MeshStandardMaterial({ color: '#dfe3e1', roughness: 0.95 }),
-    )
-    floor.rotation.x = -Math.PI / 2
-    floor.position.y = -1.34
-    floor.receiveShadow = true
-    this.scene.add(floor)
+    const rim = new DirectionalLight('#ffffff', 0.8)
+    rim.position.set(1, 4, -5)
+    this.scene.add(rim)
   }
 
-  private createDemoProduct(): { root: Group; surface: Mesh } {
-    const root = new Group()
+  private prepareBundledProduct(root: Object3D, surface: Mesh): void {
+    surface.renderOrder = 1
+    const surfaceMaterials = Array.isArray(surface.material)
+      ? surface.material
+      : [surface.material]
+    surfaceMaterials.forEach((material) => {
+      material.depthWrite = false
+      material.polygonOffset = true
+      material.polygonOffsetFactor = -1
+      material.polygonOffsetUnits = -1
+    })
+
+    const initialBounds = new Box3().setFromObject(root)
+    const initialHeight = initialBounds.getSize(new Vector3()).y
+    if (!Number.isFinite(initialHeight) || initialHeight <= 0) {
+      throw new Error('The bundled product has invalid bounds')
+    }
+
+    root.scale.multiplyScalar(DEFAULT_PRODUCT_HEIGHT / initialHeight)
     root.rotation.y = MathUtils.degToRad(-14)
+    root.updateMatrixWorld(true)
 
-    const bodyMaterial = new MeshStandardMaterial({
-      color: '#ffffff',
-      roughness: 0.42,
-      metalness: 0,
-    })
-    const surface = new Mesh(
-      new CylinderGeometry(1.28, 1.16, 2.35, 96, 1, true),
-      bodyMaterial,
-    )
-    surface.name = 'PrintArea'
-    surface.castShadow = true
-    surface.receiveShadow = true
-    root.add(surface)
-
-    const ceramic = new MeshStandardMaterial({
-      color: '#f4f4f1',
-      roughness: 0.35,
-    })
-    const rim = new Mesh(new TorusGeometry(1.28, 0.08, 20, 96), ceramic)
-    rim.rotation.x = Math.PI / 2
-    rim.position.y = 1.18
-    rim.castShadow = true
-    root.add(rim)
-
-    const inside = new Mesh(
-      new CircleGeometry(1.2, 96),
-      new MeshStandardMaterial({ color: '#29312f', roughness: 0.7 }),
-    )
-    inside.rotation.x = -Math.PI / 2
-    inside.position.y = 1.16
-    root.add(inside)
-
-    const bottom = new Mesh(new CircleGeometry(1.15, 96), ceramic)
-    bottom.rotation.x = Math.PI / 2
-    bottom.position.y = -1.17
-    root.add(bottom)
-
-    return { root, surface }
+    const bounds = new Box3().setFromObject(root)
+    const center = bounds.getCenter(new Vector3())
+    root.position.x -= center.x
+    root.position.y += DEFAULT_PRODUCT_BASE_Y - bounds.min.y
+    root.position.z -= center.z
+    root.updateMatrixWorld(true)
   }
 
   /**

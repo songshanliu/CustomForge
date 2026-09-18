@@ -37,6 +37,7 @@ CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 - Preview every canvas change on a 3D product in real time
 - Load remote GLB/GLTF models and optional base textures
 - Select the customizable surface by mesh name
+- Display the target mesh UV triangles as a non-exported editor guide
 - Rotate and zoom the 3D preview with OrbitControls
 - Export the composed texture as a PNG
 - Save and restore editable objects through versioned Design JSON
@@ -45,7 +46,7 @@ CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 - Use configurable typography, background, and decorative asset Dialogs
 - Adapt the default Workbench with branding, labels, theme tokens, and icons
 
-The included workbench starts with a procedural cup, so the project works immediately without external assets
+The included workbench starts with the bundled `cup_decal_narrow.glb`, so the project works immediately without fetching an external model
 
 ## Repository Development
 
@@ -121,7 +122,9 @@ Choose **Load product** in the demo and provide:
 
 UV coordinates are expected to be stored in the 3D model
 
-The optional texture image is the visual base layer, not a replacement for model UV data
+The optional texture image is the visual base layer, not a replacement for model UV data. Without one, the design canvas and printable overlay remain transparent
+
+After each product load, the editor reads the target mesh UV coordinates and displays its triangle layout above the design canvas. This guide is not written into the live texture, Design JSON, or exported PNG
 
 > [!IMPORTANT]
 > Remote models, textures, decals, and fonts must be served with CORS headers that allow the app origin
@@ -418,7 +421,7 @@ The current prototype expects:
 - The target texture in the first material slot of that mesh
 - Remote asset URLs accessible under the browser's CORS policy
 
-The built-in demo follows the same `PrintArea` mesh convention
+The bundled default model separates the complete cup into `MugBody` and the UV-mapped printable overlay into `PrintArea`. CustomForge preserves the body material and applies the live design texture only to `PrintArea`
 
 ## Project Structure
 
@@ -484,3 +487,5 @@ See [LICENSE](./LICENSE) for the full license terms
 Third-party dependencies and assets remain subject to their respective licenses
 
 The bundled Nunito Sans font is licensed under the SIL Open Font License 1.1, available in [NunitoSans-OFL.txt](./LICENSES/NunitoSans-OFL.txt)
+
+The bundled Plain Mug model by LightSwitch is licensed under CC BY 4.0; attribution and source details are available in [plain-mug-CC-BY-4.0.txt](./LICENSES/plain-mug-CC-BY-4.0.txt)

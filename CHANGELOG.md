@@ -4,6 +4,16 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+### Added
+
+- Display the active Mesh UV triangle layout as a non-exported editor overlay
+
+### Changed
+
+- Replaced the procedural demo cup with the bundled `cup_decal_narrow.glb` model, separating `MugBody` from the customizable `PrintArea` overlay
+- Keep the design canvas and printable overlay transparent when no base texture is configured
+- Replace the shadow-casting viewer setup with balanced non-shadow studio lighting and remove the floor and fixed scene background
+
 ## [0.1.0-alpha.2] - 2026-08-27
 
 ### Added

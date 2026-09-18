@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { normalizeProductConfiguration } from './config'
 
 describe('normalizeProductConfiguration', () => {
-  it('uses demo defaults when no product is supplied', () => {
+  it('uses bundled GLB defaults when no product is supplied', () => {
     expect(normalizeProductConfiguration()).toEqual({
       modelUrl: undefined,
       textureUrl: undefined,
       surfaceMesh: 'PrintArea',
-      textureFlipY: true,
+      textureFlipY: false,
     })
   })
 

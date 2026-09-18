@@ -37,6 +37,7 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 - 将画布的每次变化实时呈现在三维产品上
 - 加载远程 GLB/GLTF 模型和可选的基础纹理
 - 通过 Mesh 名称指定可定制表面
+- 将目标 Mesh 的 UV 三角形显示为不会导出的编辑辅助线
 - 使用 OrbitControls 旋转和缩放三维预览
 - 将合成后的纹理导出为 PNG
 - 通过版本化 Design JSON 保存和恢复可编辑对象
@@ -45,7 +46,7 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 - 使用可配置的文字、背景和装饰素材 Dialog
 - 通过品牌、文案、主题变量和图标适配默认 Workbench
 
-工作台内置了一个程序生成的杯子，无需准备外部资源即可直接运行
+工作台默认加载随包提供的 `cup_decal_narrow.glb`，无需请求外部模型即可直接运行
 
 ## 仓库开发
 
@@ -119,7 +120,9 @@ pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.2.tgz
 
 UV 坐标应当保存在三维模型中
 
-可选的纹理图片只是二维编辑器的基础图层，不能替代模型中的 UV 数据
+可选的纹理图片只是二维编辑器的基础图层，不能替代模型中的 UV 数据；未提供时，设计画布和可打印贴花层保持透明
+
+每次加载产品后，编辑器会读取目标 Mesh 的 UV 坐标并在设计画布上方显示三角形布局。该辅助线不会写入实时纹理、Design JSON 或导出的 PNG
 
 > [!IMPORTANT]
 > 远程模型、纹理、贴图和字体必须提供允许当前页面来源访问的 CORS 响应头
@@ -416,7 +419,7 @@ ProductCustomizer
 - 目标纹理位于该 Mesh 的第一个材质槽中
 - 浏览器可以在 CORS 策略下访问远程资源地址
 
-内置演示同样遵循 `PrintArea` Mesh 命名约定
+随包提供的默认模型将完整杯体保存为 `MugBody`，并将带 UV 的可打印贴花层保存为 `PrintArea`。CustomForge 会保留杯体材质，只把实时设计纹理应用到 `PrintArea`
 
 ## 项目结构
 
@@ -482,3 +485,5 @@ CustomForge 依据 Apache License 2.0 开源
 第三方依赖和资产仍遵循各自的许可条款
 
 随包提供的 Nunito Sans 字体遵循 SIL Open Font License 1.1，完整条款见 [NunitoSans-OFL.txt](./LICENSES/NunitoSans-OFL.txt)
+
+随包提供的 Plain Mug 模型由 LightSwitch 创作并采用 CC BY 4.0，署名和来源信息见 [plain-mug-CC-BY-4.0.txt](./LICENSES/plain-mug-CC-BY-4.0.txt)

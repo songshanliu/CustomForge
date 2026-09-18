@@ -7,7 +7,7 @@ export type ElementTarget = HTMLElement | string
  * 产品配置
  */
 export interface ProductConfiguration {
-  /** GLB 或 GLTF 模型的远程地址，不传时使用内置演示模型 */
+  /** GLB 或 GLTF 模型的远程地址，不传时使用随包提供的 cup_decal_narrow.glb */
   modelUrl?: string
 
   /** 二维编辑器使用的可选基础纹理地址 */
@@ -16,7 +16,7 @@ export interface ProductConfiguration {
   /** 接收实时纹理的模型 Mesh 名称，默认为 PrintArea */
   surfaceMesh?: string
 
-  /** 是否在映射到三维模型前垂直翻转纹理 */
+  /** 是否在映射到三维模型前垂直翻转纹理，默认为 false */
   textureFlipY?: boolean
 }
 

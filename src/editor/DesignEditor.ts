@@ -14,6 +14,7 @@ import type {
   DesignObjectTransform,
   HistoryState,
 } from '../core/types'
+import type { UvLayout } from '../core/uv'
 import { DesignHistory } from './DesignHistory'
 import {
   calculateContainmentOffset,
@@ -40,7 +41,7 @@ type HistoryListener = (state: HistoryState) => void
 /**
  * 基于 Fabric.js 的二维纹理编辑器
  *
- * 负责基础纹理、文字、图片、对象选择和 PNG 导出
+ * 负责基础纹理、UV 辅助线、文字、图片、对象选择和 PNG 导出
  * 显示尺寸可以响应容器变化，内部逻辑尺寸保持不变
  */
 export class DesignEditor {
@@ -62,6 +63,7 @@ export class DesignEditor {
   private readonly imageRoles = new WeakMap<FabricImage, DesignImageRole>()
   private readonly resizeObserver: ResizeObserver
   private readonly history: DesignHistory<DesignDocument>
+  private readonly uvOverlay: HTMLCanvasElement
   private historySignature: string
   private historyTimer?: ReturnType<typeof setTimeout>
   private historyBusy = false
@@ -83,7 +85,6 @@ export class DesignEditor {
     this.canvas = new Canvas(element, {
       width: this.width,
       height: this.height,
-      backgroundColor: '#f7f7f5',
       preserveObjectStacking: true,
       selectionColor: 'rgba(19, 113, 125, 0.12)',
       selectionBorderColor: '#13717d',
@@ -93,6 +94,16 @@ export class DesignEditor {
     this.historySignature = JSON.stringify(initialDesign)
 
     this.canvas.wrapperEl.classList.add('customforge-design-canvas')
+    this.uvOverlay = document.createElement('canvas')
+    this.uvOverlay.width = this.width
+    this.uvOverlay.height = this.height
+    this.uvOverlay.className = 'customforge-uv-layout'
+    this.uvOverlay.setAttribute('aria-hidden', 'true')
+    this.uvOverlay.hidden = true
+    this.canvas.wrapperEl.insertBefore(
+      this.uvOverlay,
+      this.canvas.upperCanvasEl,
+    )
     this.host.dataset.renderState = 'pending'
     this.canvas.on('after:render', () => {
       this.markRenderState()
@@ -130,6 +141,60 @@ export class DesignEditor {
   /** 供 Three.js 创建 CanvasTexture 的底层 HTML Canvas */
   get textureCanvas(): HTMLCanvasElement {
     return this.canvas.getElement()
+  }
+
+  /**
+   * 在交互画布上显示目标 Mesh 的 UV 三角形，但不写入实时纹理或导出图片
+   *
+   * @param layout 从当前目标 Mesh 提取的 UV 布局
+   * @param flipY 是否按照垂直翻转后的纹理方向显示
+   */
+  setUvLayout(layout: UvLayout, flipY: boolean): void {
+    const context = this.uvOverlay.getContext('2d')
+    if (!context) {
+      return
+    }
+
+    context.clearRect(0, 0, this.width, this.height)
+    const { triangleCoordinates } = layout
+    if (triangleCoordinates.length === 0) {
+      this.uvOverlay.hidden = true
+      return
+    }
+
+    this.uvOverlay.hidden = false
+    const accent =
+      getComputedStyle(this.canvas.wrapperEl)
+        .getPropertyValue('--cfw-accent')
+        .trim() || '#0875c9'
+    const canvasY = (v: number) => (flipY ? 1 - v : v) * this.height
+
+    context.save()
+    context.beginPath()
+    for (let index = 0; index < triangleCoordinates.length; index += 6) {
+      context.moveTo(
+        triangleCoordinates[index] * this.width,
+        canvasY(triangleCoordinates[index + 1]),
+      )
+      context.lineTo(
+        triangleCoordinates[index + 2] * this.width,
+        canvasY(triangleCoordinates[index + 3]),
+      )
+      context.lineTo(
+        triangleCoordinates[index + 4] * this.width,
+        canvasY(triangleCoordinates[index + 5]),
+      )
+      context.closePath()
+    }
+    context.fillStyle = accent
+    context.globalAlpha = 0.035
+    context.fill()
+    context.globalAlpha = 0.26
+    context.strokeStyle = accent
+    context.lineWidth = 1
+    context.lineJoin = 'round'
+    context.stroke()
+    context.restore()
   }
 
   /** 当前画布中设计对象的数量，不包含产品基础纹理 */
@@ -341,7 +406,7 @@ export class DesignEditor {
   }
 
   /**
-   * 设置铺满画布的基础纹理，不传地址时恢复默认背景色
+   * 设置铺满画布的基础纹理，不传地址时恢复透明背景
    *
    * 背景纹理不参与对象选择，但会包含在实时纹理和 PNG 导出中
    *
@@ -351,7 +416,7 @@ export class DesignEditor {
   async setBackgroundTexture(url?: string): Promise<void> {
     if (!url) {
       this.canvas.backgroundImage = undefined
-      this.canvas.backgroundColor = '#f7f7f5'
+      this.canvas.backgroundColor = ''
       this.canvas.requestRenderAll()
       return
     }

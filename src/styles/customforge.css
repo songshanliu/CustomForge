@@ -4,6 +4,24 @@
   overflow: hidden;
 }
 
+.customforge-design-canvas .customforge-uv-layout {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.customforge-design-canvas .customforge-uv-layout[hidden] {
+  display: none;
+}
+
+.customforge-design-canvas .upper-canvas {
+  z-index: 2;
+}
+
 .customforge-viewer-canvas {
   display: block;
   width: 100%;

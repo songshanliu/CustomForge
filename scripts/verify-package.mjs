@@ -144,6 +144,15 @@ const requiredDistFiles = [
 ]
 const distUrl = new URL('dist/', projectRoot)
 const distFiles = await listFiles(distUrl)
+const defaultModelFile = distFiles.find((file) =>
+  /^assets\/cup_decal_narrow(?:-[A-Za-z0-9_-]+)?\.glb$/.test(file),
+)
+
+assert(defaultModelFile, 'Bundled cup_decal_narrow.glb asset is missing')
+const defaultModelStats = await stat(
+  new URL(`dist/${defaultModelFile}`, projectRoot),
+)
+assert(defaultModelStats.size > 0, 'Bundled cup_decal_narrow.glb asset is empty')
 
 for (const requiredFile of requiredDistFiles) {
   assert(distFiles.includes(requiredFile), `Missing dist file: ${requiredFile}`)
@@ -160,6 +169,10 @@ const importSpecifiers = collectImportSpecifiers(librarySource)
 const runtimeJavaScriptFiles = distFiles.filter((file) => file.endsWith('.js'))
 const runtimeSources = await Promise.all(
   runtimeJavaScriptFiles.map((file) => readProjectFile(`dist/${file}`)),
+)
+assert(
+  runtimeSources.some((source) => source.includes(defaultModelFile)),
+  'Runtime bundles do not reference the bundled cup_decal_narrow.glb asset',
 )
 const runtimeImportSpecifiers = runtimeSources.flatMap(collectImportSpecifiers)
 assert(
@@ -205,6 +218,7 @@ for (const file of distFiles.filter((entry) => entry.endsWith('.js.map'))) {
 
 const coreStyle = await readProjectFile('dist/style.css')
 assert(coreStyle.includes('.customforge-design-canvas'), 'Editor core style is missing')
+assert(coreStyle.includes('.customforge-uv-layout'), 'UV editor overlay style is missing')
 assert(coreStyle.includes('.customforge-viewer-canvas'), 'Viewer core style is missing')
 assert(coreStyle.includes('.customforge-workbench'), 'Workbench style is missing')
 assert(coreStyle.includes('@font-face'), 'Bundled font declaration is missing')
@@ -278,10 +292,17 @@ const expectedPackageFiles = [
 const expectedPackageFileSet = new Set(expectedPackageFiles)
 const nunitoLicense = await readProjectFile('LICENSES/NunitoSans-OFL.txt')
 assert(nunitoLicense.includes('SIL OPEN FONT LICENSE Version 1.1'), 'Nunito Sans OFL license is invalid')
+const plainMugLicense = await readProjectFile('LICENSES/plain-mug-CC-BY-4.0.txt')
+assert(
+  plainMugLicense.includes('Creative Commons Attribution 4.0 International'),
+  'Plain Mug attribution is invalid',
+)
+assert(plainMugLicense.includes('LightSwitch'), 'Plain Mug author attribution is missing')
 const requiredPackedFiles = [
   'CHANGELOG.md',
   'LICENSE',
   'LICENSES/NunitoSans-OFL.txt',
+  'LICENSES/plain-mug-CC-BY-4.0.txt',
   'README.md',
   'README.zh-CN.md',
   'dist/index.d.ts',

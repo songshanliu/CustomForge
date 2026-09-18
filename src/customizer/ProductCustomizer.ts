@@ -341,9 +341,10 @@ export class ProductCustomizer {
     this.emit('status', { message: 'Loading product' })
 
     try {
-      await this.viewer.loadProduct(nextProduct)
+      const uvLayout = await this.viewer.loadProduct(nextProduct)
       await this.editor.setBackgroundTexture(nextProduct.textureUrl)
       this.textureBridge.setFlipY(nextProduct.textureFlipY)
+      this.editor.setUvLayout(uvLayout, nextProduct.textureFlipY)
       this.product = nextProduct
       this.editor.clearHistory()
       this.emit('ready', { product: this.product })
@@ -374,9 +375,10 @@ export class ProductCustomizer {
   }
 
   private async initialize(): Promise<void> {
-    await this.viewer.loadProduct(this.product)
+    const uvLayout = await this.viewer.loadProduct(this.product)
     await this.editor.setBackgroundTexture(this.product.textureUrl)
     this.textureBridge.setFlipY(this.product.textureFlipY)
+    this.editor.setUvLayout(uvLayout, this.product.textureFlipY)
     this.emit('ready', { product: this.product })
   }
 
