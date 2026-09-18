@@ -65,10 +65,10 @@ export interface WorkbenchLayout {
   /** 是否显示二维编辑工具栏，默认为 true */
   toolbar: boolean
 
-  /** 是否显示对象图层面板，默认为 true */
+  /** 是否提供编辑区内可折叠的对象图层面板，默认为 true */
   layers: boolean
 
-  /** 是否显示底部运行状态栏，默认为 true */
+  /** 是否在三维预览区显示运行状态，默认为 true */
   status: boolean
 }
 
@@ -118,6 +118,9 @@ export interface WorkbenchLabels {
 
   /** 文字格式栏的无障碍名称 */
   textFormatting: string
+
+  /** 展开更多文字格式控件的命令 */
+  moreTextOptions: string
 
   /** 进入画布文字编辑状态的命令 */
   editText: string
@@ -373,6 +376,7 @@ export type WorkbenchIconName =
   | 'loadDesign'
   | 'loadProduct'
   | 'lock'
+  | 'moreTextOptions'
   | 'moveBackward'
   | 'moveForward'
   | 'redo'

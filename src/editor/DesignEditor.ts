@@ -27,6 +27,9 @@ import {
 } from './objectBounds'
 import { resolvePersistentImageSource } from './imageSource'
 
+const EDITOR_DISPLAY_GUTTER = 56
+const OBJECT_CONTROL_SIZE = 8
+
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
   /** 画布逻辑宽度，单位为像素 */
@@ -675,7 +678,7 @@ export class DesignEditor {
       cornerColor: '#ffffff',
       cornerStrokeColor: '#13717d',
       borderColor: '#13717d',
-      cornerSize: 16,
+      cornerSize: OBJECT_CONTROL_SIZE,
     })
 
     this.addAndSelect(text, options.name)
@@ -713,7 +716,7 @@ export class DesignEditor {
       cornerColor: '#ffffff',
       cornerStrokeColor: '#13717d',
       borderColor: '#13717d',
-      cornerSize: 16,
+      cornerSize: OBJECT_CONTROL_SIZE,
     })
 
     if (role === 'background') {
@@ -1070,7 +1073,7 @@ export class DesignEditor {
       cornerColor: '#ffffff',
       cornerStrokeColor: '#13717d',
       borderColor: '#13717d',
-      cornerSize: 16,
+      cornerSize: OBJECT_CONTROL_SIZE,
     }
 
     if (design.type === 'text') {
@@ -1223,8 +1226,8 @@ export class DesignEditor {
   }
 
   private resizeDisplay(): void {
-    const availableWidth = Math.max(this.host.clientWidth - 32, 1)
-    const availableHeight = Math.max(this.host.clientHeight - 32, 1)
+    const availableWidth = Math.max(this.host.clientWidth - EDITOR_DISPLAY_GUTTER, 1)
+    const availableHeight = Math.max(this.host.clientHeight - EDITOR_DISPLAY_GUTTER, 1)
     const scale = Math.min(
       availableWidth / this.width,
       availableHeight / this.height,

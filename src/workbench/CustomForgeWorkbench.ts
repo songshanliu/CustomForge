@@ -42,6 +42,23 @@ const DEFAULT_TEXT_FONTS = [
   'Nunito Sans',
 ]
 
+const TEXT_COLOR_PRESETS = [
+  { name: 'Black', value: '#17191c' },
+  { name: 'Slate', value: '#475467' },
+  { name: 'Gray', value: '#98a2b3' },
+  { name: 'White', value: '#ffffff' },
+  { name: 'Red', value: '#d92d20' },
+  { name: 'Orange', value: '#f79009' },
+  { name: 'Yellow', value: '#fdb022' },
+  { name: 'Green', value: '#12b76a' },
+  { name: 'Teal', value: '#0e9384' },
+  { name: 'Cyan', value: '#06aed4' },
+  { name: 'Blue', value: '#0875c9' },
+  { name: 'Purple', value: '#7f56d9' },
+  { name: 'Pink', value: '#c11574' },
+  { name: 'Brown', value: '#854a0e' },
+] as const
+
 interface SelectedImage {
   src: string
   name: string
@@ -175,14 +192,15 @@ export class CustomForgeWorkbench {
   private readonly deleteButton: HTMLButtonElement
   private readonly undoButton: HTMLButtonElement
   private readonly redoButton: HTMLButtonElement
+  private readonly layersToggle: HTMLButtonElement
   private readonly statusLabel: HTMLElement
-  private readonly objectCountLabel: HTMLElement
   private readonly imageInput: HTMLInputElement
   private readonly designInput: HTMLInputElement
   private readonly loadDesignButton: HTMLButtonElement
   private readonly textDialog: HTMLDialogElement
   private readonly textForm: HTMLFormElement
   private readonly textToolbar: HTMLElement
+  private readonly textOptions: HTMLDetailsElement
   private readonly textFontFamily: HTMLSelectElement
   private readonly textFontSize: HTMLInputElement
   private readonly textColor: HTMLInputElement
@@ -199,6 +217,7 @@ export class CustomForgeWorkbench {
   private selectedTextPresetId?: string
   private selectedImage?: SelectedImage
   private activeImageTab: ImageTab = 'upload'
+  private layersExpanded = false
   private layerSignature = ''
   private draggedObjectId?: string
   private destroyed = false
@@ -224,14 +243,15 @@ export class CustomForgeWorkbench {
     this.deleteButton = this.action('delete-selection')
     this.undoButton = this.action('undo')
     this.redoButton = this.action('redo')
+    this.layersToggle = this.action('toggle-layers')
     this.statusLabel = requiredElement(element, '[data-role="status-label"]')
-    this.objectCountLabel = requiredElement(element, '[data-role="object-count"]')
     this.imageInput = requiredElement(element, '[data-role="image-input"]')
     this.designInput = requiredElement(element, '[data-role="design-input"]')
     this.loadDesignButton = this.action('load-design')
     this.textDialog = requiredElement(element, '[data-role="text-dialog"]')
     this.textForm = requiredElement(element, '[data-role="text-form"]')
     this.textToolbar = requiredElement(element, '[data-role="text-toolbar"]')
+    this.textOptions = requiredElement(element, '[data-role="text-options"]')
     this.textFontFamily = requiredElement(element, '[data-role="text-font-family"]')
     this.textFontSize = requiredElement(element, '[data-role="text-font-size"]')
     this.textColor = requiredElement(element, '[data-role="text-format-color"]')
@@ -253,6 +273,7 @@ export class CustomForgeWorkbench {
 
     this.renderTextFontOptions()
     this.renderTextPresets()
+    this.renderTextColorPresets()
     this.renderAssetPresets()
     this.bindEvents()
     this.applyVisibility()
@@ -341,13 +362,14 @@ export class CustomForgeWorkbench {
   }
 
   /**
-   * 更新底部状态栏内容
+   * 更新三维预览区域内的运行状态
    *
    * @param message 状态文字
    * @param mode 状态样式，默认为 ready
    */
   setStatus(message: string, mode: WorkbenchStatusMode = 'ready'): void {
     this.statusLabel.textContent = message
+    this.statusLabel.title = message
     this.element.dataset.status = mode
   }
 
@@ -404,6 +426,25 @@ export class CustomForgeWorkbench {
       },
       { signal },
     )
+    document.addEventListener(
+      'pointerdown',
+      (event) => {
+        const target = event.target
+        if (target instanceof Node && !this.textOptions.contains(target)) {
+          this.textOptions.open = false
+        }
+      },
+      { signal },
+    )
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key === 'Escape') {
+          this.textOptions.open = false
+        }
+      },
+      { signal },
+    )
     this.textForm.addEventListener(
       'submit',
       (event) => this.addTextFromDialog(event),
@@ -438,12 +479,22 @@ export class CustomForgeWorkbench {
         this.updateSelectedText({ fontSize: value })
       }
     }, { signal })
-    this.textColor.addEventListener('input', () => {
+    const updateTextColor = () => {
       this.updateSelectedText({ color: this.textColor.value })
-    }, { signal })
-    this.textBackgroundColor.addEventListener('input', () => {
+    }
+    this.textColor.addEventListener('input', updateTextColor, { signal })
+    this.textColor.addEventListener('change', updateTextColor, { signal })
+    const updateTextBackgroundColor = () => {
       this.updateSelectedText({ backgroundColor: this.textBackgroundColor.value })
-    }, { signal })
+    }
+    this.textBackgroundColor.addEventListener('input', updateTextBackgroundColor, {
+      signal,
+    })
+    this.textBackgroundColor.addEventListener(
+      'change',
+      updateTextBackgroundColor,
+      { signal },
+    )
     this.textLineHeight.addEventListener('change', () => {
       const value = this.textLineHeight.valueAsNumber
       if (Number.isFinite(value)) {
@@ -517,6 +568,13 @@ export class CustomForgeWorkbench {
 
   private handleRootClick(event: MouseEvent): void {
     const target = event.target as Element
+    const textColor = target.closest<HTMLButtonElement>('[data-text-color]')
+    if (textColor?.dataset.textColor) {
+      this.setColorControl(this.textColor, textColor.dataset.textColor)
+      this.updateSelectedText({ color: textColor.dataset.textColor })
+      return
+    }
+
     const textStyle = target.closest<HTMLButtonElement>('[data-text-style]')
     if (textStyle?.dataset.textStyle) {
       this.toggleSelectedTextStyle(
@@ -592,6 +650,9 @@ export class CustomForgeWorkbench {
         break
       case 'delete-selection':
         this.customizer.deleteSelected()
+        break
+      case 'toggle-layers':
+        this.toggleLayers()
         break
       case 'reset-view':
         this.customizer.resetView()
@@ -727,21 +788,38 @@ export class CustomForgeWorkbench {
     const insertVisible = this.features.addText || this.features.addImage
     const documentVisible = this.features.saveDesign || this.features.loadDesign
     const selectionVisible = this.features.deleteSelection
+    const layersVisible = this.layout.layers
     this.toolGroup('history').hidden = !historyVisible
     this.toolGroup('insert').hidden = !insertVisible
     this.toolGroup('document').hidden = !documentVisible
     this.toolGroup('history-separator').hidden =
-      !historyVisible || (!insertVisible && !documentVisible && !selectionVisible)
+      !historyVisible ||
+      (!insertVisible && !documentVisible && !selectionVisible && !layersVisible)
     this.toolGroup('document-separator').hidden =
-      !insertVisible || (!documentVisible && !selectionVisible)
+      !insertVisible || (!documentVisible && !selectionVisible && !layersVisible)
     this.toolGroup('selection-separator').hidden =
       !selectionVisible || (!historyVisible && !insertVisible && !documentVisible)
+    this.toolGroup('layers-separator').hidden =
+      !layersVisible ||
+      (!historyVisible && !insertVisible && !documentVisible && !selectionVisible)
 
     const toolbar = requiredElement<HTMLElement>(this.element, '[data-layout="toolbar"]')
     toolbar.hidden =
       !this.layout.toolbar ||
-      (!historyVisible && !insertVisible && !documentVisible && !selectionVisible)
+      (!historyVisible &&
+        !insertVisible &&
+        !documentVisible &&
+        !selectionVisible &&
+        !layersVisible)
+    this.element.dataset.toolbar = this.layout.toolbar ? 'visible' : 'hidden'
     this.element.dataset.layers = this.layout.layers ? 'visible' : 'hidden'
+    this.element.dataset.layersExpanded =
+      this.layout.layers && this.layersExpanded ? 'true' : 'false'
+    this.layersToggle.hidden = !this.layout.layers
+    this.layersToggle.setAttribute(
+      'aria-expanded',
+      String(this.layout.layers && this.layersExpanded),
+    )
 
     const brandHidden = requiredElement(this.element, '[data-role="brand"]').hidden
     const hasGlobalActions =
@@ -758,9 +836,21 @@ export class CustomForgeWorkbench {
   }
 
   private updateObjectCount(objectCount: number): void {
-    this.objectCountLabel.textContent = formatCount(this.labels, objectCount)
+    const formattedCount = formatCount(this.labels, objectCount)
     requiredElement(this.element, '[data-role="layer-count"]').textContent =
       String(objectCount)
+    const layersLabel = `${this.labels.layers}: ${formattedCount}`
+    this.layersToggle.title = layersLabel
+    this.layersToggle.setAttribute('aria-label', layersLabel)
+  }
+
+  private toggleLayers(): void {
+    if (!this.layout.layers) {
+      return
+    }
+    this.layersExpanded = !this.layersExpanded
+    this.element.dataset.layersExpanded = String(this.layersExpanded)
+    this.layersToggle.setAttribute('aria-expanded', String(this.layersExpanded))
   }
 
   private updateHistoryButtons(): void {
@@ -905,6 +995,7 @@ export class CustomForgeWorkbench {
       objects.length > 0
     this.textToolbar.hidden = !visible
     if (!visible || !objects) {
+      this.textOptions.open = false
       return
     }
 
@@ -940,6 +1031,7 @@ export class CustomForgeWorkbench {
     if (color) {
       this.setColorControl(this.textColor, color)
     }
+    this.updateTextColorPresetState(color)
     const backgroundColor = this.commonTextValue(
       objects,
       (object) => object.backgroundColor ?? '',
@@ -982,13 +1074,52 @@ export class CustomForgeWorkbench {
 
   private setColorControl(input: HTMLInputElement, value: string): void {
     const shortHex = /^#([\da-f])([\da-f])([\da-f])$/i.exec(value)
+    let normalizedValue: string | undefined
     if (shortHex) {
-      input.value = `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`
-      return
+      normalizedValue = `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`
+    } else if (/^#[\da-f]{6}$/i.test(value)) {
+      normalizedValue = value
     }
-    if (/^#[\da-f]{6}$/i.test(value)) {
-      input.value = value
+    if (
+      normalizedValue !== undefined &&
+      input.value.toLowerCase() !== normalizedValue.toLowerCase()
+    ) {
+      input.value = normalizedValue
     }
+  }
+
+  private renderTextColorPresets(): void {
+    const palette = requiredElement(
+      this.textToolbar,
+      '[data-role="text-color-palette"]',
+    )
+    const buttons = TEXT_COLOR_PRESETS.map((preset) => {
+      const button = document.createElement('button')
+      const label = `${this.labels.textColor}: ${preset.name}`
+      button.className = 'customforge-workbench__text-color-swatch'
+      button.type = 'button'
+      button.dataset.textColor = preset.value
+      button.style.setProperty('--cfw-text-swatch', preset.value)
+      button.title = label
+      button.setAttribute('aria-label', label)
+      button.setAttribute('aria-pressed', 'false')
+      return button
+    })
+    palette.replaceChildren(...buttons)
+  }
+
+  private updateTextColorPresetState(color: string | undefined): void {
+    this.textToolbar
+      .querySelectorAll<HTMLButtonElement>('[data-text-color]')
+      .forEach((button) => {
+        button.setAttribute(
+          'aria-pressed',
+          String(
+            color !== undefined &&
+              button.dataset.textColor?.toLowerCase() === color.toLowerCase(),
+          ),
+        )
+      })
   }
 
   private setPressedState(selector: string, states: boolean[]): void {

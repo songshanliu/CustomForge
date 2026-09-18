@@ -190,7 +190,7 @@ The public package uses the same root and style imports as the local `.tgz`; pin
 
 Use the optional Workbench entry when a complete default interface is preferable to building controls from scratch
 
-The host element must have an explicit height so the design surface, layers, and 3D preview can measure their available space
+The host element must have an explicit height so the design surface, collapsible layers panel, and 3D preview can measure their available space
 
 ```html
 <div id="customforge-workbench" style="height: 720px"></div>
@@ -277,8 +277,8 @@ workbench.setLayout('header', true)
 | `header` | Brand and global product actions |
 | `editorHeader`, `viewerHeader` | Workspace panel headings |
 | `toolbar` | Design tool controls |
-| `layers` | Object layer panel |
-| `status` | Runtime status and object count |
+| `layers` | Collapsible object layer panel and toolbar entry |
+| `status` | Runtime status inside the 3D preview |
 
 All feature and layout values default to `true`
 

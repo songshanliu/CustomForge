@@ -27,7 +27,7 @@ const DEFAULT_PRODUCT_BASE_Y = -1.17
 const DEFAULT_PRODUCT_ROTATION = MathUtils.degToRad(-72)
 const DEFAULT_CAMERA_AZIMUTH = MathUtils.degToRad(18)
 const DEFAULT_CAMERA_ELEVATION = MathUtils.degToRad(10)
-const DEFAULT_CAMERA_DISTANCE_SCALE = 2.1
+const CAMERA_VIEWPORT_FILL = 0.7
 
 /**
  * 基于 Three.js 的三维产品查看器
@@ -235,27 +235,64 @@ export class ProductViewer {
     material.needsUpdate = true
   }
 
-  private fitCamera(root: Object3D): void {
+  private fitCamera(root: Object3D, direction?: Vector3): void {
     const bounds = new Box3().setFromObject(root)
     const size = bounds.getSize(new Vector3())
     const center = bounds.getCenter(new Vector3())
-    const radius = Math.max(size.x, size.y, size.z) * 0.5
-    const distance =
-      Math.max(radius / Math.tan(MathUtils.degToRad(this.camera.fov / 2)), 3) *
-      DEFAULT_CAMERA_DISTANCE_SCALE
-    const horizontalDistance = distance * Math.cos(DEFAULT_CAMERA_ELEVATION)
-    const offset = new Vector3(
-      horizontalDistance * Math.sin(DEFAULT_CAMERA_AZIMUTH),
-      distance * Math.sin(DEFAULT_CAMERA_ELEVATION),
-      horizontalDistance * Math.cos(DEFAULT_CAMERA_AZIMUTH),
-    )
+    const diagonal = size.length()
+    if (!Number.isFinite(diagonal) || diagonal <= 0) {
+      throw new Error('The product has invalid bounds')
+    }
+
+    const viewDirection = direction?.clone() ?? this.defaultCameraDirection()
+    if (viewDirection.lengthSq() === 0) {
+      viewDirection.copy(this.defaultCameraDirection())
+    }
+    viewDirection.normalize()
+    const right = new Vector3().crossVectors(this.camera.up, viewDirection)
+    if (right.lengthSq() < 1e-8) {
+      right.set(1, 0, 0)
+    } else {
+      right.normalize()
+    }
+    const up = new Vector3().crossVectors(viewDirection, right).normalize()
+    const verticalSlope =
+      Math.tan(MathUtils.degToRad(this.camera.fov / 2)) * CAMERA_VIEWPORT_FILL
+    const horizontalSlope = verticalSlope * Math.max(this.camera.aspect, 0.1)
+    let distance = 0
+
+    for (const x of [bounds.min.x, bounds.max.x]) {
+      for (const y of [bounds.min.y, bounds.max.y]) {
+        for (const z of [bounds.min.z, bounds.max.z]) {
+          const offset = new Vector3(x, y, z).sub(center)
+          const depth = offset.dot(viewDirection)
+          distance = Math.max(
+            distance,
+            depth + Math.abs(offset.dot(right)) / horizontalSlope,
+            depth + Math.abs(offset.dot(up)) / verticalSlope,
+          )
+        }
+      }
+    }
+    distance = Math.max(distance, diagonal * 0.55, 0.1)
 
     this.controls.target.copy(center)
-    this.camera.position.copy(center).add(offset)
-    this.camera.near = Math.max(distance / 100, 0.01)
-    this.camera.far = distance * 100
+    this.camera.position.copy(center).addScaledVector(viewDirection, distance)
+    this.camera.near = Math.max(Math.min(distance * 0.02, diagonal * 0.01), 0.01)
+    this.camera.far = Math.max(distance + diagonal * 2, 10)
     this.camera.updateProjectionMatrix()
+    this.controls.minDistance = Math.max(diagonal * 0.45, distance * 0.3, 0.05)
+    this.controls.maxDistance = Math.max(distance * 4, diagonal * 4)
     this.controls.update()
+  }
+
+  private defaultCameraDirection(): Vector3 {
+    const horizontal = Math.cos(DEFAULT_CAMERA_ELEVATION)
+    return new Vector3(
+      horizontal * Math.sin(DEFAULT_CAMERA_AZIMUTH),
+      Math.sin(DEFAULT_CAMERA_ELEVATION),
+      horizontal * Math.cos(DEFAULT_CAMERA_AZIMUTH),
+    )
   }
 
   private removeProduct(): void {
@@ -281,9 +318,14 @@ export class ProductViewer {
   private resize(): void {
     const width = Math.max(this.host.clientWidth, 1)
     const height = Math.max(this.host.clientHeight, 1)
+    const direction = this.camera.position.clone().sub(this.controls.target)
     this.renderer.setSize(width, height, false)
     this.camera.aspect = width / height
-    this.camera.updateProjectionMatrix()
+    if (this.productRoot && direction.lengthSq() > 0) {
+      this.fitCamera(this.productRoot, direction)
+    } else {
+      this.camera.updateProjectionMatrix()
+    }
   }
 
   private render = (): void => {

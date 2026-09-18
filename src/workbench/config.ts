@@ -114,6 +114,7 @@ const defaultLabels: WorkbenchLabels = {
   noObjects: 'No design objects',
   addText: 'Text',
   textFormatting: 'Text formatting',
+  moreTextOptions: 'More text options',
   editText: 'Edit text',
   fontFamily: 'Font',
   fontSize: 'Font size',
@@ -181,12 +182,12 @@ const defaultLabels: WorkbenchLabels = {
 }
 
 const defaultTheme: WorkbenchTheme = {
-  ink: '#24272b',
-  muted: '#747b84',
-  border: '#e1e4e8',
+  ink: '#20252a',
+  muted: '#6f7780',
+  border: '#d9dde1',
   surface: '#ffffff',
-  surfaceMuted: '#f5f6f8',
-  stage: '#f1f3f5',
+  surfaceMuted: '#f6f7f8',
+  stage: '#eceff1',
   accent: '#0875c9',
   accentHover: '#075fa3',
   accentContrast: '#ffffff',

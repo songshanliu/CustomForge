@@ -72,12 +72,14 @@ export function createWorkbenchElement(): HTMLElement {
             <span class="customforge-workbench__icon-label" data-label="deleteSelection"></span>
           </button>
 
+          <span class="customforge-workbench__separator" data-tool-group="layers-separator" aria-hidden="true"></span>
+          <button class="customforge-workbench__tool-button customforge-workbench__layers-toggle" data-action="toggle-layers" data-control-label="layers" data-role="layers-toggle" type="button" aria-expanded="false">
+            <i data-customforge-icon="layers-3" data-icon-slot="layers"></i>
+            <span data-label="layers"></span>
+            <span class="customforge-workbench__layer-count" data-role="layer-count" aria-hidden="true">0</span>
+          </button>
+
           <div class="customforge-workbench__text-toolbar" data-role="text-toolbar" data-region-label="textFormatting" role="group" hidden>
-            <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
-            <button class="customforge-workbench__format-button" data-action="edit-text" data-control-label="editText" type="button">
-              <i data-customforge-icon="text-cursor-input" data-icon-slot="editText"></i>
-              <span class="customforge-workbench__icon-label" data-label="editText"></span>
-            </button>
             <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
             <select class="customforge-workbench__font-select" data-role="text-font-family" data-control-label="fontFamily"></select>
             <label class="customforge-workbench__format-number" data-control-label="fontSize">
@@ -99,42 +101,58 @@ export function createWorkbenchElement(): HTMLElement {
                 <span class="customforge-workbench__icon-label" data-label="underline"></span>
               </button>
             </div>
-            <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
-            <div class="customforge-workbench__format-group" role="group">
-              <button class="customforge-workbench__format-button" data-text-align="left" data-control-label="alignLeft" type="button" aria-pressed="false">
-                <i data-customforge-icon="align-left" data-icon-slot="alignLeft"></i>
-                <span class="customforge-workbench__icon-label" data-label="alignLeft"></span>
-              </button>
-              <button class="customforge-workbench__format-button" data-text-align="center" data-control-label="alignCenter" type="button" aria-pressed="false">
-                <i data-customforge-icon="align-center" data-icon-slot="alignCenter"></i>
-                <span class="customforge-workbench__icon-label" data-label="alignCenter"></span>
-              </button>
-              <button class="customforge-workbench__format-button" data-text-align="right" data-control-label="alignRight" type="button" aria-pressed="false">
-                <i data-customforge-icon="align-right" data-icon-slot="alignRight"></i>
-                <span class="customforge-workbench__icon-label" data-label="alignRight"></span>
-              </button>
-            </div>
-            <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
-            <label class="customforge-workbench__format-color" data-control-label="textColor">
-              <i data-customforge-icon="palette" data-icon-slot="textColor"></i>
-              <input data-role="text-format-color" data-control-label="textColor" type="color" value="#172126">
-            </label>
-            <div class="customforge-workbench__format-group" role="group">
-              <button class="customforge-workbench__format-button" data-action="toggle-text-background" data-control-label="textBackground" type="button" aria-pressed="false">
-                <i data-customforge-icon="highlighter" data-icon-slot="textBackground"></i>
-                <span class="customforge-workbench__icon-label" data-label="textBackground"></span>
-              </button>
-              <input class="customforge-workbench__background-color" data-role="text-background-color" data-control-label="textBackground" type="color" value="#fff2a8">
-            </div>
-            <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
-            <label class="customforge-workbench__format-metric" data-control-label="lineHeight">
-              <i data-customforge-icon="rows-3" data-icon-slot="lineHeight"></i>
-              <input data-role="text-line-height" data-control-label="lineHeight" type="number" min="0.5" max="5" step="0.1" inputmode="decimal">
-            </label>
-            <label class="customforge-workbench__format-metric" data-control-label="letterSpacing">
-              <i data-customforge-icon="stretch-horizontal" data-icon-slot="letterSpacing"></i>
-              <input data-role="text-letter-spacing" data-control-label="letterSpacing" type="number" min="-500" max="2000" step="10" inputmode="numeric">
-            </label>
+            <details class="customforge-workbench__text-options" data-role="text-options">
+              <summary class="customforge-workbench__format-button" data-control-label="moreTextOptions">
+                <i data-customforge-icon="ellipsis" data-icon-slot="moreTextOptions"></i>
+                <span class="customforge-workbench__icon-label" data-label="moreTextOptions"></span>
+              </summary>
+              <div class="customforge-workbench__text-options-panel">
+                <div class="customforge-workbench__text-options-row">
+                  <button class="customforge-workbench__format-button" data-action="edit-text" data-control-label="editText" type="button">
+                    <i data-customforge-icon="text-cursor-input" data-icon-slot="editText"></i>
+                    <span class="customforge-workbench__icon-label" data-label="editText"></span>
+                  </button>
+                  <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
+                  <div class="customforge-workbench__format-group" role="group">
+                    <button class="customforge-workbench__format-button" data-text-align="left" data-control-label="alignLeft" type="button" aria-pressed="false">
+                      <i data-customforge-icon="align-left" data-icon-slot="alignLeft"></i>
+                      <span class="customforge-workbench__icon-label" data-label="alignLeft"></span>
+                    </button>
+                    <button class="customforge-workbench__format-button" data-text-align="center" data-control-label="alignCenter" type="button" aria-pressed="false">
+                      <i data-customforge-icon="align-center" data-icon-slot="alignCenter"></i>
+                      <span class="customforge-workbench__icon-label" data-label="alignCenter"></span>
+                    </button>
+                    <button class="customforge-workbench__format-button" data-text-align="right" data-control-label="alignRight" type="button" aria-pressed="false">
+                      <i data-customforge-icon="align-right" data-icon-slot="alignRight"></i>
+                      <span class="customforge-workbench__icon-label" data-label="alignRight"></span>
+                    </button>
+                  </div>
+                  <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
+                  <label class="customforge-workbench__format-color" data-control-label="textColor">
+                    <i data-customforge-icon="palette" data-icon-slot="textColor"></i>
+                    <input data-role="text-format-color" data-control-label="textColor" type="color" value="#172126">
+                  </label>
+                  <div class="customforge-workbench__format-group" role="group">
+                    <button class="customforge-workbench__format-button" data-action="toggle-text-background" data-control-label="textBackground" type="button" aria-pressed="false">
+                      <i data-customforge-icon="highlighter" data-icon-slot="textBackground"></i>
+                      <span class="customforge-workbench__icon-label" data-label="textBackground"></span>
+                    </button>
+                    <input class="customforge-workbench__background-color" data-role="text-background-color" data-control-label="textBackground" type="color" value="#fff2a8">
+                  </div>
+                </div>
+                <div class="customforge-workbench__text-color-palette" data-role="text-color-palette" data-region-label="textColor" role="group"></div>
+                <div class="customforge-workbench__text-options-row customforge-workbench__text-options-row--metrics">
+                  <label class="customforge-workbench__format-metric" data-control-label="lineHeight">
+                    <i data-customforge-icon="rows-3" data-icon-slot="lineHeight"></i>
+                    <input data-role="text-line-height" data-control-label="lineHeight" type="number" min="0.5" max="5" step="0.1" inputmode="decimal">
+                  </label>
+                  <label class="customforge-workbench__format-metric" data-control-label="letterSpacing">
+                    <i data-customforge-icon="stretch-horizontal" data-icon-slot="letterSpacing"></i>
+                    <input data-role="text-letter-spacing" data-control-label="letterSpacing" type="number" min="-500" max="2000" step="10" inputmode="numeric">
+                  </label>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -146,7 +164,6 @@ export function createWorkbenchElement(): HTMLElement {
                 <i data-customforge-icon="layers-3" data-icon-slot="layers"></i>
                 <span data-label="layers"></span>
               </span>
-              <span data-role="layer-count">0</span>
             </header>
             <ol class="customforge-workbench__layer-list" data-role="layer-list"></ol>
           </aside>
@@ -164,15 +181,15 @@ export function createWorkbenchElement(): HTMLElement {
             <span class="customforge-workbench__icon-label" data-label="resetView"></span>
           </button>
         </header>
-        <div class="customforge-workbench__viewer-stage" data-role="viewer-host"></div>
+        <div class="customforge-workbench__viewer-stage">
+          <div class="customforge-workbench__viewer-host" data-role="viewer-host"></div>
+          <div class="customforge-workbench__status" data-layout="status">
+            <span class="customforge-workbench__status-indicator" aria-hidden="true"></span>
+            <span data-role="status-label" role="status" data-label="starting"></span>
+          </div>
+        </div>
       </section>
     </section>
-
-    <footer class="customforge-workbench__statusbar" data-layout="status">
-      <span class="customforge-workbench__status-indicator" aria-hidden="true"></span>
-      <span data-role="status-label" role="status" data-label="starting"></span>
-      <span class="customforge-workbench__object-count" data-role="object-count"></span>
-    </footer>
 
     <input data-role="image-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
     <input data-role="design-input" type="file" accept="application/json,.json" hidden>
