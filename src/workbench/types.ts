@@ -23,11 +23,8 @@ export interface WorkbenchFeatures {
   /** 是否显示加载 Design JSON 控件，默认为 true */
   loadDesign: boolean
 
-  /** 是否显示远程产品加载控件，默认为 true */
+  /** 是否显示本地或远程产品加载控件，默认为 true */
   loadRemoteProduct: boolean
-
-  /** 是否显示 PNG 导出控件，默认为 true */
-  exportTexture: boolean
 
   /** 是否显示三维视角重置控件，默认为 true */
   resetView: boolean
@@ -179,9 +176,6 @@ export interface WorkbenchLabels {
   /** 加载产品命令 */
   loadProduct: string
 
-  /** 导出 PNG 命令 */
-  exportTexture: string
-
   /** 重置三维视角命令 */
   resetView: string
 
@@ -269,23 +263,56 @@ export interface WorkbenchLabels {
   /** 取消命令 */
   cancel: string
 
-  /** 远程产品 Dialog 辅助标题 */
+  /** 产品来源 Dialog 辅助标题 */
   productDialogEyebrow: string
 
-  /** 远程产品 Dialog 标题 */
+  /** 产品来源 Dialog 标题 */
   productDialogTitle: string
+
+  /** 产品来源选择控件名称 */
+  productSourceMethod: string
+
+  /** 本地 GLB 来源选项 */
+  productFileSource: string
+
+  /** 远程模型地址来源选项 */
+  productUrlSource: string
+
+  /** 本地 GLB 文件字段标签 */
+  modelFile: string
+
+  /** 选择本地 GLB 文件命令 */
+  chooseModelFile: string
+
+  /** 尚未选择本地 GLB 文件时的状态 */
+  noModelFileSelected: string
+
+  /** 本地模型文件格式错误提示 */
+  invalidModelFile: string
 
   /** 模型地址字段标签 */
   modelUrl: string
 
+  /** 产品高级设置标题 */
+  advancedProductOptions: string
+
   /** 基础纹理地址字段标签 */
   textureUrl: string
+
+  /** 基础纹理用途说明 */
+  textureUrlHint: string
 
   /** 可定制 Mesh 字段标签 */
   surfaceMesh: string
 
+  /** 可定制 Mesh 用途说明 */
+  surfaceMeshHint: string
+
   /** 垂直翻转纹理字段标签 */
   flipTexture: string
+
+  /** 垂直翻转纹理用途说明 */
+  flipTextureHint: string
 
   /** 使用内置演示产品命令 */
   useDemo: string
@@ -350,7 +377,7 @@ export interface WorkbenchTheme {
   /** Workbench 字体族 CSS 值，默认加载包内 Nunito Sans 并回退到系统无衬线字体 */
   fontFamily: string
 
-  /** 控件圆角 CSS 值，默认为 7px */
+  /** 控件圆角 CSS 值，默认为 4px */
   controlRadius: string
 }
 
@@ -366,7 +393,6 @@ export type WorkbenchIconName =
   | 'close'
   | 'deleteSelection'
   | 'editText'
-  | 'exportTexture'
   | 'hideLayer'
   | 'imageObject'
   | 'italic'

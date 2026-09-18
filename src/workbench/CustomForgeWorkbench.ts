@@ -28,6 +28,7 @@ import type {
 } from './types'
 
 type ImageTab = 'upload' | 'backgrounds' | 'elements'
+type ProductSourceMode = 'file' | 'url'
 
 const DIALOG_CLOSE_DELAY_MS = 180
 
@@ -213,10 +214,14 @@ export class CustomForgeWorkbench {
   private readonly productDialog: HTMLDialogElement
   private readonly remoteForm: HTMLFormElement
   private readonly submitProductButton: HTMLButtonElement
+  private readonly modelFileInput: HTMLInputElement
+  private readonly modelUrlInput: HTMLInputElement
   private selectedObjectIds = new Set<string>()
   private selectedTextPresetId?: string
   private selectedImage?: SelectedImage
   private activeImageTab: ImageTab = 'upload'
+  private productSourceMode: ProductSourceMode = 'file'
+  private activeProductObjectUrl?: string
   private layersExpanded = false
   private layerSignature = ''
   private draggedObjectId?: string
@@ -270,6 +275,8 @@ export class CustomForgeWorkbench {
     this.productDialog = requiredElement(element, '[data-role="product-dialog"]')
     this.remoteForm = requiredElement(element, '[data-role="remote-form"]')
     this.submitProductButton = this.action('submit-product')
+    this.modelFileInput = requiredElement(element, '[data-role="model-file"]')
+    this.modelUrlInput = requiredElement(element, '[data-role="model-url"]')
 
     this.renderTextFontOptions()
     this.renderTextPresets()
@@ -278,6 +285,7 @@ export class CustomForgeWorkbench {
     this.bindEvents()
     this.applyVisibility()
     this.setImageTab('upload')
+    this.setProductSourceMode('file')
     this.updateHistoryButtons()
     this.renderLayers(true)
     this.updateTextToolbar()
@@ -386,6 +394,7 @@ export class CustomForgeWorkbench {
     this.abortController.abort()
     this.unsubscribe.splice(0).forEach((stop) => stop())
     this.customizer.destroy()
+    this.replaceActiveProductObjectUrl()
     this.host.replaceChildren()
   }
 
@@ -457,7 +466,7 @@ export class CustomForgeWorkbench {
     )
     this.remoteForm.addEventListener(
       'submit',
-      (event) => void this.loadRemoteProduct(event),
+      (event) => void this.loadProductFromDialog(event),
       { signal },
     )
     requiredElement<HTMLInputElement>(this.element, '[data-role="text-value"]')
@@ -510,6 +519,11 @@ export class CustomForgeWorkbench {
     this.imageInput.addEventListener(
       'change',
       () => this.selectUploadedImage(),
+      { signal },
+    )
+    this.modelFileInput.addEventListener(
+      'change',
+      () => this.updateSelectedProductFile(),
       { signal },
     )
     this.designInput.addEventListener(
@@ -618,6 +632,14 @@ export class CustomForgeWorkbench {
       return
     }
 
+    const productSource = target.closest<HTMLButtonElement>('[data-product-source]')
+    if (productSource?.dataset.productSource) {
+      this.setProductSourceMode(
+        productSource.dataset.productSource as ProductSourceMode,
+      )
+      return
+    }
+
     const command = target.closest<HTMLButtonElement>('[data-action]')?.dataset.action
     switch (command) {
       case 'open-text-dialog':
@@ -656,9 +678,6 @@ export class CustomForgeWorkbench {
         break
       case 'reset-view':
         this.customizer.resetView()
-        break
-      case 'export-texture':
-        this.exportTexture()
         break
       case 'load-remote':
         this.showDialog(this.productDialog)
@@ -822,8 +841,7 @@ export class CustomForgeWorkbench {
     )
 
     const brandHidden = requiredElement(this.element, '[data-role="brand"]').hidden
-    const hasGlobalActions =
-      this.features.loadRemoteProduct || this.features.exportTexture
+    const hasGlobalActions = this.features.loadRemoteProduct
     const topbar = requiredElement<HTMLElement>(this.element, '[data-layout="header"]')
     topbar.hidden = !this.layout.header || (brandHidden && !hasGlobalActions)
 
@@ -911,15 +929,6 @@ export class CustomForgeWorkbench {
     try {
       downloadJson('customforge-design.json', this.customizer.saveDesign())
       this.setStatus(this.labels.designSaved)
-    } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
-    }
-  }
-
-  private exportTexture(): void {
-    try {
-      this.customizer.exportTexture()
-      this.setStatus(this.labels.exportTexture)
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')
     }
@@ -1783,11 +1792,50 @@ export class CustomForgeWorkbench {
     }
   }
 
+  private setProductSourceMode(mode: ProductSourceMode): void {
+    this.productSourceMode = mode
+    this.element
+      .querySelectorAll<HTMLButtonElement>('[data-product-source]')
+      .forEach((button) => {
+        const selected = button.dataset.productSource === mode
+        button.dataset.selected = String(selected)
+        button.setAttribute('aria-pressed', String(selected))
+      })
+    this.element
+      .querySelectorAll<HTMLElement>('[data-product-source-panel]')
+      .forEach((panel) => {
+        panel.hidden = panel.dataset.productSourcePanel !== mode
+      })
+    this.modelFileInput.disabled = mode !== 'file'
+    this.modelFileInput.required = mode === 'file'
+    this.modelUrlInput.disabled = mode !== 'url'
+    this.modelUrlInput.required = mode === 'url'
+    if (mode === 'file') {
+      this.updateSelectedProductFile()
+    }
+  }
+
+  private updateSelectedProductFile(): void {
+    const file = this.modelFileInput.files?.[0]
+    const valid = !file || file.name.toLowerCase().endsWith('.glb')
+    this.modelFileInput.setCustomValidity(valid ? '' : this.labels.invalidModelFile)
+    requiredElement(this.element, '[data-role="model-file-name"]').textContent =
+      file?.name ?? this.labels.noModelFileSelected
+  }
+
+  private replaceActiveProductObjectUrl(nextUrl?: string): void {
+    if (this.activeProductObjectUrl && this.activeProductObjectUrl !== nextUrl) {
+      URL.revokeObjectURL(this.activeProductObjectUrl)
+    }
+    this.activeProductObjectUrl = nextUrl
+  }
+
   private async loadDemoProduct(): Promise<void> {
     this.submitProductButton.disabled = true
     this.setStatus(this.labels.loadProduct, 'busy')
     try {
       await this.customizer.loadProduct({})
+      this.replaceActiveProductObjectUrl()
       this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)
     } catch (error) {
@@ -1797,20 +1845,23 @@ export class CustomForgeWorkbench {
     }
   }
 
-  private async loadRemoteProduct(event: SubmitEvent): Promise<void> {
+  private async loadProductFromDialog(event: SubmitEvent): Promise<void> {
     event.preventDefault()
+    this.updateSelectedProductFile()
     if (!this.remoteForm.reportValidity()) {
       return
     }
 
+    const file = this.productSourceMode === 'file'
+      ? this.modelFileInput.files?.[0]
+      : undefined
+    let pendingObjectUrl: string | undefined
     this.submitProductButton.disabled = true
     this.setStatus(this.labels.loadProduct, 'busy')
     try {
+      pendingObjectUrl = file ? URL.createObjectURL(file) : undefined
       await this.customizer.loadProduct({
-        modelUrl: requiredElement<HTMLInputElement>(
-          this.element,
-          '[data-role="model-url"]',
-        ).value,
+        modelUrl: pendingObjectUrl ?? this.modelUrlInput.value,
         textureUrl: requiredElement<HTMLInputElement>(
           this.element,
           '[data-role="texture-url"]',
@@ -1824,11 +1875,16 @@ export class CustomForgeWorkbench {
           '[data-role="flip-texture"]',
         ).checked,
       })
+      this.replaceActiveProductObjectUrl(pendingObjectUrl)
+      pendingObjectUrl = undefined
       this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')
     } finally {
+      if (pendingObjectUrl) {
+        URL.revokeObjectURL(pendingObjectUrl)
+      }
       this.submitProductButton.disabled = false
     }
   }

@@ -13,12 +13,8 @@ export function createWorkbenchElement(): HTMLElement {
       </div>
       <div class="customforge-workbench__global-actions">
         <button class="customforge-workbench__button customforge-workbench__button--secondary" data-action="load-remote" data-feature="loadRemoteProduct" data-control-label="loadProduct" type="button">
-          <i data-customforge-icon="link-2" data-icon-slot="loadProduct"></i>
+          <i data-customforge-icon="upload" data-icon-slot="loadProduct"></i>
           <span data-label="loadProduct"></span>
-        </button>
-        <button class="customforge-workbench__button customforge-workbench__button--primary" data-action="export-texture" data-feature="exportTexture" data-control-label="exportTexture" type="button">
-          <i data-customforge-icon="download" data-icon-slot="exportTexture"></i>
-          <span data-label="exportTexture"></span>
         </button>
       </div>
     </header>
@@ -279,29 +275,61 @@ export function createWorkbenchElement(): HTMLElement {
             <span class="customforge-workbench__icon-label" data-label="close"></span>
           </button>
         </header>
-        <div class="customforge-workbench__dialog-body customforge-workbench__form-fields">
-          <label class="customforge-workbench__field">
-            <span data-label="modelUrl"></span>
-            <div class="customforge-workbench__input-shell">
-              <i data-customforge-icon="link-2" data-icon-slot="loadProduct"></i>
-              <input data-role="model-url" name="modelUrl" type="url" placeholder="https://example.com/product.glb" required>
+        <div class="customforge-workbench__dialog-body customforge-workbench__product-form">
+          <div class="customforge-workbench__product-source-switch" data-region-label="productSourceMethod" role="group">
+            <button data-product-source="file" data-label="productFileSource" type="button" aria-pressed="true"></button>
+            <button data-product-source="url" data-label="productUrlSource" type="button" aria-pressed="false"></button>
+          </div>
+
+          <section data-product-source-panel="file">
+            <label class="customforge-workbench__field">
+              <span data-label="modelFile"></span>
+              <span class="customforge-workbench__product-file-picker">
+                <input data-role="model-file" name="modelFile" type="file" accept=".glb,model/gltf-binary" required>
+                <span class="customforge-workbench__product-file-command" data-label="chooseModelFile"></span>
+                <small data-role="model-file-name" data-label="noModelFileSelected"></small>
+              </span>
+            </label>
+          </section>
+
+          <section data-product-source-panel="url" hidden>
+            <label class="customforge-workbench__field">
+              <span data-label="modelUrl"></span>
+              <div class="customforge-workbench__input-shell">
+                <i data-customforge-icon="link-2" data-icon-slot="loadProduct"></i>
+                <input data-role="model-url" name="modelUrl" type="url" placeholder="https://example.com/product.glb" disabled>
+              </div>
+            </label>
+          </section>
+
+          <details class="customforge-workbench__product-options">
+            <summary>
+              <span data-label="advancedProductOptions"></span>
+              <i data-customforge-icon="chevron-down"></i>
+            </summary>
+            <div class="customforge-workbench__product-options-fields">
+              <label class="customforge-workbench__field">
+                <span data-label="textureUrl"></span>
+                <div class="customforge-workbench__input-shell">
+                  <i data-customforge-icon="image-plus" data-icon-slot="addImage"></i>
+                  <input data-role="texture-url" name="textureUrl" type="url" placeholder="https://example.com/artwork.png">
+                </div>
+                <small data-label="textureUrlHint"></small>
+              </label>
+              <label class="customforge-workbench__field">
+                <span data-label="surfaceMesh"></span>
+                <input data-role="mesh-name" name="meshName" type="text" value="PrintArea" required>
+                <small data-label="surfaceMeshHint"></small>
+              </label>
+              <label class="customforge-workbench__check-field">
+                <input data-role="flip-texture" name="flipTexture" type="checkbox">
+                <span>
+                  <strong data-label="flipTexture"></strong>
+                  <small data-label="flipTextureHint"></small>
+                </span>
+              </label>
             </div>
-          </label>
-          <label class="customforge-workbench__field">
-            <span data-label="textureUrl"></span>
-            <div class="customforge-workbench__input-shell">
-              <i data-customforge-icon="image-plus" data-icon-slot="addImage"></i>
-              <input data-role="texture-url" name="textureUrl" type="url" placeholder="https://example.com/texture.png">
-            </div>
-          </label>
-          <label class="customforge-workbench__field">
-            <span data-label="surfaceMesh"></span>
-            <input data-role="mesh-name" name="meshName" type="text" value="PrintArea" required>
-          </label>
-          <label class="customforge-workbench__check-field">
-            <input data-role="flip-texture" name="flipTexture" type="checkbox">
-            <span data-label="flipTexture"></span>
-          </label>
+          </details>
         </div>
         <footer class="customforge-workbench__dialog-actions">
           <button class="customforge-workbench__button customforge-workbench__button--secondary" data-action="use-demo" data-label="useDemo" type="button"></button>

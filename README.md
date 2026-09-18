@@ -112,14 +112,17 @@ The checked-in `examples/npm-consumer` project imports CustomForge only through 
 
 ## Load Your Product
 
-Choose **Load product** in the demo and provide:
+Choose **Load product** in the demo, then upload a self-contained `.glb` file or
+provide a remote GLB / GLTF URL. Local `.gltf` files are not accepted because
+they can depend on separate binary and texture files
 
-| Field | Purpose |
+The following fields are available under **Advanced options**:
+
+| Setting | Purpose |
 | --- | --- |
-| GLB / GLTF URL | URL of the UV-mapped 3D product model |
-| Base texture URL | Optional image shown underneath editable objects |
-| Customizable mesh | Name of the mesh that receives the live canvas texture |
-| Flip texture vertically | Corrects texture orientation when required by the model |
+| Base artwork URL | Optional image placed underneath editable objects and included in the composed texture |
+| Printable mesh name | Name of the mesh that receives the live canvas texture; defaults to `PrintArea` |
+| Flip texture vertically | Enable only when the design appears vertically inverted on a model |
 
 UV coordinates are expected to be stored in the 3D model
 
@@ -268,7 +271,7 @@ workbench.setLayout('header', true)
 | `textFormatting` | Contextual text formatting toolbar |
 | `undoRedo` | Undo and redo buttons plus Workbench keyboard shortcuts |
 | `saveDesign`, `loadDesign` | Design JSON actions |
-| `loadRemoteProduct`, `exportTexture`, `resetView` | Product and output actions |
+| `loadRemoteProduct`, `resetView` | Product loading and preview actions |
 | `reorderObjects`, `toggleObjectVisibility`, `lockObjects`, `renameObjects` | Layer management |
 | `presetBackgrounds`, `presetElements` | Image Dialog preset tabs |
 
@@ -293,7 +296,7 @@ const workbench = await createWorkbench({
     enabled: true,
     sources: {
       addText: '/icons/typography.svg',
-      exportTexture: null,
+      loadProduct: '/icons/upload.svg',
     },
   },
   textPresets: [
@@ -406,7 +409,7 @@ flowchart LR
     E --> F[Three.js CanvasTexture]
     G[GLB / GLTF model] --> H[ProductViewer]
     F --> H
-    H --> I[Customizable mesh]
+    H --> I[Printable mesh]
 ```
 
 ```text

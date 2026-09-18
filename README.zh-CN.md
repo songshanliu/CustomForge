@@ -36,7 +36,7 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 - 通过 Office 风格的上下文格式栏调整选中文字
 - 上传、移动、缩放和旋转图片
 - 将画布的每次变化实时呈现在三维产品上
-- 加载远程 GLB/GLTF 模型和可选的基础纹理
+- 上传本地 GLB 模型，或加载远程 GLB/GLTF 模型和可选的基础纹理
 - 通过 Mesh 名称指定可定制表面
 - 将目标 Mesh 的 UV 可打印区域和外边界显示为不会导出的编辑辅助层
 - 使用 OrbitControls 旋转和缩放三维预览
@@ -110,14 +110,15 @@ pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.2.tgz
 
 ## 加载你的产品
 
-在演示页面中选择 **Load product**，然后填写：
+在演示页面中选择 **Load product**，然后上传一个资源完整的本地 `.glb` 文件，或填写远程 GLB / GLTF 地址。本地 `.gltf` 文件可能依赖独立的二进制文件和纹理，因此不支持直接上传
 
-| 字段 | 用途 |
+以下设置位于默认收起的 **Advanced options** 中：
+
+| 设置 | 用途 |
 | --- | --- |
-| GLB / GLTF URL | 带 UV 的三维产品模型地址 |
-| Base texture URL | 显示在可编辑对象下方的可选基础纹理 |
-| Customizable mesh | 接收实时画布纹理的 Mesh 名称 |
-| Flip texture vertically | 在模型需要时修正纹理的垂直方向 |
+| Base artwork URL | 放在可编辑对象下方，并包含在合成纹理中的可选图片 |
+| Printable mesh name | 接收实时画布纹理的 Mesh 名称，默认为 `PrintArea` |
+| Flip texture vertically | 仅在设计内容显示为上下颠倒时启用 |
 
 UV 坐标应当保存在三维模型中
 
@@ -266,7 +267,7 @@ workbench.setLayout('header', true)
 | `textFormatting` | 上下文文字格式栏 |
 | `undoRedo` | 撤销、重做按钮和 Workbench 键盘快捷键 |
 | `saveDesign`、`loadDesign` | Design JSON 操作 |
-| `loadRemoteProduct`、`exportTexture`、`resetView` | 产品和输出操作 |
+| `loadRemoteProduct`、`resetView` | 产品加载和预览操作 |
 | `reorderObjects`、`toggleObjectVisibility`、`lockObjects`、`renameObjects` | 图层管理 |
 | `presetBackgrounds`、`presetElements` | 图片 Dialog 中的预设素材页签 |
 
@@ -280,7 +281,7 @@ workbench.setLayout('header', true)
 
 所有功能和布局开关默认均为 `true`
 
-功能开关只控制 Workbench 自带控件，不会移除 `workbench.customizer` 上的底层方法
+功能开关只控制 Workbench 自带控件，不会移除 `workbench.customizer` 上的底层方法。Workbench 顶栏不再提供 PNG 导出入口，仍可通过 `workbench.customizer.exportTexture()` 使用底层导出能力
 
 主题配置用于统一的产品级视觉调整，不提供难以维护的逐按钮颜色配置
 
@@ -291,7 +292,7 @@ const workbench = await createWorkbench({
     enabled: true,
     sources: {
       addText: '/icons/typography.svg',
-      exportTexture: null,
+      loadProduct: '/icons/upload.svg',
     },
   },
   textPresets: [
@@ -404,7 +405,7 @@ flowchart LR
     E --> F[Three.js CanvasTexture]
     G[GLB / GLTF 模型] --> H[ProductViewer]
     F --> H
-    H --> I[可定制 Mesh]
+    H --> I[可打印 Mesh]
 ```
 
 ```text

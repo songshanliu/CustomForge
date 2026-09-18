@@ -209,7 +209,7 @@ export class DesignEditor {
     const accent =
       getComputedStyle(this.canvas.wrapperEl)
         .getPropertyValue('--cfw-accent')
-        .trim() || '#0875c9'
+        .trim() || '#268a4b'
     const canvasX = (u: number) =>
       Math.min(Math.max(u * this.width, 1), this.width - 1)
     const canvasY = (v: number) =>
