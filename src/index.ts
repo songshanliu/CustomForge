@@ -46,5 +46,9 @@ export type {
   ImageDesignObject,
   HistoryState,
   ProductConfiguration,
+  TextAlignment,
   TextDesignObject,
+  TextFontStyle,
+  TextFontWeight,
+  UpdateTextOptions,
 } from './core/types'

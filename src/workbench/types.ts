@@ -5,6 +5,9 @@ export interface WorkbenchFeatures {
   /** 是否显示添加文字控件，默认为 true */
   addText: boolean
 
+  /** 是否在选中文字时显示文字格式栏，默认为 true */
+  textFormatting: boolean
+
   /** 是否显示添加图片控件，默认为 true */
   addImage: boolean
 
@@ -112,6 +115,45 @@ export interface WorkbenchLabels {
 
   /** 添加文字命令 */
   addText: string
+
+  /** 文字格式栏的无障碍名称 */
+  textFormatting: string
+
+  /** 进入画布文字编辑状态的命令 */
+  editText: string
+
+  /** 字体选择控件名称 */
+  fontFamily: string
+
+  /** 字号控件名称 */
+  fontSize: string
+
+  /** 粗体命令 */
+  bold: string
+
+  /** 斜体命令 */
+  italic: string
+
+  /** 下划线命令 */
+  underline: string
+
+  /** 左对齐命令 */
+  alignLeft: string
+
+  /** 居中对齐命令 */
+  alignCenter: string
+
+  /** 右对齐命令 */
+  alignRight: string
+
+  /** 文字背景颜色控件名称 */
+  textBackground: string
+
+  /** 行高控件名称 */
+  lineHeight: string
+
+  /** 字距控件名称 */
+  letterSpacing: string
 
   /** 添加图片命令 */
   addImage: string
@@ -313,13 +355,21 @@ export interface WorkbenchTheme {
 export type WorkbenchIconName =
   | 'addImage'
   | 'addText'
+  | 'alignCenter'
+  | 'alignLeft'
+  | 'alignRight'
   | 'backgroundObject'
+  | 'bold'
   | 'close'
   | 'deleteSelection'
+  | 'editText'
   | 'exportTexture'
   | 'hideLayer'
   | 'imageObject'
+  | 'italic'
   | 'layers'
+  | 'letterSpacing'
+  | 'lineHeight'
   | 'loadDesign'
   | 'loadProduct'
   | 'lock'
@@ -329,8 +379,11 @@ export type WorkbenchIconName =
   | 'resetView'
   | 'saveDesign'
   | 'showLayer'
+  | 'textBackground'
+  | 'textColor'
   | 'textObject'
   | 'undo'
+  | 'underline'
   | 'unlock'
   | 'upload'
 

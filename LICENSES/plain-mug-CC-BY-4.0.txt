@@ -5,7 +5,7 @@ Source: https://sketchfab.com/3d-models/plain-mug-19c8fe5702b544d0a1409d3dac1cf9
 License: Creative Commons Attribution 4.0 International (CC BY 4.0)
 License URL: https://creativecommons.org/licenses/by/4.0/
 
-The bundled cup_decal_narrow.glb is adapted from the original model. The
+The bundled cup_decal_small_margins.glb is adapted from the original model. The
 original cup geometry is retained as MugBody, and CustomForge adds a separately
 named PrintArea overlay with its own UV layout and material for printable-area
 customization.

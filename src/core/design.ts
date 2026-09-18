@@ -4,6 +4,9 @@ import type {
   DesignObject,
   DesignObjectState,
   DesignObjectTransform,
+  TextAlignment,
+  TextFontStyle,
+  TextFontWeight,
 } from './types'
 
 /** 当前支持的 Design JSON Schema 版本 */
@@ -60,6 +63,31 @@ function readImageRole(value: unknown, path: string): DesignImageRole {
   return value
 }
 
+function readTextAlignment(value: unknown, path: string): TextAlignment {
+  if (value !== 'left' && value !== 'center' && value !== 'right') {
+    throw new TypeError(`${path} must be left, center, or right`)
+  }
+  return value
+}
+
+function readTextFontStyle(value: unknown, path: string): TextFontStyle {
+  if (value !== 'normal' && value !== 'italic') {
+    throw new TypeError(`${path} must be normal or italic`)
+  }
+  return value
+}
+
+function readTextFontWeight(value: unknown, path: string): TextFontWeight {
+  if (value === 'normal' || value === 'bold') {
+    return value
+  }
+  const weight = readFiniteNumber(value, path)
+  if (weight <= 0 || weight > 1000) {
+    throw new TypeError(`${path} must be between 1 and 1000`)
+  }
+  return weight
+}
+
 function parseObjectState(
   object: Record<string, unknown>,
   path: string,
@@ -110,6 +138,57 @@ function parseObject(value: unknown, index: number): DesignObject {
       fontFamily: readString(object.fontFamily, `${path}.fontFamily`),
       fontSize: readPositiveNumber(object.fontSize, `${path}.fontSize`),
       color: readString(object.color, `${path}.color`),
+      ...(object.fontWeight === undefined
+        ? {}
+        : {
+            fontWeight: readTextFontWeight(
+              object.fontWeight,
+              `${path}.fontWeight`,
+            ),
+          }),
+      ...(object.fontStyle === undefined
+        ? {}
+        : {
+            fontStyle: readTextFontStyle(
+              object.fontStyle,
+              `${path}.fontStyle`,
+            ),
+          }),
+      ...(object.underline === undefined
+        ? {}
+        : { underline: readBoolean(object.underline, `${path}.underline`) }),
+      ...(object.textAlign === undefined
+        ? {}
+        : {
+            textAlign: readTextAlignment(
+              object.textAlign,
+              `${path}.textAlign`,
+            ),
+          }),
+      ...(object.lineHeight === undefined
+        ? {}
+        : {
+            lineHeight: readPositiveNumber(
+              object.lineHeight,
+              `${path}.lineHeight`,
+            ),
+          }),
+      ...(object.charSpacing === undefined
+        ? {}
+        : {
+            charSpacing: readFiniteNumber(
+              object.charSpacing,
+              `${path}.charSpacing`,
+            ),
+          }),
+      ...(object.backgroundColor === undefined
+        ? {}
+        : {
+            backgroundColor: readString(
+              object.backgroundColor,
+              `${path}.backgroundColor`,
+            ),
+          }),
     }
   }
 

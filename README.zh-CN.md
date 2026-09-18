@@ -33,11 +33,12 @@
 CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来：
 
 - 在二维纹理画布上添加和编辑文字
+- 通过 Office 风格的上下文格式栏调整选中文字
 - 上传、移动、缩放和旋转图片
 - 将画布的每次变化实时呈现在三维产品上
 - 加载远程 GLB/GLTF 模型和可选的基础纹理
 - 通过 Mesh 名称指定可定制表面
-- 将目标 Mesh 的 UV 三角形显示为不会导出的编辑辅助线
+- 将目标 Mesh 的 UV 可打印区域和外边界显示为不会导出的编辑辅助层
 - 使用 OrbitControls 旋转和缩放三维预览
 - 将合成后的纹理导出为 PNG
 - 通过版本化 Design JSON 保存和恢复可编辑对象
@@ -46,7 +47,7 @@ CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来�
 - 使用可配置的文字、背景和装饰素材 Dialog
 - 通过品牌、文案、主题变量和图标适配默认 Workbench
 
-工作台默认加载随包提供的 `cup_decal_narrow.glb`，无需请求外部模型即可直接运行
+工作台默认加载随包提供的 `cup_decal_small_margins.glb`，无需请求外部模型即可直接运行
 
 ## 仓库开发
 
@@ -122,7 +123,7 @@ UV 坐标应当保存在三维模型中
 
 可选的纹理图片只是二维编辑器的基础图层，不能替代模型中的 UV 数据；未提供时，设计画布和可打印贴花层保持透明
 
-每次加载产品后，编辑器会读取目标 Mesh 的 UV 坐标并在设计画布上方显示三角形布局。该辅助线不会写入实时纹理、Design JSON 或导出的 PNG
+每次加载产品后，编辑器会读取目标 Mesh 的 UV 坐标，并在设计画布上方显示轻微的可打印区域底纹及其外边界。内部三角剖分保持隐藏，该辅助层不会写入实时纹理、Design JSON 或导出的 PNG
 
 > [!IMPORTANT]
 > 远程模型、纹理、贴图和字体必须提供允许当前页面来源访问的 CORS 响应头
@@ -164,6 +165,8 @@ customizer.addText({
   x: 120,
   y: 180,
   fontSize: 64,
+  fontWeight: 'bold',
+  textAlign: 'center',
   color: '#172126',
 })
 
@@ -245,6 +248,8 @@ CustomForge 会随制品提供该字体资源，不会在运行时请求第三�
 文字和图片命令现在会打开专用 Dialog，不会在点击工具栏按钮后立即修改画布
 
 - 文字 Dialog 提供文本输入、颜色选择和可替换的排版预设
+- 选中一个或多个文字对象时，现有单行工具栏会在不推动画布的情况下显示上下文格式控件，用于调整字体、字号、粗体、斜体、下划线、对齐、文字色、高亮色、行高和字距
+- 上下文格式栏支持多选混合状态，并提供明确的画布内文字编辑入口
 - 图片 Dialog 提供本地上传、预设背景和装饰元素
 - 设计背景会替换已有设计背景、铺满画布、默认锁定在最底层并保存到 Design JSON
 
@@ -258,6 +263,7 @@ workbench.setLayout('header', true)
 | 功能开关 | 控制内容 |
 | --- | --- |
 | `addText`、`addImage`、`deleteSelection` | 对象 Dialog 和删除操作 |
+| `textFormatting` | 上下文文字格式栏 |
 | `undoRedo` | 撤销、重做按钮和 Workbench 键盘快捷键 |
 | `saveDesign`、`loadDesign` | Design JSON 操作 |
 | `loadRemoteProduct`、`exportTexture`、`resetView` | 产品和输出操作 |
@@ -315,7 +321,7 @@ if (savedDesign) {
 }
 ```
 
-当前 Schema 版本为 `1`，文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID、名称、显隐、锁定状态、图片用途与基于中心点的变换
+当前 Schema 版本为 `1`，文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID、名称、显隐、锁定状态、图片用途、基于中心点的变换和丰富的文字排版属性。缺少可选排版字段的旧版 version 1 文档仍按原有的粗体、居中默认值加载
 
 Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只能加载到逻辑宽高完全相同的编辑器中
 
@@ -344,7 +350,7 @@ const stop = customizer.on('historychange', ({ canUndo, canRedo }) => {
 })
 ```
 
-历史记录覆盖对象添加、删除、画布变换、文字编辑、图层排序、名称、显隐、锁定和 Design JSON 加载
+历史记录覆盖对象添加、删除、画布变换、文字内容与格式编辑、图层排序、名称、显隐、锁定和 Design JSON 加载
 
 Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl` 或 `Cmd` + `Shift` + `Z` 和 `Ctrl` + `Y`
 
@@ -354,16 +360,19 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 
 | 方法 | 说明 |
 | --- | --- |
-| `addText(options)` | 添加并选中文字，自动约束在画布内 |
+| `addText(options)` | 添加并选中文字并自动约束在画布内；`fontSize` 默认为 `22` |
 | `addImage(options)` | 加载普通图片元素或替换设计背景 |
 | `getObjects()` | 按从后到前的图层顺序返回当前对象 |
 | `getSelectedObjectIds()` | 返回当前选区中的稳定对象 ID |
 | `selectObject(id)` | 根据稳定 ID 选中可见对象 |
+| `clearSelection()` | 清除当前画布选区且不修改设计内容 |
 | `removeObject(id)` | 根据稳定 ID 删除对象 |
 | `moveObject(id, index)` | 将对象移动到从 0 开始的图层索引 |
 | `renameObject(id, name)` | 修改图层工具中显示的对象名称 |
 | `setObjectVisibility(id, visible)` | 设置对象是否参与渲染 |
 | `setObjectLocked(id, locked)` | 锁定或解锁画布变换 |
+| `updateText(id, options)` | 按稳定 ID 修改文字内容和排版样式 |
+| `editText(id)` | 让未锁定文字进入画布内编辑状态 |
 | `deleteSelected()` | 删除当前对象或选区 |
 | `saveDesign()` | 返回当前版本化 Design JSON 文档 |
 | `loadDesign(value)` | 校验并以事务方式恢复 Design JSON |

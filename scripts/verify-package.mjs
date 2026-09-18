@@ -145,14 +145,14 @@ const requiredDistFiles = [
 const distUrl = new URL('dist/', projectRoot)
 const distFiles = await listFiles(distUrl)
 const defaultModelFile = distFiles.find((file) =>
-  /^assets\/cup_decal_narrow(?:-[A-Za-z0-9_-]+)?\.glb$/.test(file),
+  /^assets\/cup_decal_small_margins(?:-[A-Za-z0-9_-]+)?\.glb$/.test(file),
 )
 
-assert(defaultModelFile, 'Bundled cup_decal_narrow.glb asset is missing')
+assert(defaultModelFile, 'Bundled cup_decal_small_margins.glb asset is missing')
 const defaultModelStats = await stat(
   new URL(`dist/${defaultModelFile}`, projectRoot),
 )
-assert(defaultModelStats.size > 0, 'Bundled cup_decal_narrow.glb asset is empty')
+assert(defaultModelStats.size > 0, 'Bundled cup_decal_small_margins.glb asset is empty')
 
 for (const requiredFile of requiredDistFiles) {
   assert(distFiles.includes(requiredFile), `Missing dist file: ${requiredFile}`)
@@ -172,7 +172,7 @@ const runtimeSources = await Promise.all(
 )
 assert(
   runtimeSources.some((source) => source.includes(defaultModelFile)),
-  'Runtime bundles do not reference the bundled cup_decal_narrow.glb asset',
+  'Runtime bundles do not reference the bundled cup_decal_small_margins.glb asset',
 )
 const runtimeImportSpecifiers = runtimeSources.flatMap(collectImportSpecifiers)
 assert(

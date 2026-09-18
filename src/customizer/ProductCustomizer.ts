@@ -8,6 +8,7 @@ import type {
   CustomizerOptions,
   DesignDocument,
   ProductConfiguration,
+  UpdateTextOptions,
 } from '../core/types'
 import { DesignEditor } from '../editor/DesignEditor'
 import { TextureBridge } from '../bridge/TextureBridge'
@@ -165,6 +166,15 @@ export class ProductCustomizer {
   }
 
   /**
+   * 清除当前画布选区，不修改设计内容或历史记录
+   *
+   * @returns 清除前是否存在选中对象
+   */
+  clearSelection(): boolean {
+    return this.editor.clearSelection()
+  }
+
+  /**
    * 按稳定 ID 删除一个对象
    *
    * @param id Design JSON 中的对象 ID
@@ -216,6 +226,30 @@ export class ProductCustomizer {
    */
   setObjectLocked(id: string, locked: boolean): boolean {
     return this.editor.setObjectLocked(id, locked)
+  }
+
+  /**
+   * 修改已有文字对象的内容和排版样式
+   *
+   * 连续调用会在短暂空闲后合并为一个撤销步骤
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param options 要修改的文字属性，未传字段保持不变
+   * @returns 是否找到并更新了文字对象
+   * @throws 字号、行高、字距、字重或 CSS 颜色不符合约束时抛出错误
+   */
+  updateText(id: string, options: UpdateTextOptions): boolean {
+    return this.editor.updateText(id, options)
+  }
+
+  /**
+   * 让一个未锁定文字对象进入画布内联编辑状态
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到文字对象并进入编辑状态
+   */
+  editText(id: string): boolean {
+    return this.editor.editText(id)
   }
 
   /**

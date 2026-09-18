@@ -19,11 +19,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { NormalizedProductConfiguration } from '../core/config'
 import type { UvLayout } from '../core/uv'
-import defaultProductModelUrl from './assets/cup_decal_narrow.glb?url&no-inline'
+import defaultProductModelUrl from './assets/cup_decal_small_margins.glb?url&no-inline'
 import { extractUvLayout } from './uvLayout'
 
 const DEFAULT_PRODUCT_HEIGHT = 2.35
 const DEFAULT_PRODUCT_BASE_Y = -1.17
+const DEFAULT_PRODUCT_ROTATION = MathUtils.degToRad(-72)
+const DEFAULT_CAMERA_AZIMUTH = MathUtils.degToRad(18)
+const DEFAULT_CAMERA_ELEVATION = MathUtils.degToRad(10)
+const DEFAULT_CAMERA_DISTANCE_SCALE = 2.1
 
 /**
  * 基于 Three.js 的三维产品查看器
@@ -177,7 +181,7 @@ export class ProductViewer {
     }
 
     root.scale.multiplyScalar(DEFAULT_PRODUCT_HEIGHT / initialHeight)
-    root.rotation.y = MathUtils.degToRad(-14)
+    root.rotation.y = DEFAULT_PRODUCT_ROTATION
     root.updateMatrixWorld(true)
 
     const bounds = new Box3().setFromObject(root)
@@ -236,10 +240,18 @@ export class ProductViewer {
     const size = bounds.getSize(new Vector3())
     const center = bounds.getCenter(new Vector3())
     const radius = Math.max(size.x, size.y, size.z) * 0.5
-    const distance = Math.max(radius / Math.tan(MathUtils.degToRad(this.camera.fov / 2)), 3)
+    const distance =
+      Math.max(radius / Math.tan(MathUtils.degToRad(this.camera.fov / 2)), 3) *
+      DEFAULT_CAMERA_DISTANCE_SCALE
+    const horizontalDistance = distance * Math.cos(DEFAULT_CAMERA_ELEVATION)
+    const offset = new Vector3(
+      horizontalDistance * Math.sin(DEFAULT_CAMERA_AZIMUTH),
+      distance * Math.sin(DEFAULT_CAMERA_ELEVATION),
+      horizontalDistance * Math.cos(DEFAULT_CAMERA_AZIMUTH),
+    )
 
     this.controls.target.copy(center)
-    this.camera.position.copy(center).add(new Vector3(distance * 0.55, distance * 0.42, distance))
+    this.camera.position.copy(center).add(offset)
     this.camera.near = Math.max(distance / 100, 0.01)
     this.camera.far = distance * 100
     this.camera.updateProjectionMatrix()

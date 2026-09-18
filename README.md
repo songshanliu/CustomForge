@@ -33,11 +33,12 @@
 CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 
 - Add and edit text on a 2D texture canvas
+- Format selected text through an Office-style contextual toolbar
 - Upload, move, scale, and rotate images
 - Preview every canvas change on a 3D product in real time
 - Load remote GLB/GLTF models and optional base textures
 - Select the customizable surface by mesh name
-- Display the target mesh UV triangles as a non-exported editor guide
+- Display the target mesh UV printable region and boundary as a non-exported editor guide
 - Rotate and zoom the 3D preview with OrbitControls
 - Export the composed texture as a PNG
 - Save and restore editable objects through versioned Design JSON
@@ -46,7 +47,7 @@ CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
 - Use configurable typography, background, and decorative asset Dialogs
 - Adapt the default Workbench with branding, labels, theme tokens, and icons
 
-The included workbench starts with the bundled `cup_decal_narrow.glb`, so the project works immediately without fetching an external model
+The included workbench starts with the bundled `cup_decal_small_margins.glb`, so the project works immediately without fetching an external model
 
 ## Repository Development
 
@@ -124,7 +125,7 @@ UV coordinates are expected to be stored in the 3D model
 
 The optional texture image is the visual base layer, not a replacement for model UV data. Without one, the design canvas and printable overlay remain transparent
 
-After each product load, the editor reads the target mesh UV coordinates and displays its triangle layout above the design canvas. This guide is not written into the live texture, Design JSON, or exported PNG
+After each product load, the editor reads the target mesh UV coordinates and displays a subtle printable-region fill with its outer boundary above the design canvas. Internal triangulation stays hidden, and the guide is not written into the live texture, Design JSON, or exported PNG
 
 > [!IMPORTANT]
 > Remote models, textures, decals, and fonts must be served with CORS headers that allow the app origin
@@ -166,6 +167,8 @@ customizer.addText({
   x: 120,
   y: 180,
   fontSize: 64,
+  fontWeight: 'bold',
+  textAlign: 'center',
   color: '#172126',
 })
 
@@ -247,6 +250,8 @@ CustomForge bundles the font asset and does not fetch third-party font services 
 Text and image commands open focused Dialogs instead of immediately mutating the canvas
 
 - The text Dialog includes an input, color control, and replaceable typography presets
+- Selecting one or more text objects reveals contextual controls inside the existing single-row toolbar for font family, size, bold, italic, underline, alignment, text color, highlight, line height, and letter spacing without shifting the canvas
+- The contextual toolbar supports mixed multi-selection values and an explicit command for entering on-canvas text editing
 - The image Dialog includes local upload, background presets, and decorative element presets
 - A design background replaces the previous design background, fills the canvas, starts locked at the bottom layer, and persists in Design JSON
 
@@ -260,6 +265,7 @@ workbench.setLayout('header', true)
 | Feature switch | Controls |
 | --- | --- |
 | `addText`, `addImage`, `deleteSelection` | Object Dialogs and deletion |
+| `textFormatting` | Contextual text formatting toolbar |
 | `undoRedo` | Undo and redo buttons plus Workbench keyboard shortcuts |
 | `saveDesign`, `loadDesign` | Design JSON actions |
 | `loadRemoteProduct`, `exportTexture`, `resetView` | Product and output actions |
@@ -317,7 +323,7 @@ if (savedDesign) {
 }
 ```
 
-The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs, names, visibility, locking, image roles, and center-based transforms
+The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs, names, visibility, locking, image roles, center-based transforms, and rich text formatting. Existing version 1 documents without the optional formatting fields continue to load with the original bold, centered defaults
 
 Design JSON intentionally excludes the product model, target mesh, and base texture. A document can only be loaded into an editor with exactly the same logical width and height
 
@@ -346,7 +352,7 @@ const stop = customizer.on('historychange', ({ canUndo, canRedo }) => {
 })
 ```
 
-History covers object creation, deletion, canvas transforms, text edits, layer order, names, visibility, locking, and Design JSON loading
+History covers object creation, deletion, canvas transforms, text content and formatting edits, layer order, names, visibility, locking, and Design JSON loading
 
 Workbench also supports `Ctrl` or `Cmd` + `Z`, `Ctrl` or `Cmd` + `Shift` + `Z`, and `Ctrl` + `Y` while focus is outside form fields
 
@@ -356,16 +362,19 @@ Successful product replacement keeps the current design but starts a new history
 
 | Method | Description |
 | --- | --- |
-| `addText(options)` | Add and select editable text, constrained to the canvas |
+| `addText(options)` | Add and select editable text, constrained to the canvas; `fontSize` defaults to `22` |
 | `addImage(options)` | Load and select an element or replace the design background |
 | `getObjects()` | Return the current objects in back-to-front layer order |
 | `getSelectedObjectIds()` | Return stable IDs for the current selection |
 | `selectObject(id)` | Select a visible object by stable ID |
+| `clearSelection()` | Clear the current canvas selection without changing the design |
 | `removeObject(id)` | Remove an object by stable ID |
 | `moveObject(id, index)` | Move an object to a zero-based layer index |
 | `renameObject(id, name)` | Change the object name shown in layer tools |
 | `setObjectVisibility(id, visible)` | Include or exclude an object from rendering |
 | `setObjectLocked(id, locked)` | Lock or unlock canvas transformations |
+| `updateText(id, options)` | Update text content and formatting by stable ID |
+| `editText(id)` | Enter on-canvas editing for an unlocked text object |
 | `deleteSelected()` | Remove the active object or selection |
 | `saveDesign()` | Return the current versioned Design JSON document |
 | `loadDesign(value)` | Validate and transactionally restore Design JSON |

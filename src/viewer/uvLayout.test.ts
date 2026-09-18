@@ -27,10 +27,17 @@ function createQuadGeometry(): BufferGeometry {
 describe('extractUvLayout', () => {
   it('extracts indexed UV triangles', () => {
     const mesh = new Mesh(createQuadGeometry(), new MeshStandardMaterial())
+    const layout = extractUvLayout(mesh)
 
-    expect(Array.from(extractUvLayout(mesh).triangleCoordinates)).toEqual([
+    expect(Array.from(layout.triangleCoordinates)).toEqual([
       0, 0, 1, 0, 1, 1,
       0, 0, 1, 1, 0, 1,
+    ])
+    expect(Array.from(layout.boundaryCoordinates)).toEqual([
+      0, 0, 1, 0,
+      1, 0, 1, 1,
+      1, 1, 0, 1,
+      0, 1, 0, 0,
     ])
   })
 
@@ -43,9 +50,12 @@ describe('extractUvLayout', () => {
       new MeshStandardMaterial(),
     ])
 
-    expect(Array.from(extractUvLayout(mesh).triangleCoordinates)).toEqual([
+    const layout = extractUvLayout(mesh)
+
+    expect(Array.from(layout.triangleCoordinates)).toEqual([
       0, 0, 1, 1, 0, 1,
     ])
+    expect(layout.boundaryCoordinates).toHaveLength(12)
   })
 
   it('rejects a customizable mesh without UV coordinates', () => {

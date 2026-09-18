@@ -6,13 +6,23 @@ All notable changes to CustomForge will be documented in this file
 
 ### Added
 
-- Display the active Mesh UV triangle layout as a non-exported editor overlay
+- Display the active Mesh UV printable region and boundary as a non-exported editor overlay
+- Add an Office-style contextual text formatting bar with font, size, color, highlight, emphasis, alignment, line-height, and letter-spacing controls
+- Persist rich text formatting in backward-compatible Design JSON version 1 documents and expose `updateText()`, `editText()`, and `clearSelection()` APIs
 
 ### Changed
 
-- Replaced the procedural demo cup with the bundled `cup_decal_narrow.glb` model, separating `MugBody` from the customizable `PrintArea` overlay
+- Replaced the procedural demo cup with the bundled `cup_decal_small_margins.glb` model, separating `MugBody` from the customizable `PrintArea` overlay
 - Keep the design canvas and printable overlay transparent when no base texture is configured
 - Replace the shadow-casting viewer setup with balanced non-shadow studio lighting and remove the floor and fixed scene background
+- Adjust the initial and reset camera framing for a smaller, more front-facing product view
+- Seed the demo with the built-in CustomForge logo and 22px project-name text
+
+### Fixed
+
+- Keep Fabric selection borders and transform controls out of the live 3D texture
+- Keep compact layer actions beside the type label so they never cover the layer name
+- Present the design canvas as a clean gridded artboard with a restrained UV boundary
 
 ## [0.1.0-alpha.2] - 2026-08-27
 

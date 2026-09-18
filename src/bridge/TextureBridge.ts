@@ -15,7 +15,7 @@ export class TextureBridge {
   private updateFrame = 0
 
   /**
-   * @param editor 提供底层 HTML Canvas 和渲染事件的二维编辑器
+   * @param editor 提供不含交互控件的纹理 Canvas 和渲染事件的二维编辑器
    * @param viewer 接收实时纹理的三维查看器
    * @param flipY 是否垂直翻转纹理
    */

@@ -43,6 +43,32 @@ describe('parseDesignDocument', () => {
     ).toMatchObject({ visible: true, locked: false })
   })
 
+  it('preserves supported text formatting fields', () => {
+    const text = {
+      ...validDesign.objects[0],
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      underline: true,
+      textAlign: 'right',
+      lineHeight: 1.4,
+      charSpacing: 120,
+      backgroundColor: '#fff2a8',
+    }
+
+    expect(
+      parseDesignDocument({ ...validDesign, objects: [text] }).objects[0],
+    ).toMatchObject(text)
+  })
+
+  it('rejects unsupported text formatting values', () => {
+    expect(() =>
+      parseDesignDocument({
+        ...validDesign,
+        objects: [{ ...validDesign.objects[0], textAlign: 'justify' }],
+      }),
+    ).toThrow('design.objects[0].textAlign must be left, center, or right')
+  })
+
   it('rejects unsupported schema versions', () => {
     expect(() => parseDesignDocument({ ...validDesign, version: 2 })).toThrow(
       'design.version must be 1',

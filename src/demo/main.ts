@@ -1,4 +1,5 @@
 import { createWorkbench } from '../workbench'
+import customForgeLogoUrl from '../workbench/assets/CustomForgeLogo.png'
 import '../style.css'
 import './styles.css'
 
@@ -6,20 +7,20 @@ const workbench = await createWorkbench({
   container: '#app',
 })
 
-workbench.customizer.addText({
-  text: 'CF',
-  x: 680,
-  y: 170,
-  width: 220,
-  fontSize: 132,
-  color: '#df5144',
+await workbench.customizer.addImage({
+  src: customForgeLogoUrl,
+  name: 'CustomForge logo',
+  x: 800,
+  y: 215,
+  width: 200,
 })
 workbench.customizer.addText({
-  text: 'MAKE IT YOURS',
-  x: 96,
-  y: 206,
-  width: 430,
-  fontSize: 66,
+  text: 'CustomForge',
+  x: 690,
+  y: 320,
+  width: 220,
   color: '#182023',
 })
+workbench.customizer.clearSelection()
+workbench.customizer.clearHistory()
 workbench.setStatus('Demo product ready')

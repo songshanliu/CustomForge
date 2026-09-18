@@ -7,7 +7,7 @@ export type ElementTarget = HTMLElement | string
  * 产品配置
  */
 export interface ProductConfiguration {
-  /** GLB 或 GLTF 模型的远程地址，不传时使用随包提供的 cup_decal_narrow.glb */
+  /** GLB 或 GLTF 模型的远程地址，不传时使用随包提供的 cup_decal_small_margins.glb */
   modelUrl?: string
 
   /** 二维编辑器使用的可选基础纹理地址 */
@@ -43,6 +43,15 @@ export interface CustomizerOptions {
   historyLimit?: number
 }
 
+/** 文字支持的水平对齐方式 */
+export type TextAlignment = 'left' | 'center' | 'right'
+
+/** 文字支持的字体样式 */
+export type TextFontStyle = 'normal' | 'italic'
+
+/** 文字字重，数字值通常使用 100 到 900 */
+export type TextFontWeight = number | 'normal' | 'bold'
+
 /**
  * 添加文字时使用的配置
  *
@@ -67,11 +76,68 @@ export interface AddTextOptions {
   /** 字体名称 */
   fontFamily?: string
 
-  /** 字体大小，单位为像素 */
+  /** 字体大小，单位为像素，默认为 22 */
   fontSize?: number
 
   /** 文字颜色，支持 CSS 颜色值 */
   color?: string
+
+  /** 字重，默认为 700 */
+  fontWeight?: TextFontWeight
+
+  /** 是否使用斜体，默认为 normal */
+  fontStyle?: TextFontStyle
+
+  /** 是否显示下划线，默认为 false */
+  underline?: boolean
+
+  /** 文字水平对齐方式，默认为 center */
+  textAlign?: TextAlignment
+
+  /** 行高倍数，默认为 1.16 */
+  lineHeight?: number
+
+  /** 字距，单位为千分之一 em，默认为 0 */
+  charSpacing?: number
+
+  /** 文字背景 CSS 颜色，缺省时保持透明 */
+  backgroundColor?: string
+}
+
+/** 更新已有文字对象时使用的内容和样式配置 */
+export interface UpdateTextOptions {
+  /** 新的文字内容，可以为空字符串 */
+  text?: string
+
+  /** 新的字体名称，消费页面必须已经加载该字体 */
+  fontFamily?: string
+
+  /** 新的字体大小，单位为像素 */
+  fontSize?: number
+
+  /** 新的文字 CSS 颜色 */
+  color?: string
+
+  /** 新的字重 */
+  fontWeight?: TextFontWeight
+
+  /** 新的字体样式 */
+  fontStyle?: TextFontStyle
+
+  /** 是否显示下划线 */
+  underline?: boolean
+
+  /** 新的文字水平对齐方式 */
+  textAlign?: TextAlignment
+
+  /** 新的行高倍数 */
+  lineHeight?: number
+
+  /** 新的字距，单位为千分之一 em */
+  charSpacing?: number
+
+  /** 新的文字背景 CSS 颜色，传 null 时恢复透明 */
+  backgroundColor?: string | null
 }
 
 /**
@@ -172,6 +238,27 @@ export interface TextDesignObject extends DesignObjectState {
 
   /** 文字颜色，仅保存 CSS 字符串颜色 */
   color: string
+
+  /** 字重，旧版文档缺省时使用 700 */
+  fontWeight?: TextFontWeight
+
+  /** 字体样式，旧版文档缺省时使用 normal */
+  fontStyle?: TextFontStyle
+
+  /** 是否显示下划线，旧版文档缺省时使用 false */
+  underline?: boolean
+
+  /** 文字水平对齐方式，旧版文档缺省时使用 center */
+  textAlign?: TextAlignment
+
+  /** 行高倍数，旧版文档缺省时使用 1.16 */
+  lineHeight?: number
+
+  /** 字距，单位为千分之一 em，旧版文档缺省时使用 0 */
+  charSpacing?: number
+
+  /** 文字背景 CSS 颜色，缺省时保持透明 */
+  backgroundColor?: string
 }
 
 /** Design JSON 中的图片对象 */

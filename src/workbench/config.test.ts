@@ -9,6 +9,7 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.editorHeight).toBe(512)
     expect(options.historyLimit).toBe(50)
     expect(Object.values(options.features).every(Boolean)).toBe(true)
+    expect(options.features.textFormatting).toBe(true)
     expect(Object.values(options.layout).every(Boolean)).toBe(true)
     expect(options.branding.title).toBe('CustomForge')
     expect(options.branding.logoUrl).toBeTruthy()
@@ -17,6 +18,7 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.theme.controlRadius).toBe('7px')
     expect(options.icons).toEqual({ enabled: true, sources: {} })
     expect(options.textPresets).toHaveLength(4)
+    expect(options.textPresets[0]).toMatchObject({ fontSize: 22, width: 220 })
     expect(options.elements.some((asset) => asset.id === 'customforge-logo')).toBe(true)
   })
 

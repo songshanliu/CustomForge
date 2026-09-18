@@ -1,5 +1,11 @@
 import { resolveElement } from '../core/dom'
-import type { DesignImageRole, DesignObject } from '../core/types'
+import type {
+  DesignImageRole,
+  DesignObject,
+  TextAlignment,
+  TextDesignObject,
+  UpdateTextOptions,
+} from '../core/types'
 import { ProductCustomizer } from '../customizer/ProductCustomizer'
 import {
   normalizeWorkbenchOptions,
@@ -24,6 +30,17 @@ import type {
 type ImageTab = 'upload' | 'backgrounds' | 'elements'
 
 const DIALOG_CLOSE_DELAY_MS = 180
+
+const DEFAULT_TEXT_FONTS = [
+  'Arial',
+  'Georgia',
+  'Trebuchet MS',
+  'Verdana',
+  'Times New Roman',
+  'Courier New',
+  'Brush Script MT',
+  'Nunito Sans',
+]
 
 interface SelectedImage {
   src: string
@@ -165,6 +182,13 @@ export class CustomForgeWorkbench {
   private readonly loadDesignButton: HTMLButtonElement
   private readonly textDialog: HTMLDialogElement
   private readonly textForm: HTMLFormElement
+  private readonly textToolbar: HTMLElement
+  private readonly textFontFamily: HTMLSelectElement
+  private readonly textFontSize: HTMLInputElement
+  private readonly textColor: HTMLInputElement
+  private readonly textBackgroundColor: HTMLInputElement
+  private readonly textLineHeight: HTMLInputElement
+  private readonly textLetterSpacing: HTMLInputElement
   private readonly imageDialog: HTMLDialogElement
   private readonly imageForm: HTMLFormElement
   private readonly imageSubmitButton: HTMLButtonElement
@@ -207,6 +231,19 @@ export class CustomForgeWorkbench {
     this.loadDesignButton = this.action('load-design')
     this.textDialog = requiredElement(element, '[data-role="text-dialog"]')
     this.textForm = requiredElement(element, '[data-role="text-form"]')
+    this.textToolbar = requiredElement(element, '[data-role="text-toolbar"]')
+    this.textFontFamily = requiredElement(element, '[data-role="text-font-family"]')
+    this.textFontSize = requiredElement(element, '[data-role="text-font-size"]')
+    this.textColor = requiredElement(element, '[data-role="text-format-color"]')
+    this.textBackgroundColor = requiredElement(
+      element,
+      '[data-role="text-background-color"]',
+    )
+    this.textLineHeight = requiredElement(element, '[data-role="text-line-height"]')
+    this.textLetterSpacing = requiredElement(
+      element,
+      '[data-role="text-letter-spacing"]',
+    )
     this.imageDialog = requiredElement(element, '[data-role="image-dialog"]')
     this.imageForm = requiredElement(element, '[data-role="image-form"]')
     this.imageSubmitButton = this.action('submit-image')
@@ -214,6 +251,7 @@ export class CustomForgeWorkbench {
     this.remoteForm = requiredElement(element, '[data-role="remote-form"]')
     this.submitProductButton = this.action('submit-product')
 
+    this.renderTextFontOptions()
     this.renderTextPresets()
     this.renderAssetPresets()
     this.bindEvents()
@@ -221,6 +259,7 @@ export class CustomForgeWorkbench {
     this.setImageTab('upload')
     this.updateHistoryButtons()
     this.renderLayers(true)
+    this.updateTextToolbar()
     this.setStatus(this.labels.productReady)
   }
 
@@ -286,6 +325,7 @@ export class CustomForgeWorkbench {
     }
     this.applyVisibility()
     this.renderLayers(true)
+    this.updateTextToolbar()
   }
 
   /**
@@ -297,6 +337,7 @@ export class CustomForgeWorkbench {
   setLayout(section: WorkbenchLayoutName, visible: boolean): void {
     this.layout[section] = visible
     this.applyVisibility()
+    this.updateTextToolbar()
   }
 
   /**
@@ -333,11 +374,13 @@ export class CustomForgeWorkbench {
       this.customizer.on('change', ({ objectCount }) => {
         this.updateObjectCount(objectCount)
         this.renderLayers()
+        this.updateTextToolbar()
       }),
       this.customizer.on('selectionchange', ({ objectIds }) => {
         this.selectedObjectIds = new Set(objectIds)
         this.deleteButton.disabled = objectIds.length === 0
         this.renderLayers()
+        this.updateTextToolbar()
       }),
       this.customizer.on('historychange', () => this.updateHistoryButtons()),
       this.customizer.on('status', ({ message }) =>
@@ -384,6 +427,35 @@ export class CustomForgeWorkbench {
       }, { signal })
     requiredElement<HTMLInputElement>(this.element, '[data-role="text-color"]')
       .addEventListener('input', () => this.updateTextPreviews(), { signal })
+    this.textFontFamily.addEventListener('change', () => {
+      if (this.textFontFamily.value) {
+        this.updateSelectedText({ fontFamily: this.textFontFamily.value })
+      }
+    }, { signal })
+    this.textFontSize.addEventListener('change', () => {
+      const value = this.textFontSize.valueAsNumber
+      if (Number.isFinite(value)) {
+        this.updateSelectedText({ fontSize: value })
+      }
+    }, { signal })
+    this.textColor.addEventListener('input', () => {
+      this.updateSelectedText({ color: this.textColor.value })
+    }, { signal })
+    this.textBackgroundColor.addEventListener('input', () => {
+      this.updateSelectedText({ backgroundColor: this.textBackgroundColor.value })
+    }, { signal })
+    this.textLineHeight.addEventListener('change', () => {
+      const value = this.textLineHeight.valueAsNumber
+      if (Number.isFinite(value)) {
+        this.updateSelectedText({ lineHeight: value })
+      }
+    }, { signal })
+    this.textLetterSpacing.addEventListener('change', () => {
+      const value = this.textLetterSpacing.valueAsNumber
+      if (Number.isFinite(value)) {
+        this.updateSelectedText({ charSpacing: value })
+      }
+    }, { signal })
     this.imageInput.addEventListener(
       'change',
       () => this.selectUploadedImage(),
@@ -445,6 +517,22 @@ export class CustomForgeWorkbench {
 
   private handleRootClick(event: MouseEvent): void {
     const target = event.target as Element
+    const textStyle = target.closest<HTMLButtonElement>('[data-text-style]')
+    if (textStyle?.dataset.textStyle) {
+      this.toggleSelectedTextStyle(
+        textStyle.dataset.textStyle as 'bold' | 'italic' | 'underline',
+      )
+      return
+    }
+
+    const textAlign = target.closest<HTMLButtonElement>('[data-text-align]')
+    if (textAlign?.dataset.textAlign) {
+      this.updateSelectedText({
+        textAlign: textAlign.dataset.textAlign as TextAlignment,
+      })
+      return
+    }
+
     const layerAction = target.closest<HTMLButtonElement>('[data-layer-action]')
     if (layerAction) {
       this.handleLayerAction(layerAction)
@@ -476,6 +564,16 @@ export class CustomForgeWorkbench {
     switch (command) {
       case 'open-text-dialog':
         this.openTextDialog()
+        break
+      case 'edit-text': {
+        const selected = this.selectedTextObjects()
+        if (selected?.length === 1) {
+          this.customizer.editText(selected[0].id)
+        }
+        break
+      }
+      case 'toggle-text-background':
+        this.toggleSelectedTextBackground()
         break
       case 'open-image-dialog':
         this.openImageDialog()
@@ -652,6 +750,7 @@ export class CustomForgeWorkbench {
     topbar.hidden = !this.layout.header || (brandHidden && !hasGlobalActions)
 
     renderWorkbenchIcons(this.element, this.icons)
+    this.updateTextToolbar()
   }
 
   private toolGroup(name: string): HTMLElement {
@@ -734,6 +833,222 @@ export class CustomForgeWorkbench {
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')
     }
+  }
+
+  private renderTextFontOptions(): void {
+    const fonts = new Set(DEFAULT_TEXT_FONTS)
+    this.textPresets.forEach((preset) => fonts.add(preset.fontFamily))
+
+    const mixed = document.createElement('option')
+    mixed.value = ''
+    mixed.textContent = '—'
+    mixed.disabled = true
+    this.textFontFamily.replaceChildren(
+      mixed,
+      ...Array.from(fonts).map((fontFamily) => {
+        const option = document.createElement('option')
+        option.value = fontFamily
+        option.textContent = fontFamily
+        option.style.fontFamily = fontFamily
+        return option
+      }),
+    )
+  }
+
+  private ensureTextFontOption(fontFamily: string): void {
+    if (
+      Array.from(this.textFontFamily.options).some(
+        (option) => option.value === fontFamily,
+      )
+    ) {
+      return
+    }
+    const option = document.createElement('option')
+    option.value = fontFamily
+    option.textContent = fontFamily
+    option.style.fontFamily = fontFamily
+    this.textFontFamily.append(option)
+  }
+
+  private selectedTextObjects(): TextDesignObject[] | undefined {
+    if (this.selectedObjectIds.size === 0) {
+      return undefined
+    }
+    const selected = this.customizer.getObjects().filter((object) =>
+      this.selectedObjectIds.has(object.id),
+    )
+    if (
+      selected.length !== this.selectedObjectIds.size ||
+      selected.some((object) => object.type !== 'text')
+    ) {
+      return undefined
+    }
+    return selected as TextDesignObject[]
+  }
+
+  private commonTextValue<T>(
+    objects: TextDesignObject[],
+    read: (object: TextDesignObject) => T,
+  ): T | undefined {
+    const first = read(objects[0])
+    return objects.every((object) => Object.is(read(object), first))
+      ? first
+      : undefined
+  }
+
+  private updateTextToolbar(): void {
+    const objects = this.selectedTextObjects()
+    const visible =
+      this.layout.toolbar &&
+      this.features.textFormatting &&
+      objects !== undefined &&
+      objects.length > 0
+    this.textToolbar.hidden = !visible
+    if (!visible || !objects) {
+      return
+    }
+
+    const locked = objects.some((object) => object.locked ?? false)
+    this.textToolbar
+      .querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
+        'input, select, button',
+      )
+      .forEach((control) => {
+        control.disabled = locked
+      })
+    this.action('edit-text').disabled = locked || objects.length !== 1
+
+    const fontFamily = this.commonTextValue(objects, (object) => object.fontFamily)
+    if (fontFamily) {
+      this.ensureTextFontOption(fontFamily)
+    }
+    this.textFontFamily.value = fontFamily ?? ''
+    this.setNumberControl(
+      this.textFontSize,
+      this.commonTextValue(objects, (object) => object.fontSize),
+    )
+    this.setNumberControl(
+      this.textLineHeight,
+      this.commonTextValue(objects, (object) => object.lineHeight ?? 1.16),
+    )
+    this.setNumberControl(
+      this.textLetterSpacing,
+      this.commonTextValue(objects, (object) => object.charSpacing ?? 0),
+    )
+
+    const color = this.commonTextValue(objects, (object) => object.color)
+    if (color) {
+      this.setColorControl(this.textColor, color)
+    }
+    const backgroundColor = this.commonTextValue(
+      objects,
+      (object) => object.backgroundColor ?? '',
+    )
+    if (backgroundColor) {
+      this.setColorControl(this.textBackgroundColor, backgroundColor)
+    }
+
+    this.setPressedState(
+      '[data-text-style="bold"]',
+      objects.map((object) => {
+        const weight = object.fontWeight ?? 700
+        return weight === 'bold' || (typeof weight === 'number' && weight >= 600)
+      }),
+    )
+    this.setPressedState(
+      '[data-text-style="italic"]',
+      objects.map((object) => (object.fontStyle ?? 'normal') === 'italic'),
+    )
+    this.setPressedState(
+      '[data-text-style="underline"]',
+      objects.map((object) => object.underline ?? false),
+    )
+    this.setPressedState(
+      '[data-action="toggle-text-background"]',
+      objects.map((object) => Boolean(object.backgroundColor)),
+    )
+
+    for (const alignment of ['left', 'center', 'right'] as const) {
+      this.setPressedState(
+        `[data-text-align="${alignment}"]`,
+        objects.map((object) => (object.textAlign ?? 'center') === alignment),
+      )
+    }
+  }
+
+  private setNumberControl(input: HTMLInputElement, value: number | undefined): void {
+    input.value = value === undefined ? '' : String(value)
+  }
+
+  private setColorControl(input: HTMLInputElement, value: string): void {
+    const shortHex = /^#([\da-f])([\da-f])([\da-f])$/i.exec(value)
+    if (shortHex) {
+      input.value = `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`
+      return
+    }
+    if (/^#[\da-f]{6}$/i.test(value)) {
+      input.value = value
+    }
+  }
+
+  private setPressedState(selector: string, states: boolean[]): void {
+    const button = requiredElement<HTMLButtonElement>(this.textToolbar, selector)
+    const pressed = states.every(Boolean)
+      ? 'true'
+      : states.some(Boolean)
+        ? 'mixed'
+        : 'false'
+    button.setAttribute('aria-pressed', pressed)
+  }
+
+  private updateSelectedText(options: UpdateTextOptions): void {
+    const objects = this.selectedTextObjects()
+    if (!objects) {
+      return
+    }
+
+    try {
+      objects.forEach((object) => this.customizer.updateText(object.id, options))
+      this.updateTextToolbar()
+    } catch (error) {
+      this.setStatus(errorMessage(error), 'error')
+    }
+  }
+
+  private toggleSelectedTextStyle(
+    style: 'bold' | 'italic' | 'underline',
+  ): void {
+    const objects = this.selectedTextObjects()
+    if (!objects) {
+      return
+    }
+
+    if (style === 'bold') {
+      const enabled = objects.every((object) => {
+        const weight = object.fontWeight ?? 700
+        return weight === 'bold' || (typeof weight === 'number' && weight >= 600)
+      })
+      this.updateSelectedText({ fontWeight: enabled ? 'normal' : 'bold' })
+    } else if (style === 'italic') {
+      const enabled = objects.every(
+        (object) => (object.fontStyle ?? 'normal') === 'italic',
+      )
+      this.updateSelectedText({ fontStyle: enabled ? 'normal' : 'italic' })
+    } else {
+      const enabled = objects.every((object) => object.underline ?? false)
+      this.updateSelectedText({ underline: !enabled })
+    }
+  }
+
+  private toggleSelectedTextBackground(): void {
+    const objects = this.selectedTextObjects()
+    if (!objects) {
+      return
+    }
+    const enabled = objects.every((object) => Boolean(object.backgroundColor))
+    this.updateSelectedText({
+      backgroundColor: enabled ? null : this.textBackgroundColor.value,
+    })
   }
 
   private renderLayers(force = false): void {

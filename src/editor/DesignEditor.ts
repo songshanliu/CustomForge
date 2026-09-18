@@ -1,4 +1,5 @@
 import {
+  ActiveSelection,
   Canvas,
   FabricImage,
   Textbox,
@@ -13,6 +14,10 @@ import type {
   DesignObject,
   DesignObjectTransform,
   HistoryState,
+  TextAlignment,
+  TextFontStyle,
+  TextFontWeight,
+  UpdateTextOptions,
 } from '../core/types'
 import type { UvLayout } from '../core/uv'
 import { DesignHistory } from './DesignHistory'
@@ -38,10 +43,25 @@ type RenderListener = () => void
 type SelectionListener = (objectIds: string[]) => void
 type HistoryListener = (state: HistoryState) => void
 
+/** 将 Fabric 主画布重绘为不含选择框的实时纹理 */
+class DesignCanvas extends Canvas {
+  /** 将纯设计内容绘制到稳定的纹理 Canvas */
+  renderTexture(context: CanvasRenderingContext2D): void {
+    const previousSkipControlsDrawing = this.skipControlsDrawing
+    this.skipControlsDrawing = true
+
+    try {
+      this.renderCanvas(context, this.getObjects())
+    } finally {
+      this.skipControlsDrawing = previousSkipControlsDrawing
+    }
+  }
+}
+
 /**
  * 基于 Fabric.js 的二维纹理编辑器
  *
- * 负责基础纹理、UV 辅助线、文字、图片、对象选择和 PNG 导出
+ * 负责基础纹理、UV 区域辅助层、文字、图片、对象选择和 PNG 导出
  * 显示尺寸可以响应容器变化，内部逻辑尺寸保持不变
  */
 export class DesignEditor {
@@ -64,9 +84,13 @@ export class DesignEditor {
   private readonly resizeObserver: ResizeObserver
   private readonly history: DesignHistory<DesignDocument>
   private readonly uvOverlay: HTMLCanvasElement
+  private readonly textureRenderer: DesignCanvas
+  private readonly textureCanvasElement: HTMLCanvasElement
+  private readonly textureContext: CanvasRenderingContext2D
   private historySignature: string
   private historyTimer?: ReturnType<typeof setTimeout>
   private historyBusy = false
+  private renderingTexture = false
   private objectIdSequence = 0
 
   /**
@@ -82,13 +106,24 @@ export class DesignEditor {
     element.setAttribute('aria-label', 'UV texture editor')
     host.replaceChildren(element)
 
-    this.canvas = new Canvas(element, {
+    const canvas = new DesignCanvas(element, {
       width: this.width,
       height: this.height,
       preserveObjectStacking: true,
       selectionColor: 'rgba(19, 113, 125, 0.12)',
       selectionBorderColor: '#13717d',
     })
+    this.canvas = canvas
+    this.textureRenderer = canvas
+    this.textureCanvasElement = document.createElement('canvas')
+    this.textureCanvasElement.width = this.width
+    this.textureCanvasElement.height = this.height
+    const textureContext = this.textureCanvasElement.getContext('2d')
+    if (!textureContext) {
+      canvas.dispose()
+      throw new Error('Unable to create the live texture canvas')
+    }
+    this.textureContext = textureContext
     const initialDesign = this.saveDesign()
     this.history = new DesignHistory(initialDesign, options.historyLimit)
     this.historySignature = JSON.stringify(initialDesign)
@@ -106,6 +141,11 @@ export class DesignEditor {
     )
     this.host.dataset.renderState = 'pending'
     this.canvas.on('after:render', () => {
+      if (this.renderingTexture) {
+        return
+      }
+
+      this.renderTextureCanvas()
       this.markRenderState()
       this.renderListeners.forEach((listener) => listener())
     })
@@ -138,13 +178,13 @@ export class DesignEditor {
     this.resizeDisplay()
   }
 
-  /** 供 Three.js 创建 CanvasTexture 的底层 HTML Canvas */
+  /** 供 Three.js 创建 CanvasTexture 的纯设计画布，不包含选择框和变换控件 */
   get textureCanvas(): HTMLCanvasElement {
-    return this.canvas.getElement()
+    return this.textureCanvasElement
   }
 
   /**
-   * 在交互画布上显示目标 Mesh 的 UV 三角形，但不写入实时纹理或导出图片
+   * 在交互画布上显示目标 Mesh 的 UV 可打印区域，但不写入实时纹理或导出图片
    *
    * @param layout 从当前目标 Mesh 提取的 UV 布局
    * @param flipY 是否按照垂直翻转后的纹理方向显示
@@ -156,7 +196,7 @@ export class DesignEditor {
     }
 
     context.clearRect(0, 0, this.width, this.height)
-    const { triangleCoordinates } = layout
+    const { triangleCoordinates, boundaryCoordinates } = layout
     if (triangleCoordinates.length === 0) {
       this.uvOverlay.hidden = true
       return
@@ -167,32 +207,52 @@ export class DesignEditor {
       getComputedStyle(this.canvas.wrapperEl)
         .getPropertyValue('--cfw-accent')
         .trim() || '#0875c9'
-    const canvasY = (v: number) => (flipY ? 1 - v : v) * this.height
+    const canvasX = (u: number) =>
+      Math.min(Math.max(u * this.width, 1), this.width - 1)
+    const canvasY = (v: number) =>
+      Math.min(
+        Math.max((flipY ? 1 - v : v) * this.height, 1),
+        this.height - 1,
+      )
 
     context.save()
     context.beginPath()
     for (let index = 0; index < triangleCoordinates.length; index += 6) {
       context.moveTo(
-        triangleCoordinates[index] * this.width,
+        canvasX(triangleCoordinates[index]),
         canvasY(triangleCoordinates[index + 1]),
       )
       context.lineTo(
-        triangleCoordinates[index + 2] * this.width,
+        canvasX(triangleCoordinates[index + 2]),
         canvasY(triangleCoordinates[index + 3]),
       )
       context.lineTo(
-        triangleCoordinates[index + 4] * this.width,
+        canvasX(triangleCoordinates[index + 4]),
         canvasY(triangleCoordinates[index + 5]),
       )
       context.closePath()
     }
     context.fillStyle = accent
-    context.globalAlpha = 0.035
+    context.globalAlpha = 0.012
     context.fill()
-    context.globalAlpha = 0.26
+
+    context.beginPath()
+    for (let index = 0; index < boundaryCoordinates.length; index += 4) {
+      context.moveTo(
+        canvasX(boundaryCoordinates[index]),
+        canvasY(boundaryCoordinates[index + 1]),
+      )
+      context.lineTo(
+        canvasX(boundaryCoordinates[index + 2]),
+        canvasY(boundaryCoordinates[index + 3]),
+      )
+    }
+    context.globalAlpha = 0.28
     context.strokeStyle = accent
     context.lineWidth = 1
+    context.lineCap = 'round'
     context.lineJoin = 'round'
+    context.setLineDash([6, 6])
     context.stroke()
     context.restore()
   }
@@ -275,6 +335,22 @@ export class DesignEditor {
     }
 
     this.canvas.setActiveObject(object)
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
+    return true
+  }
+
+  /**
+   * 清除当前画布选区，不修改设计内容或历史记录
+   *
+   * @returns 清除前是否存在选中对象
+   */
+  clearSelection(): boolean {
+    if (!this.canvas.getActiveObject()) {
+      return false
+    }
+
+    this.canvas.discardActiveObject()
     this.canvas.requestRenderAll()
     this.notifySelectionChange()
     return true
@@ -406,6 +482,133 @@ export class DesignEditor {
   }
 
   /**
+   * 修改已有文字对象的内容和排版样式
+   *
+   * 连续调用会在短暂空闲后合并为一个历史步骤
+   * 字体必须由消费页面提前加载，否则浏览器会使用回退字体
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param options 要修改的文字属性，未传字段保持不变
+   * @returns 是否找到并更新了文字对象
+   * @throws 字号、行高、字距、字重或 CSS 颜色不符合约束时抛出错误
+   */
+  updateText(id: string, options: UpdateTextOptions): boolean {
+    const object = this.objectsById.get(id)
+    if (!(object instanceof Textbox)) {
+      return false
+    }
+
+    if (options.text !== undefined) {
+      object.set({ text: options.text })
+    }
+    if (options.fontFamily !== undefined) {
+      const fontFamily = options.fontFamily.trim()
+      if (!fontFamily) {
+        throw new TypeError('fontFamily must be a non-empty string')
+      }
+      object.set({ fontFamily })
+    }
+    if (options.fontSize !== undefined) {
+      if (!Number.isFinite(options.fontSize) || options.fontSize <= 0) {
+        throw new RangeError('fontSize must be greater than zero')
+      }
+      object.set({ fontSize: options.fontSize })
+    }
+    if (options.color !== undefined) {
+      if (!options.color.trim()) {
+        throw new TypeError('color must be a non-empty CSS color')
+      }
+      object.set({ fill: options.color })
+    }
+    if (options.fontWeight !== undefined) {
+      const validWeight =
+        options.fontWeight === 'normal' ||
+        options.fontWeight === 'bold' ||
+        (typeof options.fontWeight === 'number' &&
+          Number.isFinite(options.fontWeight) &&
+          options.fontWeight > 0 &&
+          options.fontWeight <= 1000)
+      if (!validWeight) {
+        throw new RangeError(
+          'fontWeight must be normal, bold, or between 1 and 1000',
+        )
+      }
+      object.set({ fontWeight: options.fontWeight })
+    }
+    if (options.fontStyle !== undefined) {
+      if (options.fontStyle !== 'normal' && options.fontStyle !== 'italic') {
+        throw new TypeError('fontStyle must be normal or italic')
+      }
+      object.set({ fontStyle: options.fontStyle })
+    }
+    if (options.underline !== undefined) {
+      object.set({ underline: options.underline })
+    }
+    if (options.textAlign !== undefined) {
+      if (!['left', 'center', 'right'].includes(options.textAlign)) {
+        throw new TypeError('textAlign must be left, center, or right')
+      }
+      object.set({ textAlign: options.textAlign })
+    }
+    if (options.lineHeight !== undefined) {
+      if (!Number.isFinite(options.lineHeight) || options.lineHeight <= 0) {
+        throw new RangeError('lineHeight must be greater than zero')
+      }
+      object.set({ lineHeight: options.lineHeight })
+    }
+    if (options.charSpacing !== undefined) {
+      if (!Number.isFinite(options.charSpacing)) {
+        throw new TypeError('charSpacing must be a finite number')
+      }
+      object.set({ charSpacing: options.charSpacing })
+    }
+    if (options.backgroundColor !== undefined) {
+      if (options.backgroundColor !== null && !options.backgroundColor.trim()) {
+        throw new TypeError(
+          'backgroundColor must be a non-empty CSS color or null',
+        )
+      }
+      object.set({ backgroundColor: options.backgroundColor ?? '' })
+    }
+
+    object.initDimensions()
+    if (object.group instanceof ActiveSelection) {
+      object.group.triggerLayout()
+      this.constrainObjectToCanvas(object.group)
+    } else {
+      this.constrainObjectToCanvas(object)
+    }
+    this.canvas.requestRenderAll()
+    this.scheduleHistoryCommit()
+    return true
+  }
+
+  /**
+   * 让一个未锁定文字对象进入画布内联编辑状态
+   *
+   * @param id Design JSON 中的对象 ID
+   * @returns 是否找到文字对象并进入编辑状态
+   */
+  editText(id: string): boolean {
+    this.flushHistoryCommit()
+    const object = this.objectsById.get(id)
+    if (
+      !(object instanceof Textbox) ||
+      !object.visible ||
+      (this.objectLocks.get(object) ?? false)
+    ) {
+      return false
+    }
+
+    this.canvas.setActiveObject(object)
+    object.enterEditing()
+    object.hiddenTextarea?.focus()
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
+    return true
+  }
+
+  /**
    * 设置铺满画布的基础纹理，不传地址时恢复透明背景
    *
    * 背景纹理不参与对象选择，但会包含在实时纹理和 PNG 导出中
@@ -456,12 +659,17 @@ export class DesignEditor {
       top: options.y ?? this.height * 0.36,
       width: options.width ?? this.width * 0.42,
       fontFamily: options.fontFamily ?? 'Arial',
-      fontSize: options.fontSize ?? Math.round(this.height * 0.12),
-      fontWeight: 700,
+      fontSize: options.fontSize ?? 22,
+      fontWeight: options.fontWeight ?? 700,
+      fontStyle: options.fontStyle ?? 'normal',
+      underline: options.underline ?? false,
       fill: options.color ?? '#172126',
+      backgroundColor: options.backgroundColor ?? '',
       originX: 'left',
       originY: 'top',
-      textAlign: 'center',
+      textAlign: options.textAlign ?? 'center',
+      lineHeight: options.lineHeight ?? 1.16,
+      charSpacing: options.charSpacing ?? 0,
       editable: true,
       transparentCorners: false,
       cornerColor: '#ffffff',
@@ -803,6 +1011,15 @@ export class DesignEditor {
         fontFamily: object.fontFamily,
         fontSize: object.fontSize,
         color: object.fill,
+        fontWeight: object.fontWeight as TextFontWeight,
+        fontStyle: object.fontStyle as TextFontStyle,
+        underline: object.underline,
+        textAlign: object.textAlign as TextAlignment,
+        lineHeight: object.lineHeight,
+        charSpacing: object.charSpacing,
+        ...(object.backgroundColor
+          ? { backgroundColor: object.backgroundColor }
+          : {}),
       }
     }
 
@@ -862,9 +1079,14 @@ export class DesignEditor {
         width: design.width,
         fontFamily: design.fontFamily,
         fontSize: design.fontSize,
-        fontWeight: 700,
+        fontWeight: design.fontWeight ?? 700,
+        fontStyle: design.fontStyle ?? 'normal',
+        underline: design.underline ?? false,
         fill: design.color,
-        textAlign: 'center',
+        backgroundColor: design.backgroundColor ?? '',
+        textAlign: design.textAlign ?? 'center',
+        lineHeight: design.lineHeight ?? 1.16,
+        charSpacing: design.charSpacing ?? 0,
         editable: true,
       })
     }
@@ -1016,6 +1238,15 @@ export class DesignEditor {
       },
       { cssOnly: true },
     )
+  }
+
+  private renderTextureCanvas(): void {
+    this.renderingTexture = true
+    try {
+      this.textureRenderer.renderTexture(this.textureContext)
+    } finally {
+      this.renderingTexture = false
+    }
   }
 
   private markRenderState(): void {
