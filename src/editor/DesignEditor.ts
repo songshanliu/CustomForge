@@ -24,7 +24,9 @@ import { DesignHistory } from './DesignHistory'
 import {
   calculateContainmentOffset,
   calculateContainmentScale,
+  type ObjectBounds,
 } from './objectBounds'
+import { calculateUvCanvasBounds } from './uvBounds'
 import { resolvePersistentImageSource } from './imageSource'
 
 const EDITOR_DISPLAY_GUTTER = 56
@@ -93,6 +95,7 @@ export class DesignEditor {
   private readonly textObjectName: string
   private readonly imageObjectName: string
   private readonly backgroundObjectName: string
+  private editableBounds: ObjectBounds
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
   private readonly historyListeners = new Set<HistoryListener>()
@@ -127,6 +130,12 @@ export class DesignEditor {
     this.textObjectName = options.textObjectName ?? 'Text'
     this.imageObjectName = options.imageObjectName ?? 'Image'
     this.backgroundObjectName = options.backgroundObjectName ?? 'Background'
+    this.editableBounds = {
+      left: 0,
+      top: 0,
+      width: this.width,
+      height: this.height,
+    }
 
     const element = document.createElement('canvas')
     element.setAttribute('aria-label', options.ariaLabel ?? 'UV texture editor')
@@ -216,6 +225,12 @@ export class DesignEditor {
    * @param flipY 是否按照垂直翻转后的纹理方向显示
    */
   setUvLayout(layout: UvLayout, flipY: boolean): void {
+    this.editableBounds = calculateUvCanvasBounds(
+      layout,
+      flipY,
+      this.width,
+      this.height,
+    )
     const context = this.uvOverlay.getContext('2d')
     if (!context) {
       return
@@ -443,7 +458,7 @@ export class DesignEditor {
   }
 
   /**
-   * 将现有图片转换为铺满画布的设计背景
+   * 将现有图片转换为铺满当前 UV 可打印区域的设计背景
    *
    * 转换会替换已有设计背景、重置旋转、锁定对象并移动到最底层
    *
@@ -462,14 +477,7 @@ export class DesignEditor {
 
     this.removeDesignBackgrounds()
     this.imageRoles.set(object, 'background')
-    object.set({
-      left: this.width / 2,
-      top: this.height / 2,
-      angle: 0,
-      scaleX: this.width / Math.max(object.width, 1),
-      scaleY: this.height / Math.max(object.height, 1),
-    })
-    object.setCoords()
+    this.fitImageToEditableBounds(object)
     this.applyObjectLock(object, true)
     this.canvas.moveObjectTo(object, 0)
     this.canvas.setActiveObject(object)
@@ -748,7 +756,7 @@ export class DesignEditor {
   /**
    * 加载、添加并选中一个图片对象
    *
-   * role 为 background 时替换已有设计背景、铺满画布并默认锁定在最底层
+   * role 为 background 时替换已有设计背景、铺满当前 UV 可打印区域并默认锁定在最底层
    * 图片位置使用画布像素坐标，原点位于图片中心
    * 对象过大时会等比缩小，越界时会自动移回画布
    * 远程图片必须提供正确的 CORS 响应头才能安全导出 PNG
@@ -766,12 +774,12 @@ export class DesignEditor {
     const scale = targetWidth / Math.max(image.width, 1)
 
     image.set({
-      left: role === 'background' ? this.width / 2 : options.x ?? this.width * 0.62,
-      top: role === 'background' ? this.height / 2 : options.y ?? this.height * 0.29,
+      left: options.x ?? this.width * 0.62,
+      top: options.y ?? this.height * 0.29,
       originX: 'center',
       originY: 'center',
-      scaleX: role === 'background' ? this.width / Math.max(image.width, 1) : scale,
-      scaleY: role === 'background' ? this.height / Math.max(image.height, 1) : scale,
+      scaleX: scale,
+      scaleY: scale,
       transparentCorners: false,
       cornerColor: '#ffffff',
       cornerStrokeColor: '#13717d',
@@ -781,6 +789,7 @@ export class DesignEditor {
 
     if (role === 'background') {
       this.removeDesignBackgrounds()
+      this.fitImageToEditableBounds(image)
     }
     this.imageSources.set(image, source)
     this.addAndSelect(image, options.name, role === 'background', role)
@@ -1306,6 +1315,18 @@ export class DesignEditor {
       },
       { cssOnly: true },
     )
+  }
+
+  private fitImageToEditableBounds(image: FabricImage): void {
+    const bounds = this.editableBounds
+    image.set({
+      left: bounds.left + bounds.width / 2,
+      top: bounds.top + bounds.height / 2,
+      angle: 0,
+      scaleX: bounds.width / Math.max(image.width, 1),
+      scaleY: bounds.height / Math.max(image.height, 1),
+    })
+    image.setCoords()
   }
 
   private renderTextureCanvas(): void {

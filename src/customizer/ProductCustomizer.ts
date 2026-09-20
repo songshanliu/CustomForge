@@ -131,7 +131,7 @@ export class ProductCustomizer {
   /**
    * 加载图片并将其添加到二维画布
    *
-   * role 为 background 时会替换已有设计背景并默认锁定在最底层
+   * role 为 background 时会替换已有设计背景、铺满当前 UV 可打印区域并默认锁定在最底层
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 图片地址、位置和显示宽度
@@ -201,7 +201,7 @@ export class ProductCustomizer {
   }
 
   /**
-   * 将现有图片转换为铺满画布的设计背景
+   * 将现有图片转换为铺满当前 UV 可打印区域的设计背景
    *
    * 转换会替换已有设计背景、重置旋转、锁定对象并移动到最底层
    *

@@ -599,7 +599,7 @@ export interface WorkbenchAsset {
 
 /** Workbench 可用的预设图片素材 */
 export interface WorkbenchAssetLibrary {
-  /** 铺满画布并锁定在底层的背景素材 */
+  /** 铺满当前 UV 可打印区域并锁定在底层的背景素材 */
   backgrounds?: WorkbenchAsset[]
 
   /** 作为普通可编辑图片加入画布的装饰元素 */

@@ -274,8 +274,8 @@ Text and image commands open focused Dialogs instead of immediately mutating the
 - Selecting one or more text objects reveals contextual controls inside the existing single-row toolbar for font family, size, bold, italic, underline, alignment, text color, highlight, line height, and letter spacing without shifting the canvas
 - The contextual toolbar supports mixed multi-selection values and an explicit command for entering on-canvas text editing
 - The image Dialog includes local upload, background presets, and decorative element presets
-- A design background replaces the previous design background, fills the canvas, starts locked at the bottom layer, and persists in Design JSON
-- Selecting an ordinary image reveals a command that converts it into the design background, fills the canvas, and moves it to the bottom layer
+- A design background replaces the previous design background, fills the current product's UV printable bounds, starts locked at the bottom layer, and persists in Design JSON
+- Selecting an ordinary image reveals a command that converts it into the design background, fits it to the current UV printable bounds, and moves it to the bottom layer
 
 Feature and layout switches can also be changed after initialization
 
@@ -392,7 +392,7 @@ Successful product replacement keeps the current design but starts a new history
 | `clearSelection()` | Clear the current canvas selection without changing the design |
 | `removeObject(id)` | Remove an object by stable ID |
 | `moveObject(id, index)` | Move an object to a zero-based layer index |
-| `setImageAsBackground(id)` | Replace the design background with an existing image and fit it to the canvas |
+| `setImageAsBackground(id)` | Replace the design background with an existing image and fit it to the current UV printable bounds |
 | `renameObject(id, name)` | Change the object name shown in layer tools |
 | `setObjectVisibility(id, visible)` | Include or exclude an object from rendering |
 | `setObjectLocked(id, locked)` | Lock or unlock canvas transformations |
