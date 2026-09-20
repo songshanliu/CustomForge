@@ -2,6 +2,7 @@ import {
   ActiveSelection,
   Canvas,
   FabricImage,
+  Point,
   Textbox,
   type FabricObject,
 } from 'fabric'
@@ -9,14 +10,20 @@ import { parseDesignDocument } from '../core/design'
 import type {
   AddImageOptions,
   AddTextOptions,
+  CanvasBounds,
+  DesignCanvas as DesignCanvasSize,
   DesignImageRole,
   DesignDocument,
   DesignObject,
   DesignObjectTransform,
+  EditorAppearance,
   HistoryState,
+  ImageDesignObject,
   TextAlignment,
+  TextDesignObject,
   TextFontStyle,
   TextFontWeight,
+  UpdateObjectTransformOptions,
   UpdateTextOptions,
 } from '../core/types'
 import type { UvLayout } from '../core/uv'
@@ -24,13 +31,42 @@ import { DesignHistory } from './DesignHistory'
 import {
   calculateContainmentOffset,
   calculateContainmentScale,
-  type ObjectBounds,
 } from './objectBounds'
 import { calculateUvCanvasBounds } from './uvBounds'
 import { resolvePersistentImageSource } from './imageSource'
 
 const EDITOR_DISPLAY_GUTTER = 56
-const OBJECT_CONTROL_SIZE = 8
+
+interface NormalizedEditorAppearance {
+  selectionFill: string
+  selectionBorder: string
+  controlFill: string
+  controlBorder: string
+  objectBorder: string
+  controlSize: number
+  uvFill?: string
+  uvBoundary: string
+}
+
+function normalizeEditorAppearance(
+  appearance: EditorAppearance = {},
+): NormalizedEditorAppearance {
+  const controlSize = appearance.controlSize ?? 8
+  if (!Number.isFinite(controlSize) || controlSize <= 0) {
+    throw new RangeError('appearance.editor.controlSize must be greater than zero')
+  }
+
+  return {
+    selectionFill: appearance.selectionFill?.trim() || 'rgba(19, 113, 125, 0.12)',
+    selectionBorder: appearance.selectionBorder?.trim() || '#13717d',
+    controlFill: appearance.controlFill?.trim() || '#ffffff',
+    controlBorder: appearance.controlBorder?.trim() || '#13717d',
+    objectBorder: appearance.objectBorder?.trim() || '#13717d',
+    controlSize,
+    uvFill: appearance.uvFill?.trim() || undefined,
+    uvBoundary: appearance.uvBoundary?.trim() || '#dc2626',
+  }
+}
 
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
@@ -57,6 +93,9 @@ interface DesignEditorOptions {
 
   /** 背景图片对象的默认名称 */
   backgroundObjectName?: string
+
+  /** 选择框、对象控制点和 UV 辅助层外观 */
+  appearance?: EditorAppearance
 }
 
 type RenderListener = () => void
@@ -95,7 +134,8 @@ export class DesignEditor {
   private readonly textObjectName: string
   private readonly imageObjectName: string
   private readonly backgroundObjectName: string
-  private editableBounds: ObjectBounds
+  private readonly appearance: NormalizedEditorAppearance
+  private editableBounds: CanvasBounds
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
   private readonly historyListeners = new Set<HistoryListener>()
@@ -130,6 +170,7 @@ export class DesignEditor {
     this.textObjectName = options.textObjectName ?? 'Text'
     this.imageObjectName = options.imageObjectName ?? 'Image'
     this.backgroundObjectName = options.backgroundObjectName ?? 'Background'
+    this.appearance = normalizeEditorAppearance(options.appearance)
     this.editableBounds = {
       left: 0,
       top: 0,
@@ -145,8 +186,8 @@ export class DesignEditor {
       width: this.width,
       height: this.height,
       preserveObjectStacking: true,
-      selectionColor: 'rgba(19, 113, 125, 0.12)',
-      selectionBorderColor: '#13717d',
+      selectionColor: this.appearance.selectionFill,
+      selectionBorderColor: this.appearance.selectionBorder,
     })
     this.canvas = canvas
     this.textureRenderer = canvas
@@ -244,10 +285,10 @@ export class DesignEditor {
     }
 
     this.uvOverlay.hidden = false
-    const accent =
-      getComputedStyle(this.canvas.wrapperEl)
+    const accent = this.appearance.uvFill ??
+      (getComputedStyle(this.canvas.wrapperEl)
         .getPropertyValue('--cfw-accent')
-        .trim() || '#268a4b'
+        .trim() || '#268a4b')
     const canvasX = (u: number) =>
       Math.min(Math.max(u * this.width, 1), this.width - 1)
     const canvasY = (v: number) =>
@@ -289,7 +330,7 @@ export class DesignEditor {
       )
     }
     context.globalAlpha = 0.28
-    context.strokeStyle = '#dc2626'
+    context.strokeStyle = this.appearance.uvBoundary
     context.lineWidth = 1
     context.lineCap = 'round'
     context.lineJoin = 'round'
@@ -355,6 +396,16 @@ export class DesignEditor {
     return this.canvas.getObjects().map((object) => this.serializeObject(object))
   }
 
+  /** 返回当前逻辑画布尺寸 */
+  getCanvasSize(): DesignCanvasSize {
+    return { width: this.width, height: this.height }
+  }
+
+  /** 返回当前 UV 可打印区域的独立包围框 */
+  getPrintableBounds(): CanvasBounds {
+    return { ...this.editableBounds }
+  }
+
   /** 当前选中对象的 ID，按画布层级从后到前排列 */
   getSelectedObjectIds(): string[] {
     return this.canvas
@@ -370,12 +421,29 @@ export class DesignEditor {
    * @returns 是否找到并选中了对象
    */
   selectObject(id: string): boolean {
-    const object = this.objectsById.get(id)
-    if (!object || !object.visible) {
+    return this.selectObjects([id])
+  }
+
+  /**
+   * 按稳定 ID 同时选中多个可见对象
+   *
+   * 所有 ID 都必须有效且对象可见，否则保持原选区不变
+   *
+   * @param ids 对象 ID，空数组表示清除选区
+   * @returns 是否应用了请求的选区
+   */
+  selectObjects(ids: readonly string[]): boolean {
+    const uniqueIds = [...new Set(ids)]
+    if (uniqueIds.length === 0) {
+      return this.clearSelection()
+    }
+
+    const objects = uniqueIds.map((id) => this.objectsById.get(id))
+    if (objects.some((object) => !object || !object.visible)) {
       return false
     }
 
-    this.canvas.setActiveObject(object)
+    this.applySelection(objects as FabricObject[])
     this.canvas.requestRenderAll()
     this.notifySelectionChange()
     return true
@@ -553,6 +621,56 @@ export class DesignEditor {
   }
 
   /**
+   * 更新对象中心位置、缩放、旋转和翻转
+   *
+   * 对象最终仍会约束在逻辑画布内，连续调用会合并为一个历史步骤
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param options 要更新的变换字段
+   * @returns 约束后的对象快照，找不到对象时返回 undefined
+   * @throws 数值无效或缩放倍数不大于零时抛出错误
+   */
+  updateObjectTransform(
+    id: string,
+    options: UpdateObjectTransformOptions,
+  ): DesignObject | undefined {
+    const object = this.objectsById.get(id)
+    if (!object) {
+      return undefined
+    }
+    this.validateTransformOptions(options)
+
+    const selectedIds = this.getSelectedObjectIds()
+    if (object.group instanceof ActiveSelection) {
+      this.canvas.discardActiveObject()
+    }
+
+    const current = this.serializeTransform(object)
+    const x = options.x ?? current.x
+    const y = options.y ?? current.y
+    object.set({
+      scaleX: options.scaleX ?? current.scaleX,
+      scaleY: options.scaleY ?? current.scaleY,
+      angle: options.rotation ?? current.rotation,
+      flipX: options.flipX ?? current.flipX,
+      flipY: options.flipY ?? current.flipY,
+    })
+    object.setPositionByOrigin(new Point(x, y), 'center', 'center')
+    this.constrainObjectToCanvas(object)
+
+    const selectedObjects = selectedIds
+      .map((selectedId) => this.objectsById.get(selectedId))
+      .filter((selected): selected is FabricObject => Boolean(selected?.visible))
+    if (selectedObjects.length > 0) {
+      this.applySelection(selectedObjects)
+    }
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
+    this.scheduleHistoryCommit()
+    return this.serializeObject(object)
+  }
+
+  /**
    * 修改已有文字对象的内容和排版样式
    *
    * 连续调用会在短暂空闲后合并为一个历史步骤
@@ -721,9 +839,9 @@ export class DesignEditor {
    * 对象过大时会等比缩小，越界时会自动移回画布
    *
    * @param options 文字内容、位置和样式
-   * @returns 创建的 Fabric Textbox
+   * @returns 创建后的可持久化文字对象快照
    */
-  addText(options: AddTextOptions = {}): Textbox {
+  addText(options: AddTextOptions = {}): TextDesignObject {
     this.flushHistoryCommit()
     const text = new Textbox(options.text ?? this.defaultText, {
       left: options.x ?? this.width * 0.18,
@@ -742,15 +860,11 @@ export class DesignEditor {
       lineHeight: options.lineHeight ?? 1.16,
       charSpacing: options.charSpacing ?? 0,
       editable: true,
-      transparentCorners: false,
-      cornerColor: '#ffffff',
-      cornerStrokeColor: '#13717d',
-      borderColor: '#13717d',
-      cornerSize: OBJECT_CONTROL_SIZE,
+      ...this.objectControlAppearance(),
     })
 
     this.addAndSelect(text, options.name)
-    return text
+    return this.serializeObject(text) as TextDesignObject
   }
 
   /**
@@ -762,10 +876,10 @@ export class DesignEditor {
    * 远程图片必须提供正确的 CORS 响应头才能安全导出 PNG
    *
    * @param options 图片地址、中心位置和显示宽度
-   * @returns 创建的 FabricImage
+   * @returns 创建后的可持久化图片对象快照
    * @throws 图片加载失败或被 CORS 策略阻止时抛出错误
    */
-  async addImage(options: AddImageOptions): Promise<FabricImage> {
+  async addImage(options: AddImageOptions): Promise<ImageDesignObject> {
     this.flushHistoryCommit()
     const source = await resolvePersistentImageSource(options.src)
     const image = await this.loadImage(source)
@@ -780,11 +894,7 @@ export class DesignEditor {
       originY: 'center',
       scaleX: scale,
       scaleY: scale,
-      transparentCorners: false,
-      cornerColor: '#ffffff',
-      cornerStrokeColor: '#13717d',
-      borderColor: '#13717d',
-      cornerSize: OBJECT_CONTROL_SIZE,
+      ...this.objectControlAppearance(),
     })
 
     if (role === 'background') {
@@ -793,7 +903,7 @@ export class DesignEditor {
     }
     this.imageSources.set(image, source)
     this.addAndSelect(image, options.name, role === 'background', role)
-    return image
+    return this.serializeObject(image) as ImageDesignObject
   }
 
   /**
@@ -973,16 +1083,40 @@ export class DesignEditor {
    * @throws 画布被无 CORS 授权的远程图片污染时抛出安全错误
    */
   exportTexture(filename = 'custom-texture.png'): void {
-    this.canvas.discardActiveObject()
-    this.canvas.renderAll()
-
     const anchor = document.createElement('a')
     anchor.download = filename
-    anchor.href = this.canvas.toDataURL({
-      format: 'png',
-      multiplier: 1,
-    })
+    anchor.href = this.getTextureDataUrl()
     anchor.click()
+  }
+
+  /**
+   * 返回不含选择框和 UV 辅助层的 PNG Data URL
+   *
+   * @returns 与逻辑画布同尺寸的 PNG Data URL
+   * @throws 远程图片污染 Canvas 时抛出安全错误
+   */
+  getTextureDataUrl(): string {
+    this.renderTextureCanvas()
+    return this.textureCanvasElement.toDataURL('image/png')
+  }
+
+  /**
+   * 异步返回不含选择框和 UV 辅助层的 PNG Blob
+   *
+   * @returns 与逻辑画布同尺寸的 PNG Blob
+   * @throws 远程图片污染 Canvas 或浏览器无法编码时抛出错误
+   */
+  getTextureBlob(): Promise<Blob> {
+    this.renderTextureCanvas()
+    return new Promise((resolve, reject) => {
+      this.textureCanvasElement.toBlob((blob) => {
+        if (blob) {
+          resolve(blob)
+        } else {
+          reject(new Error('The texture canvas could not be encoded as PNG'))
+        }
+      }, 'image/png')
+    })
   }
 
   /** 释放 ResizeObserver、事件监听和 Fabric Canvas */
@@ -1138,11 +1272,7 @@ export class DesignEditor {
       flipX: design.transform.flipX,
       flipY: design.transform.flipY,
       visible: design.visible ?? true,
-      transparentCorners: false,
-      cornerColor: '#ffffff',
-      cornerStrokeColor: '#13717d',
-      borderColor: '#13717d',
-      cornerSize: OBJECT_CONTROL_SIZE,
+      ...this.objectControlAppearance(),
     }
 
     if (design.type === 'text') {
@@ -1315,6 +1445,53 @@ export class DesignEditor {
       },
       { cssOnly: true },
     )
+  }
+
+  private applySelection(objects: FabricObject[]): void {
+    this.canvas.discardActiveObject()
+    this.canvas.setActiveObject(
+      objects.length === 1
+        ? objects[0]
+        : new ActiveSelection(objects, { canvas: this.canvas }),
+    )
+  }
+
+  private objectControlAppearance(): Record<string, string | number | boolean> {
+    return {
+      transparentCorners: false,
+      cornerColor: this.appearance.controlFill,
+      cornerStrokeColor: this.appearance.controlBorder,
+      borderColor: this.appearance.objectBorder,
+      cornerSize: this.appearance.controlSize,
+    }
+  }
+
+  private validateTransformOptions(options: UpdateObjectTransformOptions): void {
+    for (const [name, value] of [
+      ['x', options.x],
+      ['y', options.y],
+      ['rotation', options.rotation],
+    ] as const) {
+      if (value !== undefined && !Number.isFinite(value)) {
+        throw new TypeError(`${name} must be a finite number`)
+      }
+    }
+    for (const [name, value] of [
+      ['scaleX', options.scaleX],
+      ['scaleY', options.scaleY],
+    ] as const) {
+      if (value !== undefined && (!Number.isFinite(value) || value <= 0)) {
+        throw new RangeError(`${name} must be greater than zero`)
+      }
+    }
+    for (const [name, value] of [
+      ['flipX', options.flipX],
+      ['flipY', options.flipY],
+    ] as const) {
+      if (value !== undefined && typeof value !== 'boolean') {
+        throw new TypeError(`${name} must be a boolean`)
+      }
+    }
   }
 
   private fitImageToEditableBounds(image: FabricImage): void {

@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  base: './',
   assetsInclude: ['**/*.glb'],
   build: {
+    assetsDir: '',
     copyPublicDir: false,
     emptyOutDir: true,
     lib: {

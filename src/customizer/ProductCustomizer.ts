@@ -1,22 +1,31 @@
 import { normalizeProductConfiguration } from '../core/config'
+import type {
+  CustomizerEventListener,
+  ProductCustomizerApi,
+} from '../core/api'
 import { resolveElement } from '../core/dom'
 import type {
   AddImageOptions,
   AddTextOptions,
+  CanvasBounds,
   CustomizerEventMap,
   CustomizerEventName,
   CustomizerOptions,
+  CustomizerState,
+  DesignCanvas,
   DesignDocument,
+  DesignObject,
+  ImageDesignObject,
   ProductConfiguration,
+  ProductViewState,
+  ResolvedProductConfiguration,
+  TextDesignObject,
+  UpdateObjectTransformOptions,
   UpdateTextOptions,
 } from '../core/types'
 import { DesignEditor } from '../editor/DesignEditor'
 import { TextureBridge } from '../bridge/TextureBridge'
 import { ProductViewer } from '../viewer/ProductViewer'
-
-type EventListener<K extends CustomizerEventName> = (
-  detail: CustomizerEventMap[K],
-) => void
 
 /**
  * 统一管理二维编辑器、三维查看器和实时纹理同步
@@ -25,7 +34,7 @@ type EventListener<K extends CustomizerEventName> = (
  * 每个实例独立持有 DOM 事件、Fabric 状态和 WebGL 资源
  * 不再使用实例时必须调用 `destroy()`
  */
-export class ProductCustomizer {
+export class ProductCustomizer implements ProductCustomizerApi {
   private readonly events = new EventTarget()
   private readonly textureBridge: TextureBridge
   private readonly editor: DesignEditor
@@ -34,6 +43,7 @@ export class ProductCustomizer {
   private readonly stopSelectionListener: () => void
   private readonly stopRenderListener: () => void
   private readonly stopHistoryListener: () => void
+  private readonly stopViewListener: () => void
   private destroyed = false
 
   private constructor(options: CustomizerOptions) {
@@ -59,8 +69,13 @@ export class ProductCustomizer {
       textObjectName: options.textObjectName,
       imageObjectName: options.imageObjectName,
       backgroundObjectName: options.backgroundObjectName,
+      appearance: options.appearance?.editor,
     })
-    this.viewer = new ProductViewer(viewerHost, options.viewerAriaLabel)
+    this.viewer = new ProductViewer(
+      viewerHost,
+      options.viewerAriaLabel,
+      options.appearance?.viewer,
+    )
     this.textureBridge = new TextureBridge(
       this.editor,
       this.viewer,
@@ -78,6 +93,9 @@ export class ProductCustomizer {
     })
     this.stopHistoryListener = this.editor.onHistoryChange((state) => {
       this.emit('historychange', state)
+    })
+    this.stopViewListener = this.viewer.onViewChange((state) => {
+      this.emit('viewchange', state)
     })
   }
 
@@ -108,7 +126,7 @@ export class ProductCustomizer {
    */
   on<K extends CustomizerEventName>(
     event: K,
-    listener: EventListener<K>,
+    listener: CustomizerEventListener<K>,
   ): () => void {
     const wrapped = (browserEvent: Event) => {
       listener((browserEvent as CustomEvent<CustomizerEventMap[K]>).detail)
@@ -123,9 +141,10 @@ export class ProductCustomizer {
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 文字内容、位置和样式配置
+   * @returns 创建后的可持久化文字对象快照
    */
-  addText(options?: AddTextOptions): void {
-    this.editor.addText(options)
+  addText(options?: AddTextOptions): TextDesignObject {
+    return this.editor.addText(options)
   }
 
   /**
@@ -135,15 +154,47 @@ export class ProductCustomizer {
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 图片地址、位置和显示宽度
+   * @returns 创建后的可持久化图片对象快照
    * @throws 图片无法访问、加载失败或被 CORS 策略阻止时抛出错误
    */
-  async addImage(options: AddImageOptions): Promise<void> {
+  async addImage(options: AddImageOptions): Promise<ImageDesignObject> {
     try {
-      await this.editor.addImage(options)
+      return await this.editor.addImage(options)
     } catch (error) {
       this.reportError(error)
       throw error
     }
+  }
+
+  /** 返回产品、画布、对象、选区、历史和视角的独立状态快照 */
+  getState(): CustomizerState {
+    return {
+      product: this.getProduct(),
+      canvas: this.getCanvasSize(),
+      printableBounds: this.getPrintableBounds(),
+      objects: this.getObjects(),
+      selectedObjectIds: this.getSelectedObjectIds(),
+      history: {
+        canUndo: this.canUndo(),
+        canRedo: this.canRedo(),
+      },
+      view: this.getViewState(),
+    }
+  }
+
+  /** 返回当前补全默认值后的产品配置独立快照 */
+  getProduct(): ResolvedProductConfiguration {
+    return { ...this.product }
+  }
+
+  /** 返回当前二维逻辑画布尺寸 */
+  getCanvasSize(): DesignCanvas {
+    return this.editor.getCanvasSize()
+  }
+
+  /** 返回当前产品 UV 在逻辑画布中的可打印包围框 */
+  getPrintableBounds(): CanvasBounds {
+    return this.editor.getPrintableBounds()
   }
 
   /**
@@ -151,7 +202,7 @@ export class ProductCustomizer {
    *
    * @returns 按画布层级从后到前排列的 Design JSON 对象
    */
-  getObjects(): DesignDocument['objects'] {
+  getObjects(): DesignObject[] {
     return this.editor.getObjects()
   }
 
@@ -168,6 +219,18 @@ export class ProductCustomizer {
    */
   selectObject(id: string): boolean {
     return this.editor.selectObject(id)
+  }
+
+  /**
+   * 按稳定 ID 同时选中多个可见对象
+   *
+   * 所有 ID 都必须有效且可见，否则保持原选区不变；空数组清除选区
+   *
+   * @param ids Design JSON 中的对象 ID
+   * @returns 是否应用了请求的选区
+   */
+  selectObjects(ids: readonly string[]): boolean {
+    return this.editor.selectObjects(ids)
   }
 
   /**
@@ -243,6 +306,21 @@ export class ProductCustomizer {
    */
   setObjectLocked(id: string, locked: boolean): boolean {
     return this.editor.setObjectLocked(id, locked)
+  }
+
+  /**
+   * 更新对象中心位置、缩放、旋转和翻转
+   *
+   * @param id Design JSON 中的对象 ID
+   * @param options 要更新的变换字段
+   * @returns 约束后的对象快照，找不到对象时返回 undefined
+   * @throws 数值无效或缩放倍数不大于零时抛出错误
+   */
+  updateObjectTransform(
+    id: string,
+    options: UpdateObjectTransformOptions,
+  ): DesignObject | undefined {
+    return this.editor.updateObjectTransform(id, options)
   }
 
   /**
@@ -365,6 +443,30 @@ export class ProductCustomizer {
   }
 
   /**
+   * 返回当前合成纹理的 PNG Data URL
+   *
+   * 结果与逻辑画布同尺寸，不包含选择框和 UV 辅助层
+   *
+   * @returns PNG Data URL
+   * @throws 远程图片污染 Canvas 时抛出安全错误
+   */
+  getTextureDataUrl(): string {
+    return this.editor.getTextureDataUrl()
+  }
+
+  /**
+   * 异步返回当前合成纹理的 PNG Blob
+   *
+   * 结果与逻辑画布同尺寸，不包含选择框和 UV 辅助层
+   *
+   * @returns PNG Blob
+   * @throws 远程图片污染 Canvas 或浏览器无法编码时抛出错误
+   */
+  getTextureBlob(): Promise<Blob> {
+    return this.editor.getTextureBlob()
+  }
+
+  /**
    * 将当前二维设计合成为 PNG 并触发浏览器下载
    *
    * @param filename 下载文件名，默认为 `custom-texture.png`
@@ -377,6 +479,22 @@ export class ProductCustomizer {
   /** 恢复三维产品的默认相机位置 */
   resetView(): void {
     this.viewer.resetView()
+  }
+
+  /** 返回当前三维相机位置和观察目标点 */
+  getViewState(): ProductViewState {
+    return this.viewer.getViewState()
+  }
+
+  /**
+   * 恢复三维观察视角
+   *
+   * @param state 要恢复的相机位置和观察目标点
+   * @returns 应用后的独立视角快照
+   * @throws 坐标不是有限数值或相机与目标点重合时抛出错误
+   */
+  setViewState(state: ProductViewState): ProductViewState {
+    return this.viewer.setViewState(state)
   }
 
   /**
@@ -398,7 +516,7 @@ export class ProductCustomizer {
       this.editor.setUvLayout(uvLayout, nextProduct.textureFlipY)
       this.product = nextProduct
       this.editor.clearHistory()
-      this.emit('ready', { product: this.product })
+      this.emit('ready', { product: this.getProduct() })
       this.emit('status', { message: nextProduct.modelUrl ? 'Remote product ready' : 'Demo product ready' })
     } catch (error) {
       this.reportError(error)
@@ -420,6 +538,7 @@ export class ProductCustomizer {
     this.stopSelectionListener?.()
     this.stopRenderListener?.()
     this.stopHistoryListener?.()
+    this.stopViewListener?.()
     this.textureBridge.destroy()
     this.editor.destroy()
     this.viewer.destroy()
@@ -430,7 +549,7 @@ export class ProductCustomizer {
     await this.editor.setBackgroundTexture(this.product.textureUrl)
     this.textureBridge.setFlipY(this.product.textureFlipY)
     this.editor.setUvLayout(uvLayout, this.product.textureFlipY)
-    this.emit('ready', { product: this.product })
+    this.emit('ready', { product: this.getProduct() })
   }
 
   private emit<K extends CustomizerEventName>(

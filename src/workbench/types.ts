@@ -1,4 +1,9 @@
-import type { ElementTarget, ProductConfiguration } from '../core/types'
+import type { ProductCustomizerApi } from '../core/api'
+import type {
+  CustomizerAppearance,
+  ElementTarget,
+  ProductConfiguration,
+} from '../core/types'
 
 /** Workbench 可显示的功能控件 */
 export interface WorkbenchFeatures {
@@ -611,6 +616,9 @@ export interface WorkbenchOptions {
   /** Workbench 独占使用的挂载元素或 CSS 选择器 */
   container: ElementTarget
 
+  /** 添加到 Workbench 根元素的一个或多个 CSS 类名 */
+  className?: string
+
   /** 二维编辑画布的逻辑宽度，单位为像素，默认为 1024 */
   editorWidth?: number
 
@@ -622,6 +630,9 @@ export interface WorkbenchOptions {
 
   /** 初始化时加载的产品配置 */
   product?: ProductConfiguration
+
+  /** 二维选择控件、UV 辅助层和三维画布的外观配置 */
+  appearance?: CustomizerAppearance
 
   /** 功能控件开关，未传字段使用默认值 */
   features?: Partial<WorkbenchFeatures>
@@ -662,3 +673,40 @@ export type WorkbenchLayoutName = keyof WorkbenchLayout
 
 /** Workbench 状态提示样式 */
 export type WorkbenchStatusMode = 'ready' | 'busy' | 'error'
+
+/**
+ * 带默认界面的产品定制工作台能力契约
+ *
+ * 可通过根元素、实例级 className 和主题变量调整默认样式；完全自建 UI 时应直接使用 ProductCustomizerApi
+ */
+export interface CustomForgeWorkbenchApi {
+  /** Workbench 使用的无界面核心接口 */
+  readonly customizer: ProductCustomizerApi
+
+  /** 可用于实例级 DOM 集成和附加样式的 Workbench 根元素 */
+  readonly element: HTMLElement
+
+  /** 返回当前功能控件开关的独立快照 */
+  getFeatures(): WorkbenchFeatures
+
+  /** 在运行时显示或隐藏一项默认功能控件 */
+  setFeature(feature: WorkbenchFeatureName, enabled: boolean): void
+
+  /** 返回当前布局区域开关的独立快照 */
+  getLayout(): WorkbenchLayout
+
+  /** 在运行时显示或隐藏一个默认布局区域 */
+  setLayout(section: WorkbenchLayoutName, visible: boolean): void
+
+  /** 返回当前完整主题的独立快照 */
+  getTheme(): WorkbenchTheme
+
+  /** 合并主题变量、立即更新当前实例并返回完整主题 */
+  setTheme(theme: Partial<WorkbenchTheme>): WorkbenchTheme
+
+  /** 更新默认界面的状态文案和状态样式 */
+  setStatus(message: string, mode?: WorkbenchStatusMode): void
+
+  /** 释放默认界面、核心实例和关联浏览器资源 */
+  destroy(): void
+}

@@ -20,6 +20,63 @@ export interface ProductConfiguration {
   textureFlipY?: boolean
 }
 
+/** 补全默认值后的产品配置快照 */
+export interface ResolvedProductConfiguration {
+  /** 清理空白后的模型地址，缺省时使用随包模型 */
+  modelUrl?: string
+
+  /** 清理空白后的基础纹理地址 */
+  textureUrl?: string
+
+  /** 接收实时纹理的模型 Mesh 名称 */
+  surfaceMesh: string
+
+  /** 是否在映射到三维模型前垂直翻转纹理 */
+  textureFlipY: boolean
+}
+
+/** 二维编辑器交互元素的外观配置 */
+export interface EditorAppearance {
+  /** 框选区域填充色，默认为 rgba(19, 113, 125, 0.12) */
+  selectionFill?: string
+
+  /** 框选区域边框色，默认为 #13717d */
+  selectionBorder?: string
+
+  /** 对象控制点填充色，默认为 #ffffff */
+  controlFill?: string
+
+  /** 对象控制点描边色，默认为 #13717d */
+  controlBorder?: string
+
+  /** 选中对象的边框色，默认为 #13717d */
+  objectBorder?: string
+
+  /** 对象控制点显示尺寸，单位为 CSS 像素，默认为 8 */
+  controlSize?: number
+
+  /** UV 区域辅助填充色，缺省时读取 --cfw-accent */
+  uvFill?: string
+
+  /** UV 外边界虚线颜色，默认为 #dc2626 */
+  uvBoundary?: string
+}
+
+/** 三维查看器画布的外观配置 */
+export interface ViewerAppearance {
+  /** WebGL 画布清屏颜色，缺省时保持透明并显示容器背景 */
+  backgroundColor?: string
+}
+
+/** 无界面核心所管理画布的外观配置 */
+export interface CustomizerAppearance {
+  /** 二维编辑器交互元素外观 */
+  editor?: EditorAppearance
+
+  /** 三维查看器画布外观 */
+  viewer?: ViewerAppearance
+}
+
 /**
  * 产品定制器初始化配置
  */
@@ -59,6 +116,9 @@ export interface CustomizerOptions {
 
   /** 背景图片对象在图层工具中的默认名称，默认为 Background */
   backgroundObjectName?: string
+
+  /** 二维编辑器和三维查看器的可选外观配置 */
+  appearance?: CustomizerAppearance
 }
 
 /** 文字支持的水平对齐方式 */
@@ -216,6 +276,30 @@ export interface DesignObjectTransform {
   flipY: boolean
 }
 
+/** 以对象中心点为原点更新现有对象时使用的变换 */
+export interface UpdateObjectTransformOptions {
+  /** 新的对象中心横坐标，单位为逻辑像素 */
+  x?: number
+
+  /** 新的对象中心纵坐标，单位为逻辑像素 */
+  y?: number
+
+  /** 新的横向缩放倍数，必须大于 0 */
+  scaleX?: number
+
+  /** 新的纵向缩放倍数，必须大于 0 */
+  scaleY?: number
+
+  /** 新的顺时针旋转角度，单位为度 */
+  rotation?: number
+
+  /** 是否沿对象自身横轴翻转 */
+  flipX?: boolean
+
+  /** 是否沿对象自身纵轴翻转 */
+  flipY?: boolean
+}
+
 /** Design JSON 中可编辑对象共用的图层状态 */
 export interface DesignObjectState {
   /** 图层面板使用的可选名称，缺省时由对象内容生成 */
@@ -325,6 +409,66 @@ export interface HistoryState {
   canRedo: boolean
 }
 
+/** 逻辑画布中的轴对齐区域 */
+export interface CanvasBounds {
+  /** 左边缘横坐标，单位为逻辑像素 */
+  left: number
+
+  /** 上边缘纵坐标，单位为逻辑像素 */
+  top: number
+
+  /** 区域宽度，单位为逻辑像素 */
+  width: number
+
+  /** 区域高度，单位为逻辑像素 */
+  height: number
+}
+
+/** 三维空间中的坐标值 */
+export interface Vector3Value {
+  /** 横轴坐标 */
+  x: number
+
+  /** 纵轴坐标 */
+  y: number
+
+  /** 深度轴坐标 */
+  z: number
+}
+
+/** 可保存并恢复的三维观察视角 */
+export interface ProductViewState {
+  /** 透视相机在三维场景中的位置 */
+  position: Vector3Value
+
+  /** 轨道控制器围绕观察的目标点 */
+  target: Vector3Value
+}
+
+/** 自定义 UI 可以一次读取的核心状态快照 */
+export interface CustomizerState {
+  /** 当前补全默认值后的产品配置 */
+  product: ResolvedProductConfiguration
+
+  /** 当前逻辑画布尺寸 */
+  canvas: DesignCanvas
+
+  /** 当前产品 UV 在逻辑画布中的可打印包围框 */
+  printableBounds: CanvasBounds
+
+  /** 按从后到前顺序排列的设计对象 */
+  objects: DesignObject[]
+
+  /** 按画布层级排列的当前选中对象 ID */
+  selectedObjectIds: string[]
+
+  /** 当前撤销与重做可用状态 */
+  history: HistoryState
+
+  /** 当前三维观察视角 */
+  view: ProductViewState
+}
+
 /**
  * 产品定制器事件及其载荷
  */
@@ -339,13 +483,16 @@ export interface CustomizerEventMap {
   historychange: HistoryState
 
   /** 产品模型和纹理完成加载 */
-  ready: { product: ProductConfiguration }
+  ready: { product: ResolvedProductConfiguration }
 
   /** 二维编辑器的选中状态发生变化，objectIds 按画布层级从后到前排列 */
   selectionchange: { hasSelection: boolean; objectIds: string[] }
 
   /** 加载或运行状态发生变化 */
   status: { message: string }
+
+  /** 用户操作或 API 调整了三维观察视角 */
+  viewchange: ProductViewState
 }
 
 /**

@@ -141,7 +141,7 @@ After each product load, the editor reads the target mesh UV coordinates and dis
 
 ## Basic Usage
 
-The framework-independent Library entry can be mounted into any two DOM containers:
+Use the `ProductCustomizerApi` core when the consuming application owns the complete UI. It can be mounted into any two DOM containers and does not require the Workbench DOM structure or CSS classes:
 
 CustomForge is browser-only and must be initialized after its DOM containers are available
 
@@ -166,6 +166,14 @@ const customizer = await createCustomizer({
     textureUrl: 'https://example.com/base-texture.png',
     surfaceMesh: 'PrintArea',
     textureFlipY: false,
+  },
+  appearance: {
+    editor: {
+      controlSize: 7,
+      objectBorder: '#0057b8',
+      uvBoundary: '#d92d20',
+    },
+    viewer: { backgroundColor: '#f4f4f5' },
   },
 })
 
@@ -209,6 +217,7 @@ import 'customforge/style.css'
 
 const workbench = await createWorkbench({
   container: '#customforge-workbench',
+  className: 'store-customizer',
   product: {
     modelUrl: 'https://example.com/product.glb',
     surfaceMesh: 'PrintArea',
@@ -264,6 +273,8 @@ Use the exported `WorkbenchLabels` type when authoring a complete language pack;
 
 `theme` maps to scoped CSS variables, and `icons` can disable built-in icons or replace individual semantic icons with image URLs
 
+`appearance` configures Fabric selection controls, UV helper colors, and the WebGL clear color that normal Workbench CSS cannot style reliably
+
 The default UI font stack prefers the rounded `Nunito Sans` family and falls back to system sans-serif fonts
 
 CustomForge bundles the font asset and does not fetch third-party font services at runtime
@@ -282,7 +293,10 @@ Feature and layout switches can also be changed after initialization
 ```ts
 workbench.setFeature('addText', true)
 workbench.setLayout('header', true)
+workbench.setTheme({ accent: '#0057b8' })
 ```
+
+`workbench.getFeatures()`, `workbench.getLayout()`, and `workbench.getTheme()` return independent snapshots. `className` is applied only to that Workbench root, so application CSS can target one instance without relying on a global selector. For a fully custom interface, use `createCustomizer()` instead of restyling or querying Workbench internals.
 
 | Feature switch | Controls |
 | --- | --- |
@@ -386,9 +400,14 @@ Successful product replacement keeps the current design but starts a new history
 | --- | --- |
 | `addText(options)` | Add and select editable text, constrained to the canvas; `fontSize` defaults to `22` |
 | `addImage(options)` | Load and select an element or replace the design background |
+| `getState()` | Return product, canvas, printable bounds, objects, selection, history, and 3D view in one snapshot |
+| `getProduct()` | Return the resolved current product configuration |
+| `getCanvasSize()` | Return the logical texture dimensions |
+| `getPrintableBounds()` | Return the UV printable bounds in logical canvas coordinates |
 | `getObjects()` | Return the current objects in back-to-front layer order |
 | `getSelectedObjectIds()` | Return stable IDs for the current selection |
 | `selectObject(id)` | Select a visible object by stable ID |
+| `selectObjects(ids)` | Select multiple visible objects by stable ID |
 | `clearSelection()` | Clear the current canvas selection without changing the design |
 | `removeObject(id)` | Remove an object by stable ID |
 | `moveObject(id, index)` | Move an object to a zero-based layer index |
@@ -396,6 +415,7 @@ Successful product replacement keeps the current design but starts a new history
 | `renameObject(id, name)` | Change the object name shown in layer tools |
 | `setObjectVisibility(id, visible)` | Include or exclude an object from rendering |
 | `setObjectLocked(id, locked)` | Lock or unlock canvas transformations |
+| `updateObjectTransform(id, options)` | Update center position, scale, rotation, and flips by stable ID |
 | `updateText(id, options)` | Update text content and formatting by stable ID |
 | `editText(id)` | Enter on-canvas editing for an unlocked text object |
 | `deleteSelected()` | Remove the active object or selection |
@@ -405,14 +425,17 @@ Successful product replacement keeps the current design but starts a new history
 | `undo()`, `redo()` | Restore the previous or next design snapshot |
 | `clearHistory()` | Make the current design the new history baseline |
 | `loadProduct(product)` | Replace the model, base texture, and target mesh |
+| `getTextureDataUrl()` | Return the composed texture as a PNG Data URL |
+| `getTextureBlob()` | Return the composed texture as a PNG Blob |
 | `exportTexture(filename?)` | Download the composed texture as PNG |
+| `getViewState()`, `setViewState(state)` | Read or restore the 3D camera position and target |
 | `resetView()` | Restore the default 3D camera position |
 | `on(event, listener)` | Subscribe to instance events; returns an unsubscribe function |
 | `destroy()` | Release DOM events, Fabric state, and WebGL resources |
 
-Available events are `ready`, `change`, `selectionchange`, `historychange`, `status`, and `error`
+Available events are `ready`, `change`, `selectionchange`, `historychange`, `viewchange`, `status`, and `error`
 
-The initial alpha stability boundary is limited to the methods above, `createCustomizer`, `ProductCustomizer`, the `customforge/workbench` entry, and the configuration, event, Workbench, and Design JSON types exported from declared package entries
+The headless contract is exported as `ProductCustomizerApi`; the default UI contract is exported as `CustomForgeWorkbenchApi`. The concrete classes remain available, but consumers can depend on these interfaces without coupling application code to their implementation.
 
 `ProductCustomizer` does not expose its Fabric.js editor or Three.js viewer instances; consumers interact through the facade API
 

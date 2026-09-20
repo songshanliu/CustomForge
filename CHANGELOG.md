@@ -9,6 +9,9 @@ All notable changes to CustomForge will be documented in this file
 - Display the active Mesh UV printable region and boundary as a non-exported editor overlay
 - Add an Office-style contextual text formatting bar with font, size, color, highlight, emphasis, alignment, line-height, and letter-spacing controls
 - Persist rich text formatting in backward-compatible Design JSON version 1 documents and expose `updateText()`, `editText()`, and `clearSelection()` APIs
+- Add stable `ProductCustomizerApi` and `CustomForgeWorkbenchApi` contracts for headless and default-UI integrations
+- Expose state snapshots, printable bounds, multi-selection, object transforms, PNG Data URL and Blob output, and 3D view persistence
+- Add instance-scoped Workbench classes, runtime theme access, and configurable editor and viewer drawing appearance
 
 ### Changed
 

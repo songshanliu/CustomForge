@@ -1,4 +1,5 @@
 import { resolveElement } from '../core/dom'
+import type { ProductCustomizerApi } from '../core/api'
 import type {
   DesignImageRole,
   DesignObject,
@@ -15,6 +16,7 @@ import {
 import { renderWorkbenchIcons } from './icons'
 import { createWorkbenchElement } from './template'
 import type {
+  CustomForgeWorkbenchApi,
   WorkbenchAsset,
   WorkbenchFeatureName,
   WorkbenchFeatures,
@@ -157,9 +159,9 @@ function formatCount(labels: WorkbenchLabels, count: number): string {
  * 底层 ProductCustomizer 仍通过 customizer 属性提供完整公共 API
  * 不再使用实例时必须调用 destroy
  */
-export class CustomForgeWorkbench {
+export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
   /** Workbench 使用的底层无界面定制器 */
-  readonly customizer: ProductCustomizer
+  readonly customizer: ProductCustomizerApi
 
   /** Workbench 根元素 */
   readonly element: HTMLElement
@@ -170,6 +172,7 @@ export class CustomForgeWorkbench {
   private readonly unsubscribe: Array<() => void> = []
   private readonly features: WorkbenchFeatures
   private readonly layout: WorkbenchLayout
+  private theme: WorkbenchTheme
   private readonly labels: WorkbenchLabels
   private readonly icons: Required<WorkbenchIconConfiguration>
   private readonly textPresets: WorkbenchTextPreset[]
@@ -219,7 +222,7 @@ export class CustomForgeWorkbench {
   private constructor(
     host: HTMLElement,
     element: HTMLElement,
-    customizer: ProductCustomizer,
+    customizer: ProductCustomizerApi,
     options: NormalizedWorkbenchOptions,
   ) {
     this.host = host
@@ -227,6 +230,7 @@ export class CustomForgeWorkbench {
     this.customizer = customizer
     this.features = options.features
     this.layout = options.layout
+    this.theme = options.theme
     this.labels = options.labels
     this.icons = options.icons
     this.textPresets = options.textPresets
@@ -296,6 +300,9 @@ export class CustomForgeWorkbench {
     const host = resolveElement(options.container, 'Workbench')
     const normalized = normalizeWorkbenchOptions(options)
     const element = createWorkbenchElement()
+    if (normalized.classNames.length > 0) {
+      element.classList.add(...normalized.classNames)
+    }
     applyLabels(element, normalized.labels)
     applyBranding(element, normalized.branding)
     applyTheme(element, normalized.theme)
@@ -312,6 +319,7 @@ export class CustomForgeWorkbench {
         editorHeight: normalized.editorHeight,
         historyLimit: normalized.historyLimit,
         product: normalized.product,
+        appearance: normalized.appearance,
         editorAriaLabel: normalized.labels.editorCanvas,
         viewerAriaLabel: normalized.labels.viewerCanvas,
         defaultText: normalized.labels.defaultText,
@@ -324,6 +332,11 @@ export class CustomForgeWorkbench {
       host.replaceChildren()
       throw error
     }
+  }
+
+  /** 返回当前默认功能控件开关的独立快照 */
+  getFeatures(): WorkbenchFeatures {
+    return { ...this.features }
   }
 
   /**
@@ -354,6 +367,12 @@ export class CustomForgeWorkbench {
     this.applyVisibility()
     this.renderLayers(true)
     this.updateTextToolbar()
+    this.updateImageToolbar()
+  }
+
+  /** 返回当前默认布局区域开关的独立快照 */
+  getLayout(): WorkbenchLayout {
+    return { ...this.layout }
   }
 
   /**
@@ -366,6 +385,24 @@ export class CustomForgeWorkbench {
     this.layout[section] = visible
     this.applyVisibility()
     this.updateTextToolbar()
+    this.updateImageToolbar()
+  }
+
+  /** 返回当前完整主题的独立快照 */
+  getTheme(): WorkbenchTheme {
+    return { ...this.theme }
+  }
+
+  /**
+   * 合并并立即应用当前 Workbench 实例的主题变量
+   *
+   * @param theme 要覆盖的主题字段
+   * @returns 合并后的完整主题独立快照
+   */
+  setTheme(theme: Partial<WorkbenchTheme>): WorkbenchTheme {
+    this.theme = { ...this.theme, ...theme }
+    applyTheme(this.element, this.theme)
+    return this.getTheme()
   }
 
   /**

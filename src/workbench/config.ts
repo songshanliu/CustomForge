@@ -39,6 +39,9 @@ export interface NormalizedWorkbenchBranding {
 
 /** Workbench 内部使用的完整配置 */
 export interface NormalizedWorkbenchOptions {
+  /** 添加到 Workbench 根元素的 CSS 类名 */
+  classNames: string[]
+
   /** 二维编辑画布的逻辑宽度 */
   editorWidth: number
 
@@ -50,6 +53,9 @@ export interface NormalizedWorkbenchOptions {
 
   /** 初始化产品配置 */
   product: WorkbenchOptions['product']
+
+  /** 二维编辑器与三维查看器外观配置 */
+  appearance: WorkbenchOptions['appearance']
 
   /** 完整功能开关 */
   features: WorkbenchFeatures
@@ -348,6 +354,10 @@ function uniqueTextPresets(presets: WorkbenchTextPreset[]): WorkbenchTextPreset[
   })
 }
 
+function normalizeClassNames(value?: string): string[] {
+  return [...new Set(value?.trim().split(/\s+/).filter(Boolean) ?? [])]
+}
+
 function uniqueFontFamilies(fonts: WorkbenchFontFamily[]): WorkbenchFontFamily[] {
   const values = new Set<string>()
   return fonts.map((font) => {
@@ -386,10 +396,12 @@ export function normalizeWorkbenchOptions(
   options: WorkbenchOptions,
 ): NormalizedWorkbenchOptions {
   return {
+    classNames: normalizeClassNames(options.className),
     editorWidth: positiveInteger(options.editorWidth, 1024, 'editorWidth'),
     editorHeight: positiveInteger(options.editorHeight, 512, 'editorHeight'),
     historyLimit: positiveInteger(options.historyLimit, 50, 'historyLimit'),
     product: options.product,
+    appearance: options.appearance,
     features: { ...defaultFeatures, ...options.features },
     layout: { ...defaultLayout, ...options.layout },
     branding: normalizeBranding(options.branding),

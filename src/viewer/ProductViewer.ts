@@ -18,6 +18,7 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { NormalizedProductConfiguration } from '../core/config'
+import type { ProductViewState, ViewerAppearance } from '../core/types'
 import type { UvLayout } from '../core/uv'
 import defaultProductModelUrl from './assets/cup_decal_small_margins.glb?url&no-inline'
 import { extractUvLayout } from './uvLayout'
@@ -28,6 +29,8 @@ const DEFAULT_PRODUCT_ROTATION = MathUtils.degToRad(-72)
 const DEFAULT_CAMERA_AZIMUTH = MathUtils.degToRad(18)
 const DEFAULT_CAMERA_ELEVATION = MathUtils.degToRad(10)
 const CAMERA_VIEWPORT_FILL = 0.7
+
+type ViewChangeListener = (state: ProductViewState) => void
 
 /**
  * 基于 Three.js 的三维产品查看器
@@ -47,14 +50,21 @@ export class ProductViewer {
   private surface?: Mesh
   private texture?: CanvasTexture
   private animationFrame = 0
+  private readonly viewChangeListeners = new Set<ViewChangeListener>()
+  private readonly handleControlsChange = (): void => {
+    const state = this.getViewState()
+    this.viewChangeListeners.forEach((listener) => listener(state))
+  }
 
   /**
    * @param host 三维查看器挂载容器
    * @param ariaLabel 三维产品画布的无障碍名称
+   * @param appearance WebGL 画布清屏颜色等外观配置
    */
   constructor(
     host: HTMLElement,
     ariaLabel = 'Interactive 3D product preview',
+    appearance: ViewerAppearance = {},
   ) {
     this.host = host
     host.replaceChildren()
@@ -64,6 +74,9 @@ export class ProductViewer {
     this.renderer.outputColorSpace = SRGBColorSpace
     this.renderer.toneMapping = ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
+    if (appearance.backgroundColor?.trim()) {
+      this.renderer.setClearColor(appearance.backgroundColor.trim(), 1)
+    }
     this.renderer.domElement.setAttribute('aria-label', ariaLabel)
     this.renderer.domElement.classList.add('customforge-viewer-canvas')
     host.append(this.renderer.domElement)
@@ -76,6 +89,7 @@ export class ProductViewer {
     this.controls.minDistance = 3.2
     this.controls.maxDistance = 11
     this.controls.target.set(0, 0, 0)
+    this.controls.addEventListener('change', this.handleControlsChange)
 
     this.addStudioLighting()
     this.resizeObserver = new ResizeObserver(() => this.resize())
@@ -140,11 +154,54 @@ export class ProductViewer {
     }
   }
 
+  /** 返回当前相机位置和轨道控制目标点的独立快照 */
+  getViewState(): ProductViewState {
+    return {
+      position: this.vectorToValue(this.camera.position),
+      target: this.vectorToValue(this.controls.target),
+    }
+  }
+
+  /**
+   * 恢复相机位置和轨道控制目标点
+   *
+   * @param state 要恢复的三维观察视角
+   * @returns 应用后的独立视角快照
+   * @throws 坐标不是有限数值或相机与目标点重合时抛出错误
+   */
+  setViewState(state: ProductViewState): ProductViewState {
+    this.validateViewState(state)
+    this.camera.position.set(
+      state.position.x,
+      state.position.y,
+      state.position.z,
+    )
+    this.controls.target.set(state.target.x, state.target.y, state.target.z)
+    this.camera.updateProjectionMatrix()
+    this.controls.update()
+    return this.getViewState()
+  }
+
+  /**
+   * 订阅三维视角变化
+   *
+   * 用户旋转、缩放、平移以及 API 恢复视角时都会触发
+   *
+   * @param listener 接收独立视角快照的监听函数
+   * @returns 用于取消本次订阅的函数
+   */
+  onViewChange(listener: ViewChangeListener): () => void {
+    this.viewChangeListeners.add(listener)
+    return () => this.viewChangeListeners.delete(listener)
+  }
+
   /** 释放动画帧、相机控制、模型材质和 WebGLRenderer */
   destroy(): void {
     cancelAnimationFrame(this.animationFrame)
     this.resizeObserver.disconnect()
+    this.controls.removeEventListener('change', this.handleControlsChange)
     this.controls.dispose()
+    this.viewChangeListeners.clear()
     this.removeProduct()
     this.renderer.dispose()
     this.renderer.domElement.remove()
@@ -297,6 +354,32 @@ export class ProductViewer {
       Math.sin(DEFAULT_CAMERA_ELEVATION),
       horizontal * Math.cos(DEFAULT_CAMERA_AZIMUTH),
     )
+  }
+
+  private vectorToValue(vector: Vector3): ProductViewState['position'] {
+    return { x: vector.x, y: vector.y, z: vector.z }
+  }
+
+  private validateViewState(state: ProductViewState): void {
+    const values = [
+      state.position.x,
+      state.position.y,
+      state.position.z,
+      state.target.x,
+      state.target.y,
+      state.target.z,
+    ]
+    if (!values.every(Number.isFinite)) {
+      throw new TypeError('View position and target must contain finite numbers')
+    }
+
+    const distanceSquared =
+      (state.position.x - state.target.x) ** 2 +
+      (state.position.y - state.target.y) ** 2 +
+      (state.position.z - state.target.z) ** 2
+    if (distanceSquared <= Number.EPSILON) {
+      throw new RangeError('View position and target must not be identical')
+    }
   }
 
   private removeProduct(): void {

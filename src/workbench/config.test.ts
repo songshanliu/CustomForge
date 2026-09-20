@@ -8,6 +8,8 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.editorWidth).toBe(1024)
     expect(options.editorHeight).toBe(512)
     expect(options.historyLimit).toBe(50)
+    expect(options.classNames).toEqual([])
+    expect(options.appearance).toBeUndefined()
     expect(options.features.textFormatting).toBe(true)
     expect(Object.values(options.features).every(Boolean)).toBe(true)
     expect(Object.values(options.layout).every(Boolean)).toBe(true)
@@ -30,6 +32,11 @@ describe('normalizeWorkbenchOptions', () => {
       branding: { title: 'Store editor', showSubtitle: false },
       labels: { addText: 'Type' },
       theme: { accent: '#0055aa' },
+      className: 'store-editor compact store-editor',
+      appearance: {
+        editor: { controlSize: 6 },
+        viewer: { backgroundColor: '#eeeeee' },
+      },
       icons: { enabled: false },
     })
 
@@ -45,6 +52,11 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.labels.editorMode).toBe('2D')
     expect(options.labels.modelUrlPlaceholder).toContain('product.glb')
     expect(options.theme.accent).toBe('#0055aa')
+    expect(options.classNames).toEqual(['store-editor', 'compact'])
+    expect(options.appearance).toEqual({
+      editor: { controlSize: 6 },
+      viewer: { backgroundColor: '#eeeeee' },
+    })
     expect(options.icons.enabled).toBe(false)
   })
 

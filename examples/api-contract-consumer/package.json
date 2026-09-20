@@ -1,0 +1,24 @@
+{
+  "name": "customforge-api-contract-consumer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5175 --strictPort",
+    "check": "tsc --noEmit --pretty false",
+    "build": "tsc --noEmit --pretty false && vite build"
+  },
+  "dependencies": {
+    "customforge": "file:../../customforge-0.1.0-alpha.2.tgz"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "canvas"
+    ]
+  },
+  "packageManager": "pnpm@11.18.0"
+}

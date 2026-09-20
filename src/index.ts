@@ -1,5 +1,6 @@
 import './style.css'
 import { ProductCustomizer } from './customizer/ProductCustomizer'
+import type { ProductCustomizerApi } from './core/api'
 import type { CustomizerOptions } from './core/types'
 
 /**
@@ -27,28 +28,43 @@ import type { CustomizerOptions } from './core/types'
  */
 export async function createCustomizer(
   options: CustomizerOptions,
-): Promise<ProductCustomizer> {
+): Promise<ProductCustomizerApi> {
   return ProductCustomizer.create(options)
 }
 
 export { ProductCustomizer }
 export type {
+  CustomizerEventListener,
+  ProductCustomizerApi,
+} from './core/api'
+export type {
   AddImageOptions,
   AddTextOptions,
+  CanvasBounds,
+  CustomizerAppearance,
   CustomizerEventMap,
+  CustomizerEventName,
   CustomizerOptions,
+  CustomizerState,
   DesignCanvas,
   DesignDocument,
   DesignImageRole,
   DesignObject,
   DesignObjectState,
   DesignObjectTransform,
+  ElementTarget,
   ImageDesignObject,
+  EditorAppearance,
   HistoryState,
   ProductConfiguration,
+  ProductViewState,
+  ResolvedProductConfiguration,
   TextAlignment,
   TextDesignObject,
   TextFontStyle,
   TextFontWeight,
+  UpdateObjectTransformOptions,
   UpdateTextOptions,
+  Vector3Value,
+  ViewerAppearance,
 } from './core/types'

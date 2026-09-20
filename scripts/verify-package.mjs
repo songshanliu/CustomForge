@@ -100,7 +100,10 @@ assert(
   packageJson.exports?.['./workbench']?.types === './dist/workbench/index.d.ts',
   'Workbench types export is invalid',
 )
-assert(packageJson.exports?.['./style.css'] === './dist/style.css', 'Style export is invalid')
+assert(
+  packageJson.exports?.['./style.css'] === './dist/style.css',
+  'Style export is invalid',
+)
 assert(packageJson.dependencies?.fabric, 'Fabric.js must be a runtime dependency')
 assert(packageJson.dependencies?.three, 'Three.js must be a runtime dependency')
 assert(!packageJson.peerDependencies?.fabric, 'Fabric.js must not be a peer dependency')
@@ -134,6 +137,7 @@ const requiredDistFiles = [
   'index.js',
   'index.js.map',
   'style.css',
+  'core/api.d.ts',
   'core/types.d.ts',
   'customizer/ProductCustomizer.d.ts',
   'workbench.js',
@@ -145,7 +149,7 @@ const requiredDistFiles = [
 const distUrl = new URL('dist/', projectRoot)
 const distFiles = await listFiles(distUrl)
 const defaultModelFile = distFiles.find((file) =>
-  /^assets\/cup_decal_small_margins(?:-[A-Za-z0-9_-]+)?\.glb$/.test(file),
+  /^(?:assets\/)?cup_decal_small_margins(?:-[A-Za-z0-9_-]+)?\.glb$/.test(file),
 )
 
 assert(defaultModelFile, 'Bundled cup_decal_small_margins.glb asset is missing')
@@ -227,6 +231,14 @@ assert(!coreStyle.includes('data:font/'), 'Workbench font must not be inlined in
 const nunitoFontFile = distFiles.find((file) => /NunitoSans.*\.ttf$/i.test(file))
 assert(nunitoFontFile, 'Bundled Nunito Sans font asset is missing')
 assert(coreStyle.includes(nunitoFontFile), 'Workbench CSS does not reference its font asset')
+assert(
+  !coreStyle.includes('url("/'),
+  'Workbench CSS must not use site-root asset URLs',
+)
+assert(
+  !coreStyle.includes('url("../../'),
+  'Workbench CSS asset URLs must remain inside dist',
+)
 const coreStyleStats = await stat(new URL('dist/style.css', projectRoot))
 assert(coreStyleStats.size < 250_000, 'Core stylesheet is unexpectedly large')
 assert(
@@ -241,6 +253,12 @@ assert(rootDeclaration.includes('DesignDocument'), 'Design document type is miss
 assert(rootDeclaration.includes('DesignImageRole'), 'Design image role type is missing')
 assert(rootDeclaration.includes('HistoryState'), 'History state type is missing')
 assert(rootDeclaration.includes('CustomizerEventMap'), 'Customizer event map type is missing')
+assert(rootDeclaration.includes('ProductCustomizerApi'), 'Core API contract is missing')
+
+const coreApiDeclaration = await readProjectFile('dist/core/api.d.ts')
+assert(coreApiDeclaration.includes('getTextureBlob'), 'Core texture Blob API is missing')
+assert(coreApiDeclaration.includes('setViewState'), 'Core view restore API is missing')
+assert(coreApiDeclaration.includes('selectObjects'), 'Core multi-selection API is missing')
 
 const coreTypesDeclaration = await readProjectFile('dist/core/types.d.ts')
 assert(coreTypesDeclaration.includes('historychange'), 'History event type is missing')
@@ -257,6 +275,17 @@ assert(
 )
 assert(workbenchDeclaration.includes('WorkbenchTextPreset'), 'Workbench text preset type is missing')
 assert(workbenchDeclaration.includes('WorkbenchAsset'), 'Workbench asset type is missing')
+assert(
+  workbenchDeclaration.includes('CustomForgeWorkbenchApi'),
+  'Workbench API contract is missing',
+)
+const workbenchTypesDeclaration = await readProjectFile(
+  'dist/workbench/types.d.ts',
+)
+assert(
+  workbenchTypesDeclaration.includes('setTheme'),
+  'Workbench runtime theme API is missing',
+)
 assert(!workbenchDeclaration.includes('/demo/'), 'Demo type leaked into Workbench declaration')
 
 const customizerDeclaration = await readProjectFile(

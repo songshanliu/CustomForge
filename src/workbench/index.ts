@@ -1,5 +1,5 @@
 import { CustomForgeWorkbench } from './CustomForgeWorkbench'
-import type { WorkbenchOptions } from './types'
+import type { CustomForgeWorkbenchApi, WorkbenchOptions } from './types'
 
 /**
  * 创建带默认界面的产品定制工作台
@@ -22,12 +22,13 @@ import type { WorkbenchOptions } from './types'
  */
 export async function createWorkbench(
   options: WorkbenchOptions,
-): Promise<CustomForgeWorkbench> {
+): Promise<CustomForgeWorkbenchApi> {
   return CustomForgeWorkbench.create(options)
 }
 
 export { CustomForgeWorkbench }
 export type {
+  CustomForgeWorkbenchApi,
   WorkbenchAsset,
   WorkbenchAssetLibrary,
   WorkbenchBranding,

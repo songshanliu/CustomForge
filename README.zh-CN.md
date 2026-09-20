@@ -137,7 +137,7 @@ UV 坐标应当保存在三维模型中
 
 ## 基本用法
 
-与框架无关的 Library 入口可以挂载到任意两个 DOM 容器中：
+消费方需要完全掌控界面时，应使用 `ProductCustomizerApi` 核心入口。它可以挂载到任意两个 DOM 容器中，不依赖 Workbench 的 DOM 结构或 CSS 类：
 
 CustomForge 仅支持浏览器环境，应在 DOM 挂载容器可用后创建实例
 
@@ -162,6 +162,14 @@ const customizer = await createCustomizer({
     textureUrl: 'https://example.com/base-texture.png',
     surfaceMesh: 'PrintArea',
     textureFlipY: false,
+  },
+  appearance: {
+    editor: {
+      controlSize: 7,
+      objectBorder: '#0057b8',
+      uvBoundary: '#d92d20',
+    },
+    viewer: { backgroundColor: '#f4f4f5' },
   },
 })
 
@@ -205,6 +213,7 @@ import 'customforge/style.css'
 
 const workbench = await createWorkbench({
   container: '#customforge-workbench',
+  className: 'store-customizer',
   product: {
     modelUrl: 'https://example.com/product.glb',
     surfaceMesh: 'PrintArea',
@@ -259,6 +268,8 @@ CustomForge 提供默认英文文案，但不接管应用的当前语言状态�
 
 `theme` 映射到限定作用域的 CSS 变量，`icons` 可以关闭内置图标或用图片地址替换指定语义图标
 
+`appearance` 用于配置普通 Workbench CSS 无法可靠控制的 Fabric 选择控件、UV 辅助颜色和 WebGL 清屏颜色
+
 默认界面字体栈优先使用圆润的 `Nunito Sans`，不可用时回退到系统无衬线字体
 
 CustomForge 会随制品提供该字体资源，不会在运行时请求第三方字体服务
@@ -277,7 +288,10 @@ CustomForge 会随制品提供该字体资源，不会在运行时请求第三�
 ```ts
 workbench.setFeature('addText', true)
 workbench.setLayout('header', true)
+workbench.setTheme({ accent: '#0057b8' })
 ```
+
+`workbench.getFeatures()`、`workbench.getLayout()` 和 `workbench.getTheme()` 返回互不影响的配置快照。`className` 只添加到当前 Workbench 根元素，宿主 CSS 可以精确作用于某个实例，而不需要依赖全局选择器。需要完全自定义界面时，应使用 `createCustomizer()`，不要查询或改写 Workbench 内部 DOM。
 
 | 功能开关 | 控制内容 |
 | --- | --- |
@@ -381,9 +395,14 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | --- | --- |
 | `addText(options)` | 添加并选中文字并自动约束在画布内；`fontSize` 默认为 `22` |
 | `addImage(options)` | 加载普通图片元素或替换设计背景 |
+| `getState()` | 一次返回商品、画布、可打印边界、对象、选区、历史和三维视角快照 |
+| `getProduct()` | 返回补全默认值后的当前商品配置 |
+| `getCanvasSize()` | 返回逻辑纹理尺寸 |
+| `getPrintableBounds()` | 返回逻辑画布坐标中的 UV 可打印边界 |
 | `getObjects()` | 按从后到前的图层顺序返回当前对象 |
 | `getSelectedObjectIds()` | 返回当前选区中的稳定对象 ID |
 | `selectObject(id)` | 根据稳定 ID 选中可见对象 |
+| `selectObjects(ids)` | 根据稳定 ID 多选可见对象 |
 | `clearSelection()` | 清除当前画布选区且不修改设计内容 |
 | `removeObject(id)` | 根据稳定 ID 删除对象 |
 | `moveObject(id, index)` | 将对象移动到从 0 开始的图层索引 |
@@ -391,6 +410,7 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `renameObject(id, name)` | 修改图层工具中显示的对象名称 |
 | `setObjectVisibility(id, visible)` | 设置对象是否参与渲染 |
 | `setObjectLocked(id, locked)` | 锁定或解锁画布变换 |
+| `updateObjectTransform(id, options)` | 根据稳定 ID 修改中心位置、缩放、旋转和翻转 |
 | `updateText(id, options)` | 按稳定 ID 修改文字内容和排版样式 |
 | `editText(id)` | 让未锁定文字进入画布内编辑状态 |
 | `deleteSelected()` | 删除当前对象或选区 |
@@ -400,14 +420,17 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `undo()`、`redo()` | 恢复前一个或后一个设计快照 |
 | `clearHistory()` | 将当前设计设为新的历史起点 |
 | `loadProduct(product)` | 更换模型、基础纹理和目标 Mesh |
+| `getTextureDataUrl()` | 以 PNG Data URL 返回合成纹理 |
+| `getTextureBlob()` | 以 PNG Blob 返回合成纹理 |
 | `exportTexture(filename?)` | 将合成纹理下载为 PNG |
+| `getViewState()`、`setViewState(state)` | 读取或恢复三维相机位置和观察目标点 |
 | `resetView()` | 恢复默认三维相机位置 |
 | `on(event, listener)` | 订阅实例事件，并返回取消订阅函数 |
 | `destroy()` | 释放 DOM 事件、Fabric 状态和 WebGL 资源 |
 
-当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`status` 和 `error`
+当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`viewchange`、`status` 和 `error`
 
-首个 alpha 的稳定候选边界只包括上表方法、`createCustomizer`、`ProductCustomizer`、`customforge/workbench` 入口，以及从已声明入口导出的配置、事件、Workbench 和 Design JSON 类型
+无界面能力契约导出为 `ProductCustomizerApi`，默认界面能力契约导出为 `CustomForgeWorkbenchApi`。具体类仍然保留，但消费方可以只依赖接口，避免业务代码与实现细节耦合。
 
 `ProductCustomizer` 不公开 Fabric.js 编辑器和 Three.js 查看器实例，使用方只通过门面 API 操作定制器
 
