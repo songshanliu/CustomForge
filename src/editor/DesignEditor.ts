@@ -251,7 +251,7 @@ export class DesignEditor {
       )
     }
     context.globalAlpha = 0.28
-    context.strokeStyle = accent
+    context.strokeStyle = '#dc2626'
     context.lineWidth = 1
     context.lineCap = 'round'
     context.lineJoin = 'round'
@@ -415,6 +415,43 @@ export class DesignEditor {
 
     this.canvas.moveObjectTo(object, nextIndex)
     this.canvas.requestRenderAll()
+    this.commitHistory()
+    return true
+  }
+
+  /**
+   * 将现有图片转换为铺满画布的设计背景
+   *
+   * 转换会替换已有设计背景、重置旋转、锁定对象并移动到最底层
+   *
+   * @param id Design JSON 中的图片对象 ID
+   * @returns 是否找到普通图片并完成转换
+   */
+  setImageAsBackground(id: string): boolean {
+    this.flushHistoryCommit()
+    const object = this.objectsById.get(id)
+    if (
+      !(object instanceof FabricImage) ||
+      this.imageRoles.get(object) === 'background'
+    ) {
+      return false
+    }
+
+    this.removeDesignBackgrounds()
+    this.imageRoles.set(object, 'background')
+    object.set({
+      left: this.width / 2,
+      top: this.height / 2,
+      angle: 0,
+      scaleX: this.width / Math.max(object.width, 1),
+      scaleY: this.height / Math.max(object.height, 1),
+    })
+    object.setCoords()
+    this.applyObjectLock(object, true)
+    this.canvas.moveObjectTo(object, 0)
+    this.canvas.setActiveObject(object)
+    this.canvas.requestRenderAll()
+    this.notifySelectionChange()
     this.commitHistory()
     return true
   }

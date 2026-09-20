@@ -2,6 +2,7 @@ import { resolveElement } from '../core/dom'
 import type {
   DesignImageRole,
   DesignObject,
+  ImageDesignObject,
   TextAlignment,
   TextDesignObject,
   UpdateTextOptions,
@@ -201,6 +202,7 @@ export class CustomForgeWorkbench {
   private readonly textDialog: HTMLDialogElement
   private readonly textForm: HTMLFormElement
   private readonly textToolbar: HTMLElement
+  private readonly imageToolbar: HTMLElement
   private readonly textOptions: HTMLDetailsElement
   private readonly textFontFamily: HTMLSelectElement
   private readonly textFontSize: HTMLInputElement
@@ -256,6 +258,7 @@ export class CustomForgeWorkbench {
     this.textDialog = requiredElement(element, '[data-role="text-dialog"]')
     this.textForm = requiredElement(element, '[data-role="text-form"]')
     this.textToolbar = requiredElement(element, '[data-role="text-toolbar"]')
+    this.imageToolbar = requiredElement(element, '[data-role="image-toolbar"]')
     this.textOptions = requiredElement(element, '[data-role="text-options"]')
     this.textFontFamily = requiredElement(element, '[data-role="text-font-family"]')
     this.textFontSize = requiredElement(element, '[data-role="text-font-size"]')
@@ -289,6 +292,7 @@ export class CustomForgeWorkbench {
     this.updateHistoryButtons()
     this.renderLayers(true)
     this.updateTextToolbar()
+    this.updateImageToolbar()
     this.setStatus(this.labels.productReady)
   }
 
@@ -406,12 +410,14 @@ export class CustomForgeWorkbench {
         this.updateObjectCount(objectCount)
         this.renderLayers()
         this.updateTextToolbar()
+        this.updateImageToolbar()
       }),
       this.customizer.on('selectionchange', ({ objectIds }) => {
         this.selectedObjectIds = new Set(objectIds)
         this.deleteButton.disabled = objectIds.length === 0
         this.renderLayers()
         this.updateTextToolbar()
+        this.updateImageToolbar()
       }),
       this.customizer.on('historychange', () => this.updateHistoryButtons()),
       this.customizer.on('status', ({ message }) =>
@@ -658,6 +664,9 @@ export class CustomForgeWorkbench {
       case 'open-image-dialog':
         this.openImageDialog()
         break
+      case 'set-image-as-background':
+        this.setSelectedImageAsBackground()
+        break
       case 'undo':
         void this.runHistory('undo')
         break
@@ -847,6 +856,7 @@ export class CustomForgeWorkbench {
 
     renderWorkbenchIcons(this.element, this.icons)
     this.updateTextToolbar()
+    this.updateImageToolbar()
   }
 
   private toolGroup(name: string): HTMLElement {
@@ -983,6 +993,38 @@ export class CustomForgeWorkbench {
       return undefined
     }
     return selected as TextDesignObject[]
+  }
+
+  private selectedImageObject(): ImageDesignObject | undefined {
+    if (this.selectedObjectIds.size !== 1) {
+      return undefined
+    }
+    const [selectedId] = this.selectedObjectIds
+    const object = this.customizer
+      .getObjects()
+      .find((entry) => entry.id === selectedId)
+    return object?.type === 'image' && object.role !== 'background'
+      ? object
+      : undefined
+  }
+
+  private updateImageToolbar(): void {
+    const object = this.selectedImageObject()
+    const visible =
+      this.layout.toolbar &&
+      this.features.addImage &&
+      object !== undefined
+    this.imageToolbar.hidden = !visible
+    this.action('set-image-as-background').disabled =
+      !visible || Boolean(object?.locked)
+  }
+
+  private setSelectedImageAsBackground(): void {
+    const object = this.selectedImageObject()
+    if (!object || object.locked) {
+      return
+    }
+    this.customizer.setImageAsBackground(object.id)
   }
 
   private commonTextValue<T>(
@@ -1823,6 +1865,19 @@ export class CustomForgeWorkbench {
       file?.name ?? this.labels.noModelFileSelected
   }
 
+  private setProductLoading(loading: boolean): void {
+    const label = requiredElement(
+      this.submitProductButton,
+      '[data-label="loadProduct"]',
+    )
+    this.submitProductButton.disabled = loading
+    this.submitProductButton.dataset.loading = String(loading)
+    this.submitProductButton.setAttribute('aria-busy', String(loading))
+    label.textContent = loading
+      ? `${this.labels.loadProduct}...`
+      : this.labels.loadProduct
+  }
+
   private replaceActiveProductObjectUrl(nextUrl?: string): void {
     if (this.activeProductObjectUrl && this.activeProductObjectUrl !== nextUrl) {
       URL.revokeObjectURL(this.activeProductObjectUrl)
@@ -1831,7 +1886,7 @@ export class CustomForgeWorkbench {
   }
 
   private async loadDemoProduct(): Promise<void> {
-    this.submitProductButton.disabled = true
+    this.setProductLoading(true)
     this.setStatus(this.labels.loadProduct, 'busy')
     try {
       await this.customizer.loadProduct({})
@@ -1841,7 +1896,7 @@ export class CustomForgeWorkbench {
     } catch (error) {
       this.setStatus(errorMessage(error), 'error')
     } finally {
-      this.submitProductButton.disabled = false
+      this.setProductLoading(false)
     }
   }
 
@@ -1856,7 +1911,7 @@ export class CustomForgeWorkbench {
       ? this.modelFileInput.files?.[0]
       : undefined
     let pendingObjectUrl: string | undefined
-    this.submitProductButton.disabled = true
+    this.setProductLoading(true)
     this.setStatus(this.labels.loadProduct, 'busy')
     try {
       pendingObjectUrl = file ? URL.createObjectURL(file) : undefined
@@ -1885,7 +1940,7 @@ export class CustomForgeWorkbench {
       if (pendingObjectUrl) {
         URL.revokeObjectURL(pendingObjectUrl)
       }
-      this.submitProductButton.disabled = false
+      this.setProductLoading(false)
     }
   }
 }

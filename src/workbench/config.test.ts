@@ -41,6 +41,7 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.branding.showSubtitle).toBe(false)
     expect(options.labels.addText).toBe('Type')
     expect(options.labels.addImage).toBe('Image')
+    expect(options.labels.setImageAsBackground).toBe('Set as background')
     expect(options.theme.accent).toBe('#0055aa')
     expect(options.icons.enabled).toBe(false)
   })

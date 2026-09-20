@@ -127,6 +127,7 @@ const defaultLabels: WorkbenchLabels = {
   lineHeight: 'Line height',
   letterSpacing: 'Letter spacing',
   addImage: 'Image',
+  setImageAsBackground: 'Set as background',
   undo: 'Undo',
   redo: 'Redo',
   saveDesign: 'Save design JSON',

@@ -158,6 +158,9 @@ export interface WorkbenchLabels {
   /** 添加图片命令 */
   addImage: string
 
+  /** 将选中图片设为设计背景的命令 */
+  setImageAsBackground: string
+
   /** 撤销命令 */
   undo: string
 
@@ -408,6 +411,7 @@ export type WorkbenchIconName =
   | 'redo'
   | 'resetView'
   | 'saveDesign'
+  | 'setImageAsBackground'
   | 'showLayer'
   | 'textBackground'
   | 'textColor'

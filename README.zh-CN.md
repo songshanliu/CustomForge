@@ -28,6 +28,10 @@
 
 ---
 
+## 操作演示
+
+![CustomForge 商品定制操作演示](./.github/assets/demo.gif)
+
 ## 项目能力
 
 CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来：
@@ -253,6 +257,7 @@ CustomForge 会随制品提供该字体资源，不会在运行时请求第三�
 - 上下文格式栏支持多选混合状态，并提供明确的画布内文字编辑入口
 - 图片 Dialog 提供本地上传、预设背景和装饰元素
 - 设计背景会替换已有设计背景、铺满画布、默认锁定在最底层并保存到 Design JSON
+- 选中普通图片后可以将其转换为设计背景，自动铺满画布并移动到最底层
 
 功能和布局开关也可以在初始化后动态调整
 
@@ -351,7 +356,7 @@ const stop = customizer.on('historychange', ({ canUndo, canRedo }) => {
 })
 ```
 
-历史记录覆盖对象添加、删除、画布变换、文字内容与格式编辑、图层排序、名称、显隐、锁定和 Design JSON 加载
+历史记录覆盖对象添加、删除、画布变换、文字内容与格式编辑、图片转背景、图层排序、名称、显隐、锁定和 Design JSON 加载
 
 Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl` 或 `Cmd` + `Shift` + `Z` 和 `Ctrl` + `Y`
 
@@ -369,6 +374,7 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `clearSelection()` | 清除当前画布选区且不修改设计内容 |
 | `removeObject(id)` | 根据稳定 ID 删除对象 |
 | `moveObject(id, index)` | 将对象移动到从 0 开始的图层索引 |
+| `setImageAsBackground(id)` | 使用现有图片替换设计背景并自动铺满画布 |
 | `renameObject(id, name)` | 修改图层工具中显示的对象名称 |
 | `setObjectVisibility(id, visible)` | 设置对象是否参与渲染 |
 | `setObjectLocked(id, locked)` | 锁定或解锁画布变换 |

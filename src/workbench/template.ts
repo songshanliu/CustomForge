@@ -150,6 +150,14 @@ export function createWorkbenchElement(): HTMLElement {
               </div>
             </details>
           </div>
+
+          <div class="customforge-workbench__image-toolbar" data-role="image-toolbar" data-region-label="setImageAsBackground" role="group" hidden>
+            <span class="customforge-workbench__format-separator" aria-hidden="true"></span>
+            <button class="customforge-workbench__tool-button" data-action="set-image-as-background" data-control-label="setImageAsBackground" type="button">
+              <i data-customforge-icon="stretch-horizontal" data-icon-slot="setImageAsBackground"></i>
+              <span data-label="setImageAsBackground"></span>
+            </button>
+          </div>
         </div>
 
         <div class="customforge-workbench__editor-body">

@@ -285,6 +285,26 @@
   color: var(--cfw-accent-contrast);
 }
 
+.customforge-workbench__button[data-loading="true"] [data-icon-slot="upload"] {
+  display: none;
+}
+
+.customforge-workbench__button[data-loading="true"]::before {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentcolor 32%, transparent);
+  border-top-color: currentcolor;
+  border-radius: 50%;
+  animation: customforge-workbench-spin 700ms linear infinite;
+  content: "";
+}
+
+@keyframes customforge-workbench-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .customforge-workbench__custom-icon,
 .customforge-workbench [data-icon-slot] {
   flex: 0 0 auto;
@@ -488,7 +508,8 @@
   background: var(--cfw-line);
 }
 
-.customforge-workbench__text-toolbar {
+.customforge-workbench__text-toolbar,
+.customforge-workbench__image-toolbar {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
@@ -1758,7 +1779,8 @@
   }
 
   .customforge-workbench__tool-group,
-  .customforge-workbench__text-toolbar {
+  .customforge-workbench__text-toolbar,
+  .customforge-workbench__image-toolbar {
     gap: 2px;
   }
 
@@ -1924,6 +1946,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .customforge-workbench__button[data-loading="true"]::before,
   .customforge-workbench__layer-item,
   .customforge-workbench__layer-item[data-selected="true"],
   .customforge-workbench__layer-item[data-selected="true"]::before,

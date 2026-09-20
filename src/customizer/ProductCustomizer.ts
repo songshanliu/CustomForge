@@ -196,6 +196,18 @@ export class ProductCustomizer {
   }
 
   /**
+   * 将现有图片转换为铺满画布的设计背景
+   *
+   * 转换会替换已有设计背景、重置旋转、锁定对象并移动到最底层
+   *
+   * @param id Design JSON 中的图片对象 ID
+   * @returns 是否找到普通图片并完成转换
+   */
+  setImageAsBackground(id: string): boolean {
+    return this.editor.setImageAsBackground(id)
+  }
+
+  /**
    * 修改对象在图层面板中的名称
    *
    * @param id Design JSON 中的对象 ID
