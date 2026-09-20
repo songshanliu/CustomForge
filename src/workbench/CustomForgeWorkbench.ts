@@ -33,32 +33,21 @@ type ProductSourceMode = 'file' | 'url'
 
 const DIALOG_CLOSE_DELAY_MS = 180
 
-const DEFAULT_TEXT_FONTS = [
-  'Arial',
-  'Georgia',
-  'Trebuchet MS',
-  'Verdana',
-  'Times New Roman',
-  'Courier New',
-  'Brush Script MT',
-  'Nunito Sans',
-]
-
 const TEXT_COLOR_PRESETS = [
-  { name: 'Black', value: '#17191c' },
-  { name: 'Slate', value: '#475467' },
-  { name: 'Gray', value: '#98a2b3' },
-  { name: 'White', value: '#ffffff' },
-  { name: 'Red', value: '#d92d20' },
-  { name: 'Orange', value: '#f79009' },
-  { name: 'Yellow', value: '#fdb022' },
-  { name: 'Green', value: '#12b76a' },
-  { name: 'Teal', value: '#0e9384' },
-  { name: 'Cyan', value: '#06aed4' },
-  { name: 'Blue', value: '#0875c9' },
-  { name: 'Purple', value: '#7f56d9' },
-  { name: 'Pink', value: '#c11574' },
-  { name: 'Brown', value: '#854a0e' },
+  { label: 'colorBlack', value: '#17191c' },
+  { label: 'colorSlate', value: '#475467' },
+  { label: 'colorGray', value: '#98a2b3' },
+  { label: 'colorWhite', value: '#ffffff' },
+  { label: 'colorRed', value: '#d92d20' },
+  { label: 'colorOrange', value: '#f79009' },
+  { label: 'colorYellow', value: '#fdb022' },
+  { label: 'colorGreen', value: '#12b76a' },
+  { label: 'colorTeal', value: '#0e9384' },
+  { label: 'colorCyan', value: '#06aed4' },
+  { label: 'colorBlue', value: '#0875c9' },
+  { label: 'colorPurple', value: '#7f56d9' },
+  { label: 'colorPink', value: '#c11574' },
+  { label: 'colorBrown', value: '#854a0e' },
 ] as const
 
 interface SelectedImage {
@@ -66,10 +55,6 @@ interface SelectedImage {
   name: string
   role: DesignImageRole
   objectUrl?: string
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function requiredElement<T extends HTMLElement>(
@@ -188,8 +173,10 @@ export class CustomForgeWorkbench {
   private readonly labels: WorkbenchLabels
   private readonly icons: Required<WorkbenchIconConfiguration>
   private readonly textPresets: WorkbenchTextPreset[]
+  private readonly fontFamilies: NormalizedWorkbenchOptions['fontFamilies']
   private readonly backgrounds: WorkbenchAsset[]
   private readonly elements: WorkbenchAsset[]
+  private readonly formatError: NormalizedWorkbenchOptions['formatError']
   private readonly layerList: HTMLOListElement
   private readonly deleteButton: HTMLButtonElement
   private readonly undoButton: HTMLButtonElement
@@ -243,8 +230,10 @@ export class CustomForgeWorkbench {
     this.labels = options.labels
     this.icons = options.icons
     this.textPresets = options.textPresets
+    this.fontFamilies = options.fontFamilies
     this.backgrounds = options.backgrounds
     this.elements = options.elements
+    this.formatError = options.formatError
     this.selectedTextPresetId = this.textPresets[0]?.id
     this.layerList = requiredElement(element, '[data-role="layer-list"]')
     this.deleteButton = this.action('delete-selection')
@@ -323,6 +312,12 @@ export class CustomForgeWorkbench {
         editorHeight: normalized.editorHeight,
         historyLimit: normalized.historyLimit,
         product: normalized.product,
+        editorAriaLabel: normalized.labels.editorCanvas,
+        viewerAriaLabel: normalized.labels.viewerCanvas,
+        defaultText: normalized.labels.defaultText,
+        textObjectName: normalized.labels.textObject,
+        imageObjectName: normalized.labels.imageObject,
+        backgroundObjectName: normalized.labels.backgroundObject,
       })
       return new CustomForgeWorkbench(host, element, customizer, normalized)
     } catch (error) {
@@ -420,11 +415,14 @@ export class CustomForgeWorkbench {
         this.updateImageToolbar()
       }),
       this.customizer.on('historychange', () => this.updateHistoryButtons()),
-      this.customizer.on('status', ({ message }) =>
-        this.setStatus(this.localizeStatus(message)),
-      ),
+      this.customizer.on('status', ({ message }) => {
+        const localized = this.localizeStatus(message)
+        if (localized) {
+          this.setStatus(localized)
+        }
+      }),
       this.customizer.on('error', ({ error }) =>
-        this.setStatus(error.message, 'error'),
+        this.setStatus(this.formatError(error), 'error'),
       ),
     )
 
@@ -532,6 +530,23 @@ export class CustomForgeWorkbench {
       () => this.updateSelectedProductFile(),
       { signal },
     )
+    this.modelUrlInput.addEventListener(
+      'input',
+      () => this.modelUrlInput.setCustomValidity(''),
+      { signal },
+    )
+    for (const selector of [
+      '[data-role="texture-url"]',
+      '[data-role="mesh-name"]',
+    ]) {
+      requiredElement<HTMLInputElement>(this.element, selector).addEventListener(
+        'input',
+        (event) => {
+          (event.currentTarget as HTMLInputElement).setCustomValidity('')
+        },
+        { signal },
+      )
+    }
     this.designInput.addEventListener(
       'change',
       () => void this.loadSelectedDesign(),
@@ -886,14 +901,14 @@ export class CustomForgeWorkbench {
     this.redoButton.disabled = !this.customizer.canRedo()
   }
 
-  private localizeStatus(message: string): string {
+  private localizeStatus(message: string): string | undefined {
     switch (message) {
       case 'Loading design':
-        return this.labels.loadDesign
+        return this.labels.loadingDesign
       case 'Design loaded':
         return this.labels.designLoaded
       case 'Loading product':
-        return this.labels.loadProduct
+        return this.labels.loadingProduct
       case 'Remote product ready':
       case 'Demo product ready':
         return this.labels.productReady
@@ -902,7 +917,7 @@ export class CustomForgeWorkbench {
       case 'Redo complete':
         return this.labels.redoComplete
       default:
-        return message
+        return undefined
     }
   }
 
@@ -916,7 +931,10 @@ export class CustomForgeWorkbench {
 
     this.undoButton.disabled = true
     this.redoButton.disabled = true
-    this.setStatus(direction === 'undo' ? this.labels.undo : this.labels.redo, 'busy')
+    this.setStatus(
+      direction === 'undo' ? this.labels.undoing : this.labels.redoing,
+      'busy',
+    )
     try {
       const changed = direction === 'undo'
         ? await this.customizer.undo()
@@ -929,7 +947,7 @@ export class CustomForgeWorkbench {
         )
       }
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
     } finally {
       this.updateHistoryButtons()
     }
@@ -937,27 +955,33 @@ export class CustomForgeWorkbench {
 
   private saveDesign(): void {
     try {
-      downloadJson('customforge-design.json', this.customizer.saveDesign())
+      downloadJson(this.labels.designFilename, this.customizer.saveDesign())
       this.setStatus(this.labels.designSaved)
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
     }
   }
 
   private renderTextFontOptions(): void {
-    const fonts = new Set(DEFAULT_TEXT_FONTS)
-    this.textPresets.forEach((preset) => fonts.add(preset.fontFamily))
+    const fonts = new Map<string, string>(
+      this.fontFamilies.map((font) => [font.value, font.label] as const),
+    )
+    this.textPresets.forEach((preset) => {
+      if (!fonts.has(preset.fontFamily)) {
+        fonts.set(preset.fontFamily, preset.fontFamily)
+      }
+    })
 
     const mixed = document.createElement('option')
     mixed.value = ''
-    mixed.textContent = '—'
+    mixed.textContent = this.labels.mixedValue
     mixed.disabled = true
     this.textFontFamily.replaceChildren(
       mixed,
-      ...Array.from(fonts).map((fontFamily) => {
+      ...Array.from(fonts).map(([fontFamily, label]) => {
         const option = document.createElement('option')
         option.value = fontFamily
-        option.textContent = fontFamily
+        option.textContent = label
         option.style.fontFamily = fontFamily
         return option
       }),
@@ -1146,7 +1170,7 @@ export class CustomForgeWorkbench {
     )
     const buttons = TEXT_COLOR_PRESETS.map((preset) => {
       const button = document.createElement('button')
-      const label = `${this.labels.textColor}: ${preset.name}`
+      const label = `${this.labels.textColor}: ${this.labels[preset.label]}`
       button.className = 'customforge-workbench__text-color-swatch'
       button.type = 'button'
       button.dataset.textColor = preset.value
@@ -1193,7 +1217,7 @@ export class CustomForgeWorkbench {
       objects.forEach((object) => this.customizer.updateText(object.id, options))
       this.updateTextToolbar()
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
     }
   }
 
@@ -1624,14 +1648,9 @@ export class CustomForgeWorkbench {
       this.element,
       '[data-role="text-value"]',
     )
-    input.setCustomValidity('')
-    if (!this.textForm.reportValidity()) {
-      return
-    }
     const text = input.value.trim()
-    if (!text) {
-      input.setCustomValidity(this.labels.textInputLabel)
-      input.reportValidity()
+    input.setCustomValidity(text ? '' : this.labels.textRequired)
+    if (!this.textForm.reportValidity()) {
       return
     }
     const color = requiredElement<HTMLInputElement>(
@@ -1654,7 +1673,7 @@ export class CustomForgeWorkbench {
         : {}),
     })
     this.closeDialog(this.textDialog)
-    this.setStatus(this.labels.addTextConfirm)
+    this.setStatus(this.labels.textAdded)
   }
 
   private renderAssetPresets(): void {
@@ -1775,7 +1794,7 @@ export class CustomForgeWorkbench {
     }
 
     this.imageSubmitButton.disabled = true
-    this.setStatus(this.labels.addImage, 'busy')
+    this.setStatus(this.labels.addingImage, 'busy')
     try {
       await this.customizer.addImage({
         src: selection.src,
@@ -1783,9 +1802,9 @@ export class CustomForgeWorkbench {
         role: selection.role,
       })
       this.closeDialog(this.imageDialog)
-      this.setStatus(this.labels.addImageConfirm)
+      this.setStatus(this.labels.imageAdded)
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
       this.imageSubmitButton.disabled = false
     }
   }
@@ -1822,12 +1841,12 @@ export class CustomForgeWorkbench {
     }
 
     this.loadDesignButton.disabled = true
-    this.setStatus(this.labels.loadDesign, 'busy')
+    this.setStatus(this.labels.loadingDesign, 'busy')
     try {
       await this.customizer.loadDesign(JSON.parse(await file.text()))
       this.setStatus(this.labels.designLoaded)
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
     } finally {
       this.loadDesignButton.disabled = false
       this.designInput.value = ''
@@ -1860,9 +1879,48 @@ export class CustomForgeWorkbench {
   private updateSelectedProductFile(): void {
     const file = this.modelFileInput.files?.[0]
     const valid = !file || file.name.toLowerCase().endsWith('.glb')
-    this.modelFileInput.setCustomValidity(valid ? '' : this.labels.invalidModelFile)
+    const validationMessage = this.productSourceMode !== 'file'
+      ? ''
+      : !file
+        ? this.labels.modelFileRequired
+        : valid
+          ? ''
+          : this.labels.invalidModelFile
+    this.modelFileInput.setCustomValidity(validationMessage)
     requiredElement(this.element, '[data-role="model-file-name"]').textContent =
       file?.name ?? this.labels.noModelFileSelected
+  }
+
+  private validateProductForm(): void {
+    this.updateSelectedProductFile()
+
+    this.modelUrlInput.setCustomValidity('')
+    if (this.productSourceMode === 'url') {
+      this.modelUrlInput.setCustomValidity(
+        !this.modelUrlInput.value.trim()
+          ? this.labels.modelUrlRequired
+          : this.modelUrlInput.validity.typeMismatch
+            ? this.labels.invalidModelUrl
+            : '',
+      )
+    }
+
+    const textureUrl = requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="texture-url"]',
+    )
+    textureUrl.setCustomValidity('')
+    if (textureUrl.value.trim() && textureUrl.validity.typeMismatch) {
+      textureUrl.setCustomValidity(this.labels.invalidTextureUrl)
+    }
+
+    const surfaceMesh = requiredElement<HTMLInputElement>(
+      this.element,
+      '[data-role="mesh-name"]',
+    )
+    surfaceMesh.setCustomValidity(
+      surfaceMesh.value.trim() ? '' : this.labels.surfaceMeshRequired,
+    )
   }
 
   private setProductLoading(loading: boolean): void {
@@ -1874,7 +1932,7 @@ export class CustomForgeWorkbench {
     this.submitProductButton.dataset.loading = String(loading)
     this.submitProductButton.setAttribute('aria-busy', String(loading))
     label.textContent = loading
-      ? `${this.labels.loadProduct}...`
+      ? this.labels.loadingProduct
       : this.labels.loadProduct
   }
 
@@ -1887,14 +1945,14 @@ export class CustomForgeWorkbench {
 
   private async loadDemoProduct(): Promise<void> {
     this.setProductLoading(true)
-    this.setStatus(this.labels.loadProduct, 'busy')
+    this.setStatus(this.labels.loadingProduct, 'busy')
     try {
       await this.customizer.loadProduct({})
       this.replaceActiveProductObjectUrl()
       this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
     } finally {
       this.setProductLoading(false)
     }
@@ -1902,7 +1960,7 @@ export class CustomForgeWorkbench {
 
   private async loadProductFromDialog(event: SubmitEvent): Promise<void> {
     event.preventDefault()
-    this.updateSelectedProductFile()
+    this.validateProductForm()
     if (!this.remoteForm.reportValidity()) {
       return
     }
@@ -1912,7 +1970,7 @@ export class CustomForgeWorkbench {
       : undefined
     let pendingObjectUrl: string | undefined
     this.setProductLoading(true)
-    this.setStatus(this.labels.loadProduct, 'busy')
+    this.setStatus(this.labels.loadingProduct, 'busy')
     try {
       pendingObjectUrl = file ? URL.createObjectURL(file) : undefined
       await this.customizer.loadProduct({
@@ -1935,7 +1993,7 @@ export class CustomForgeWorkbench {
       this.closeDialog(this.productDialog)
       this.setStatus(this.labels.productReady)
     } catch (error) {
-      this.setStatus(errorMessage(error), 'error')
+      this.setStatus(this.formatError(error), 'error')
     } finally {
       if (pendingObjectUrl) {
         URL.revokeObjectURL(pendingObjectUrl)

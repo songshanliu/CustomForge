@@ -42,8 +42,23 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.labels.addText).toBe('Type')
     expect(options.labels.addImage).toBe('Image')
     expect(options.labels.setImageAsBackground).toBe('Set as background')
+    expect(options.labels.editorMode).toBe('2D')
+    expect(options.labels.modelUrlPlaceholder).toContain('product.glb')
     expect(options.theme.accent).toBe('#0055aa')
     expect(options.icons.enabled).toBe(false)
+  })
+
+  it('accepts localized font names and error messages', () => {
+    const options = normalizeWorkbenchOptions({
+      container: '#app',
+      fontFamilies: [{ value: 'Arial', label: '无衬线字体' }],
+      formatError: () => '加载失败',
+    })
+
+    expect(options.fontFamilies).toEqual([
+      { value: 'Arial', label: '无衬线字体' },
+    ])
+    expect(options.formatError(new Error('Failed'))).toBe('加载失败')
   })
 
   it('validates history and asset identifiers', () => {

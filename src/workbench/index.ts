@@ -33,6 +33,8 @@ export type {
   WorkbenchBranding,
   WorkbenchFeatureName,
   WorkbenchFeatures,
+  WorkbenchErrorFormatter,
+  WorkbenchFontFamily,
   WorkbenchIconConfiguration,
   WorkbenchIconName,
   WorkbenchLabels,

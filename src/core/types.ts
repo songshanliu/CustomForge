@@ -41,6 +41,24 @@ export interface CustomizerOptions {
 
   /** 可保留的撤销步骤数量，默认为 50 */
   historyLimit?: number
+
+  /** 二维编辑画布的无障碍名称，默认为 UV texture editor */
+  editorAriaLabel?: string
+
+  /** 三维产品画布的无障碍名称，默认为 Interactive 3D product preview */
+  viewerAriaLabel?: string
+
+  /** addText 未提供内容时使用的默认文字，默认为 Edit this text */
+  defaultText?: string
+
+  /** 空文字对象在图层工具中的默认名称，默认为 Text */
+  textObjectName?: string
+
+  /** 普通图片对象在图层工具中的默认名称，默认为 Image */
+  imageObjectName?: string
+
+  /** 背景图片对象在图层工具中的默认名称，默认为 Background */
+  backgroundObjectName?: string
 }
 
 /** 文字支持的水平对齐方式 */

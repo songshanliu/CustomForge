@@ -229,7 +229,15 @@ const workbench = await createWorkbench({
   labels: {
     addText: 'Typography',
     addImage: 'Artwork',
+    productDialogTitle: 'Choose a product model',
+    loadingProduct: 'Loading product...',
   },
+  fontFamilies: [
+    { value: 'Arial', label: 'Arial' },
+    { value: 'Georgia', label: 'Georgia' },
+  ],
+  formatError: (error) =>
+    error instanceof Error ? error.message : 'The operation failed',
   theme: {
     accent: '#0057b8',
     accentHover: '#003f87',
@@ -248,7 +256,13 @@ const workbench = await createWorkbench({
 
 The bundled CustomForge logo is used by default and can be replaced or hidden through `branding`
 
-`labels` replaces visible Workbench copy, `theme` maps to scoped CSS variables, and `icons` can disable built-in icons or replace individual semantic icons with image URLs
+`labels` covers every fixed Workbench label, Dialog message, placeholder, validation prompt, status, color name, download filename, and accessibility name. `fontFamilies`, `textPresets`, `assets`, and `branding` control the visible names generated from configurable data, while `formatError` converts model, image, UV, and Design JSON failures into user-facing copy
+
+CustomForge provides default English copy but does not own application locale state. Build the options from the host application's i18n system and create the Workbench with the active language pack. This keeps locale routing and fallback behavior in the consuming application instead of coupling the library to a specific i18n framework
+
+Use the exported `WorkbenchLabels` type when authoring a complete language pack; `WorkbenchOptions.labels` remains partial so applications only overriding a few terms are not forced to repeat the defaults
+
+`theme` maps to scoped CSS variables, and `icons` can disable built-in icons or replace individual semantic icons with image URLs
 
 The default UI font stack prefers the rounded `Nunito Sans` family and falls back to system sans-serif fonts
 

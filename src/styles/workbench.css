@@ -1074,8 +1074,9 @@
   border-radius: var(--cfw-control-radius);
 }
 
-.customforge-workbench__layer-action svg,
-.customforge-workbench__layer-action img {
+.customforge-workbench
+  .customforge-workbench__layer-action
+  [data-icon-slot] {
   width: 12px;
   height: 12px;
 }

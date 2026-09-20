@@ -23,10 +23,10 @@ export function createWorkbenchElement(): HTMLElement {
       <section class="customforge-workbench__panel customforge-workbench__panel--editor" data-region-label="editorTitle">
         <header class="customforge-workbench__panelbar" data-layout="editorHeader">
           <div class="customforge-workbench__panel-title">
-            <span class="customforge-workbench__panel-kicker">2D</span>
+            <span class="customforge-workbench__panel-kicker" data-label="editorMode"></span>
             <h1 data-label="editorTitle"></h1>
           </div>
-          <span class="customforge-workbench__resolution" data-role="resolution">1024 x 512</span>
+          <span class="customforge-workbench__resolution" data-role="resolution"></span>
         </header>
 
         <div class="customforge-workbench__toolbar" data-layout="toolbar" data-region-label="workbench" role="toolbar">
@@ -177,7 +177,7 @@ export function createWorkbenchElement(): HTMLElement {
       <section class="customforge-workbench__panel customforge-workbench__panel--viewer" data-region-label="viewerTitle">
         <header class="customforge-workbench__panelbar" data-layout="viewerHeader">
           <div class="customforge-workbench__panel-title">
-            <span class="customforge-workbench__panel-kicker">3D</span>
+            <span class="customforge-workbench__panel-kicker" data-label="viewerMode"></span>
             <h2 data-label="viewerTitle"></h2>
           </div>
           <button class="customforge-workbench__icon-button" data-action="reset-view" data-feature="resetView" data-control-label="resetView" type="button">
@@ -305,7 +305,7 @@ export function createWorkbenchElement(): HTMLElement {
               <span data-label="modelUrl"></span>
               <div class="customforge-workbench__input-shell">
                 <i data-customforge-icon="link-2" data-icon-slot="loadProduct"></i>
-                <input data-role="model-url" name="modelUrl" type="url" placeholder="https://example.com/product.glb" disabled>
+                <input data-role="model-url" name="modelUrl" type="url" data-placeholder-label="modelUrlPlaceholder" disabled>
               </div>
             </label>
           </section>
@@ -320,7 +320,7 @@ export function createWorkbenchElement(): HTMLElement {
                 <span data-label="textureUrl"></span>
                 <div class="customforge-workbench__input-shell">
                   <i data-customforge-icon="image-plus" data-icon-slot="addImage"></i>
-                  <input data-role="texture-url" name="textureUrl" type="url" placeholder="https://example.com/artwork.png">
+                  <input data-role="texture-url" name="textureUrl" type="url" data-placeholder-label="textureUrlPlaceholder">
                 </div>
                 <small data-label="textureUrlHint"></small>
               </label>

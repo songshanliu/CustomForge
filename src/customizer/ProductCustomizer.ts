@@ -54,8 +54,13 @@ export class ProductCustomizer {
       width: options.editorWidth ?? 1024,
       height: options.editorHeight ?? 512,
       historyLimit,
+      ariaLabel: options.editorAriaLabel,
+      defaultText: options.defaultText,
+      textObjectName: options.textObjectName,
+      imageObjectName: options.imageObjectName,
+      backgroundObjectName: options.backgroundObjectName,
     })
-    this.viewer = new ProductViewer(viewerHost)
+    this.viewer = new ProductViewer(viewerHost, options.viewerAriaLabel)
     this.textureBridge = new TextureBridge(
       this.editor,
       this.viewer,

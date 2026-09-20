@@ -225,7 +225,14 @@ const workbench = await createWorkbench({
   labels: {
     addText: '文字设计',
     addImage: '图片素材',
+    productDialogTitle: '选择商品模型',
+    loadingProduct: '正在加载商品……',
   },
+  fontFamilies: [
+    { value: 'Arial', label: '无衬线字体' },
+    { value: 'Georgia', label: '衬线字体' },
+  ],
+  formatError: () => '资源加载失败，请检查文件或网络连接',
   theme: {
     accent: '#0057b8',
     accentHover: '#003f87',
@@ -244,7 +251,13 @@ const workbench = await createWorkbench({
 
 默认使用包内的 CustomForge Logo，可以通过 `branding` 替换或隐藏
 
-`labels` 用于替换 Workbench 可见文案，`theme` 映射到限定作用域的 CSS 变量，`icons` 可以关闭内置图标或用图片地址替换指定语义图标
+`labels` 覆盖 Workbench 中所有固定标签、Dialog 文案、占位符、校验提示、状态、颜色名称、下载文件名和无障碍名称。由配置数据生成的可见名称分别通过 `fontFamilies`、`textPresets`、`assets` 和 `branding` 传入，模型、图片、UV 与 Design JSON 异常则通过 `formatError` 转换为面向用户的提示
+
+CustomForge 提供默认英文文案，但不接管应用的当前语言状态。宿主项目应从自身 i18n 系统生成配置，并使用当前语言包创建 Workbench，从而避免与 Vue I18n、React Intl 或其他国际化方案耦合
+
+编写完整语言包时可以使用导出的 `WorkbenchLabels` 类型进行字段完整性检查；`WorkbenchOptions.labels` 仍保持为可选字段集合，少量改词时无需重复全部默认值
+
+`theme` 映射到限定作用域的 CSS 变量，`icons` 可以关闭内置图标或用图片地址替换指定语义图标
 
 默认界面字体栈优先使用圆润的 `Nunito Sans`，不可用时回退到系统无衬线字体
 

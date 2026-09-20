@@ -104,6 +104,18 @@ export interface WorkbenchLabels {
   /** 三维查看区域标题 */
   viewerTitle: string
 
+  /** 二维编辑区域模式标识 */
+  editorMode: string
+
+  /** 三维查看区域模式标识 */
+  viewerMode: string
+
+  /** 二维编辑画布的无障碍名称 */
+  editorCanvas: string
+
+  /** 三维产品画布的无障碍名称 */
+  viewerCanvas: string
+
   /** 图层面板标题 */
   layers: string
 
@@ -224,11 +236,62 @@ export interface WorkbenchLabels {
   /** 文字输入占位文案 */
   textInputPlaceholder: string
 
+  /** 未提供文字内容时添加到画布的默认文字 */
+  defaultText: string
+
+  /** 文字内容为空时的校验提示 */
+  textRequired: string
+
   /** 文字排版预设区域标题 */
   textPresets: string
 
   /** 文字颜色字段标签 */
   textColor: string
+
+  /** 黑色预设名称 */
+  colorBlack: string
+
+  /** 深灰色预设名称 */
+  colorSlate: string
+
+  /** 灰色预设名称 */
+  colorGray: string
+
+  /** 白色预设名称 */
+  colorWhite: string
+
+  /** 红色预设名称 */
+  colorRed: string
+
+  /** 橙色预设名称 */
+  colorOrange: string
+
+  /** 黄色预设名称 */
+  colorYellow: string
+
+  /** 绿色预设名称 */
+  colorGreen: string
+
+  /** 青绿色预设名称 */
+  colorTeal: string
+
+  /** 青色预设名称 */
+  colorCyan: string
+
+  /** 蓝色预设名称 */
+  colorBlue: string
+
+  /** 紫色预设名称 */
+  colorPurple: string
+
+  /** 粉色预设名称 */
+  colorPink: string
+
+  /** 棕色预设名称 */
+  colorBrown: string
+
+  /** 多选对象属性值不一致时的占位文案 */
+  mixedValue: string
 
   /** 确认添加文字命令 */
   addTextConfirm: string
@@ -293,8 +356,20 @@ export interface WorkbenchLabels {
   /** 本地模型文件格式错误提示 */
   invalidModelFile: string
 
+  /** 尚未选择本地模型文件时的校验提示 */
+  modelFileRequired: string
+
   /** 模型地址字段标签 */
   modelUrl: string
+
+  /** 模型地址输入框占位文案 */
+  modelUrlPlaceholder: string
+
+  /** 模型地址为空时的校验提示 */
+  modelUrlRequired: string
+
+  /** 模型地址格式错误时的校验提示 */
+  invalidModelUrl: string
 
   /** 产品高级设置标题 */
   advancedProductOptions: string
@@ -302,11 +377,20 @@ export interface WorkbenchLabels {
   /** 基础纹理地址字段标签 */
   textureUrl: string
 
+  /** 基础纹理地址输入框占位文案 */
+  textureUrlPlaceholder: string
+
+  /** 基础纹理地址格式错误时的校验提示 */
+  invalidTextureUrl: string
+
   /** 基础纹理用途说明 */
   textureUrlHint: string
 
   /** 可定制 Mesh 字段标签 */
   surfaceMesh: string
+
+  /** 可定制 Mesh 名称为空时的校验提示 */
+  surfaceMeshRequired: string
 
   /** 可定制 Mesh 用途说明 */
   surfaceMeshHint: string
@@ -320,6 +404,21 @@ export interface WorkbenchLabels {
   /** 使用内置演示产品命令 */
   useDemo: string
 
+  /** 图片加载中的状态文案 */
+  addingImage: string
+
+  /** Design JSON 加载中的状态文案 */
+  loadingDesign: string
+
+  /** 产品加载中的状态文案 */
+  loadingProduct: string
+
+  /** 撤销执行中的状态文案 */
+  undoing: string
+
+  /** 重做执行中的状态文案 */
+  redoing: string
+
   /** 初始状态文案 */
   starting: string
 
@@ -328,6 +427,12 @@ export interface WorkbenchLabels {
 
   /** 设计保存成功状态文案 */
   designSaved: string
+
+  /** 文字添加成功状态文案 */
+  textAdded: string
+
+  /** 图片添加成功状态文案 */
+  imageAdded: string
 
   /** 设计加载成功状态文案 */
   designLoaded: string
@@ -343,6 +448,9 @@ export interface WorkbenchLabels {
 
   /** 多个对象数量格式，其中 {count} 会被替换 */
   objectCountMany: string
+
+  /** 保存 Design JSON 时使用的文件名 */
+  designFilename: string
 }
 
 /** Workbench 可覆盖的主题变量 */
@@ -454,6 +562,23 @@ export interface WorkbenchTextPreset {
   color: string
 }
 
+/** Workbench 字体选择器条目 */
+export interface WorkbenchFontFamily {
+  /** 写入文字对象的 CSS 字体族名称 */
+  value: string
+
+  /** 字体选择器中显示的名称 */
+  label: string
+}
+
+/**
+ * 将底层异常转换为用户可见文案
+ *
+ * @param error 模型、图片、UV 或 Design JSON 操作抛出的原始值
+ * @returns 应显示在 Workbench 状态区域的文案
+ */
+export type WorkbenchErrorFormatter = (error: unknown) => string
+
 /** Workbench 图片素材条目 */
 export interface WorkbenchAsset {
   /** 在对应素材集合内唯一的标识 */
@@ -519,8 +644,14 @@ export interface WorkbenchOptions {
   /** 替换内置文字排版预设，空数组表示不显示预设 */
   textPresets?: WorkbenchTextPreset[]
 
+  /** 替换字体选择器条目，预设使用但未列出的字体会以 CSS 字体族名称补充 */
+  fontFamilies?: WorkbenchFontFamily[]
+
   /** 图片 Dialog 使用的背景与装饰素材 */
   assets?: WorkbenchAssetLibrary
+
+  /** 将模型、图片和 Design JSON 异常转换为界面提示 */
+  formatError?: WorkbenchErrorFormatter
 }
 
 /** Workbench 功能控件名称 */

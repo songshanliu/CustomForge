@@ -50,8 +50,12 @@ export class ProductViewer {
 
   /**
    * @param host 三维查看器挂载容器
+   * @param ariaLabel 三维产品画布的无障碍名称
    */
-  constructor(host: HTMLElement) {
+  constructor(
+    host: HTMLElement,
+    ariaLabel = 'Interactive 3D product preview',
+  ) {
     this.host = host
     host.replaceChildren()
 
@@ -60,7 +64,7 @@ export class ProductViewer {
     this.renderer.outputColorSpace = SRGBColorSpace
     this.renderer.toneMapping = ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
-    this.renderer.domElement.setAttribute('aria-label', 'Interactive 3D product preview')
+    this.renderer.domElement.setAttribute('aria-label', ariaLabel)
     this.renderer.domElement.classList.add('customforge-viewer-canvas')
     host.append(this.renderer.domElement)
     host.dataset.renderState = 'pending'

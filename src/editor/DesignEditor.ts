@@ -40,6 +40,21 @@ interface DesignEditorOptions {
 
   /** 最多保留的撤销步骤数量 */
   historyLimit: number
+
+  /** 编辑画布的无障碍名称 */
+  ariaLabel?: string
+
+  /** 未提供内容时添加到画布的默认文字 */
+  defaultText?: string
+
+  /** 空文字对象的默认名称 */
+  textObjectName?: string
+
+  /** 普通图片对象的默认名称 */
+  imageObjectName?: string
+
+  /** 背景图片对象的默认名称 */
+  backgroundObjectName?: string
 }
 
 type RenderListener = () => void
@@ -74,6 +89,10 @@ export class DesignEditor {
   private readonly host: HTMLElement
   private readonly width: number
   private readonly height: number
+  private readonly defaultText: string
+  private readonly textObjectName: string
+  private readonly imageObjectName: string
+  private readonly backgroundObjectName: string
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
   private readonly historyListeners = new Set<HistoryListener>()
@@ -104,9 +123,13 @@ export class DesignEditor {
     this.host = host
     this.width = options.width
     this.height = options.height
+    this.defaultText = options.defaultText ?? 'Edit this text'
+    this.textObjectName = options.textObjectName ?? 'Text'
+    this.imageObjectName = options.imageObjectName ?? 'Image'
+    this.backgroundObjectName = options.backgroundObjectName ?? 'Background'
 
     const element = document.createElement('canvas')
-    element.setAttribute('aria-label', 'UV texture editor')
+    element.setAttribute('aria-label', options.ariaLabel ?? 'UV texture editor')
     host.replaceChildren(element)
 
     const canvas = new DesignCanvas(element, {
@@ -694,7 +717,7 @@ export class DesignEditor {
    */
   addText(options: AddTextOptions = {}): Textbox {
     this.flushHistoryCommit()
-    const text = new Textbox(options.text ?? 'Edit this text', {
+    const text = new Textbox(options.text ?? this.defaultText, {
       left: options.x ?? this.width * 0.18,
       top: options.y ?? this.height * 0.36,
       width: options.width ?? this.width * 0.42,
@@ -1145,9 +1168,14 @@ export class DesignEditor {
 
   private createObjectName(object: FabricObject): string {
     if (object instanceof Textbox) {
-      return object.text.trim().slice(0, 48) || 'Text'
+      return object.text.trim().slice(0, 48) || this.textObjectName
     }
-    return object instanceof FabricImage ? 'Image' : 'Object'
+    if (object instanceof FabricImage) {
+      return this.imageRoles.get(object) === 'background'
+        ? this.backgroundObjectName
+        : this.imageObjectName
+    }
+    return 'Object'
   }
 
   private applyObjectLock(object: FabricObject, locked: boolean): void {

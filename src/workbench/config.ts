@@ -4,6 +4,7 @@ import type {
   WorkbenchAsset,
   WorkbenchBranding,
   WorkbenchFeatures,
+  WorkbenchFontFamily,
   WorkbenchIconConfiguration,
   WorkbenchLabels,
   WorkbenchLayout,
@@ -71,11 +72,17 @@ export interface NormalizedWorkbenchOptions {
   /** 可用文字排版预设 */
   textPresets: WorkbenchTextPreset[]
 
+  /** 字体选择器条目 */
+  fontFamilies: WorkbenchFontFamily[]
+
   /** 可用背景素材 */
   backgrounds: WorkbenchAsset[]
 
   /** 可用装饰元素 */
   elements: WorkbenchAsset[]
+
+  /** 用户可见异常文案格式化函数 */
+  formatError: NonNullable<WorkbenchOptions['formatError']>
 }
 
 const defaultFeatures: WorkbenchFeatures = {
@@ -109,6 +116,10 @@ const defaultLabels: WorkbenchLabels = {
   workbench: 'Product customization studio',
   editorTitle: 'Design surface',
   viewerTitle: 'Product preview',
+  editorMode: '2D',
+  viewerMode: '3D',
+  editorCanvas: 'UV texture editor',
+  viewerCanvas: 'Interactive 3D product preview',
   layers: 'Layers',
   noObjects: 'No design objects',
   addText: 'Text',
@@ -149,8 +160,25 @@ const defaultLabels: WorkbenchLabels = {
   textDialogTitle: 'Add text',
   textInputLabel: 'Text',
   textInputPlaceholder: 'Make it yours',
+  defaultText: 'Edit this text',
+  textRequired: 'Enter text',
   textPresets: 'Style',
   textColor: 'Color',
+  colorBlack: 'Black',
+  colorSlate: 'Slate',
+  colorGray: 'Gray',
+  colorWhite: 'White',
+  colorRed: 'Red',
+  colorOrange: 'Orange',
+  colorYellow: 'Yellow',
+  colorGreen: 'Green',
+  colorTeal: 'Teal',
+  colorCyan: 'Cyan',
+  colorBlue: 'Blue',
+  colorPurple: 'Purple',
+  colorPink: 'Pink',
+  colorBrown: 'Brown',
+  mixedValue: '—',
   addTextConfirm: 'Add text',
   imageDialogEyebrow: 'Artwork',
   imageDialogTitle: 'Add image',
@@ -172,23 +200,38 @@ const defaultLabels: WorkbenchLabels = {
   chooseModelFile: 'Choose GLB file',
   noModelFileSelected: 'No file selected',
   invalidModelFile: 'Choose a .glb file',
+  modelFileRequired: 'Choose a GLB file',
   modelUrl: 'GLB or GLTF URL',
+  modelUrlPlaceholder: 'https://example.com/product.glb',
+  modelUrlRequired: 'Enter a model URL',
+  invalidModelUrl: 'Enter a valid model URL',
   advancedProductOptions: 'Advanced options',
   textureUrl: 'Base artwork URL (optional)',
+  textureUrlPlaceholder: 'https://example.com/artwork.png',
+  invalidTextureUrl: 'Enter a valid artwork URL',
   textureUrlHint: 'Placed beneath all editable objects',
   surfaceMesh: 'Printable mesh name',
+  surfaceMeshRequired: 'Enter a printable mesh name',
   surfaceMeshHint: 'The model mesh that receives the design; defaults to PrintArea',
   flipTexture: 'Flip texture vertically',
   flipTextureHint: 'Only enable this when the design appears upside down',
   useDemo: 'Use built-in demo',
+  addingImage: 'Adding image',
+  loadingDesign: 'Loading design',
+  loadingProduct: 'Loading product...',
+  undoing: 'Undoing',
+  redoing: 'Redoing',
   starting: 'Starting',
   productReady: 'Product ready',
   designSaved: 'Design saved',
+  textAdded: 'Text added',
+  imageAdded: 'Image added',
   designLoaded: 'Design loaded',
   undoComplete: 'Undo complete',
   redoComplete: 'Redo complete',
   objectCountOne: '{count} object',
   objectCountMany: '{count} objects',
+  designFilename: 'customforge-design.json',
 }
 
 const defaultTheme: WorkbenchTheme = {
@@ -246,6 +289,21 @@ const defaultTextPresets: WorkbenchTextPreset[] = [
   },
 ]
 
+const defaultFontFamilies: WorkbenchFontFamily[] = [
+  'Arial',
+  'Georgia',
+  'Trebuchet MS',
+  'Verdana',
+  'Times New Roman',
+  'Courier New',
+  'Brush Script MT',
+  'Nunito Sans',
+].map((fontFamily) => ({ value: fontFamily, label: fontFamily }))
+
+function defaultErrorFormatter(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {
   const resolved = value ?? fallback
   if (!Number.isInteger(resolved) || resolved < 1) {
@@ -290,6 +348,22 @@ function uniqueTextPresets(presets: WorkbenchTextPreset[]): WorkbenchTextPreset[
   })
 }
 
+function uniqueFontFamilies(fonts: WorkbenchFontFamily[]): WorkbenchFontFamily[] {
+  const values = new Set<string>()
+  return fonts.map((font) => {
+    const value = font.value.trim()
+    const label = font.label.trim()
+    if (!value || !label) {
+      throw new TypeError('Font families require value and label')
+    }
+    if (values.has(value)) {
+      throw new TypeError(`Font family value is duplicated: ${value}`)
+    }
+    values.add(value)
+    return { value, label }
+  })
+}
+
 function normalizeBranding(branding?: WorkbenchBranding): NormalizedWorkbenchBranding {
   return {
     logoUrl: branding?.logoUrl?.trim() || defaultLogoUrl,
@@ -326,6 +400,9 @@ export function normalizeWorkbenchOptions(
       sources: { ...options.icons?.sources },
     },
     textPresets: uniqueTextPresets(options.textPresets ?? defaultTextPresets),
+    fontFamilies: uniqueFontFamilies(
+      options.fontFamilies ?? defaultFontFamilies,
+    ),
     backgrounds: uniqueAssets(
       options.assets?.backgrounds ?? builtInAssetLibrary.backgrounds,
       'Background',
@@ -334,5 +411,6 @@ export function normalizeWorkbenchOptions(
       options.assets?.elements ?? builtInAssetLibrary.elements,
       'Element',
     ),
+    formatError: options.formatError ?? defaultErrorFormatter,
   }
 }
