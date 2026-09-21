@@ -6,6 +6,307 @@ body,
   margin: 0;
 }
 
+body {
+  background: #e8efec;
+}
+
 .package-contract-test {
   min-height: 640px;
+}
+
+.package-contract-test .customforge-workbench__topbar {
+  min-height: 64px;
+  padding: 10px 18px;
+  color: #f7fbf9;
+  background: #17352f;
+  border-bottom: 0;
+}
+
+.package-contract-test .customforge-workbench__brand {
+  gap: 12px;
+}
+
+.package-contract-test .customforge-workbench__brand-logo {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
+
+.package-contract-test .customforge-workbench__brand-copy strong {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 760;
+}
+
+.package-contract-test .customforge-workbench__brand-copy span {
+  color: #a9beb7;
+  font-size: 12px;
+}
+
+.package-contract-test
+  .customforge-workbench__topbar
+  .customforge-workbench__button--secondary {
+  color: #f7fbf9;
+  background: rgb(255 255 255 / 6%);
+  border-color: rgb(255 255 255 / 22%);
+}
+
+.package-contract-test
+  .customforge-workbench__topbar
+  .customforge-workbench__button--secondary:hover:not(:disabled) {
+  color: #17352f;
+  background: #d9f99d;
+  border-color: #d9f99d;
+}
+
+.package-contract-test .customforge-workbench__workspace {
+  grid-template-columns: minmax(0, 1.62fr) minmax(340px, 1fr);
+}
+
+.package-contract-test .customforge-workbench__panelbar {
+  min-height: 54px;
+  padding-right: 16px;
+  padding-left: 18px;
+}
+
+.package-contract-test .customforge-workbench__panel-kicker {
+  color: #0f766e;
+  font-weight: 800;
+}
+
+.package-contract-test .customforge-workbench__panelbar h1,
+.package-contract-test .customforge-workbench__panelbar h2 {
+  font-size: 15px;
+}
+
+.package-contract-test .customforge-workbench__layers-header {
+  color: #17352f;
+  background: #e7f4ef;
+}
+
+.package-contract-test .customforge-workbench__layer-list {
+  padding: 10px 8px;
+}
+
+.package-contract-test .customforge-workbench__layer-item {
+  min-height: 52px;
+  margin-bottom: 5px;
+  padding-right: 7px;
+  padding-left: 9px;
+  border-radius: 6px;
+}
+
+.package-contract-test .customforge-workbench__layer-item[data-selected="true"] {
+  background: #e7f4ef;
+  border-color: #b8d9cd;
+  box-shadow: inset -3px 0 0 #0f766e;
+}
+
+.package-contract-test .customforge-workbench__layer-item::before {
+  right: 2px;
+  left: auto;
+}
+
+.package-contract-test .customforge-workbench__layer-copy strong {
+  color: #17352f;
+  font-size: 13px;
+}
+
+.package-contract-test .customforge-workbench__layer-action {
+  border-radius: 5px;
+}
+
+@media (min-width: 980px) {
+  .package-contract-test .customforge-workbench__panel--editor {
+    grid-template-areas:
+      "editor-header editor-header"
+      "editor-toolbar editor-body";
+    grid-template-columns: 168px minmax(0, 1fr);
+    grid-template-rows: 54px minmax(0, 1fr);
+  }
+
+  .package-contract-test
+    .customforge-workbench__panel--editor
+    > .customforge-workbench__toolbar {
+    align-items: stretch;
+    align-content: start;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    padding: 14px 12px;
+    overflow: visible;
+    color: #eaf3ef;
+    background: #21443c;
+    border-right: 1px solid #17352f;
+    border-bottom: 0;
+  }
+
+  .package-contract-test .customforge-workbench__toolbar > * {
+    flex-shrink: 0;
+  }
+
+  .package-contract-test
+    .customforge-workbench__toolbar
+    > .customforge-workbench__extension-slot {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .package-contract-test .customforge-workbench__tool-group {
+    display: grid;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .package-contract-test
+    .customforge-workbench__tool-group[data-tool-group="history"],
+  .package-contract-test
+    .customforge-workbench__tool-group[data-tool-group="document"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .package-contract-test
+    .customforge-workbench__tool-group[data-tool-group="insert"] {
+    grid-template-columns: 1fr;
+  }
+
+  .package-contract-test .customforge-workbench__toolbar > .customforge-workbench__separator,
+  .package-contract-test
+    .customforge-workbench__text-toolbar
+    > .customforge-workbench__format-separator,
+  .package-contract-test
+    .customforge-workbench__image-toolbar
+    > .customforge-workbench__format-separator {
+    width: 100%;
+    height: 1px;
+    margin: 0;
+    background: rgb(255 255 255 / 15%);
+  }
+
+  .package-contract-test .customforge-workbench__toolbar .customforge-workbench__tool-button,
+  .package-contract-test .customforge-workbench__toolbar .customforge-workbench__icon-button {
+    width: 100%;
+    min-height: 36px;
+    color: #dce9e4;
+    border-color: rgb(255 255 255 / 7%);
+  }
+
+  .package-contract-test .customforge-workbench__toolbar .customforge-workbench__tool-button {
+    justify-content: flex-start;
+    padding: 0 11px;
+  }
+
+  .package-contract-test
+    .customforge-workbench__toolbar
+    :is(.customforge-workbench__tool-button, .customforge-workbench__icon-button):hover:not(:disabled) {
+    color: #ffffff;
+    background: rgb(255 255 255 / 10%);
+    border-color: rgb(255 255 255 / 12%);
+  }
+
+  .package-contract-test
+    .customforge-workbench__toolbar
+    :is(.customforge-workbench__tool-button, .customforge-workbench__icon-button):disabled {
+    color: rgb(220 233 228 / 32%);
+  }
+
+  .package-contract-test .customforge-workbench__layers-toggle[aria-expanded="true"],
+  .package-contract-test
+    .customforge-workbench__layers-toggle[aria-expanded="true"]:hover:not(:disabled) {
+    color: #17352f;
+    background: #d9f99d;
+    border-color: #d9f99d;
+  }
+
+  .package-contract-test .customforge-workbench__layer-count {
+    margin-left: auto;
+    color: inherit;
+    border-left-color: currentcolor;
+  }
+
+  .package-contract-test .customforge-workbench__text-toolbar,
+  .package-contract-test .customforge-workbench__image-toolbar {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+    gap: 7px;
+    color: #eaf3ef;
+  }
+
+  .package-contract-test .customforge-workbench__font-select,
+  .package-contract-test .customforge-workbench__format-number,
+  .package-contract-test .customforge-workbench__format-number input,
+  .package-contract-test .customforge-workbench__text-options,
+  .package-contract-test .customforge-workbench__text-options > summary {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .package-contract-test
+    .customforge-workbench__text-toolbar
+    > .customforge-workbench__format-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .package-contract-test
+    .customforge-workbench__text-toolbar
+    > .customforge-workbench__format-group
+    .customforge-workbench__format-button {
+    width: 100%;
+    color: #526660;
+  }
+
+  .package-contract-test .customforge-workbench__text-options-panel {
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: calc(100% + 13px);
+  }
+
+  .package-contract-test .customforge-workbench__editor-body {
+    grid-template-areas: "editor-stage layers";
+    grid-template-columns: minmax(0, 1fr) 0;
+  }
+
+  .package-contract-test[data-layers-expanded="true"]
+    .customforge-workbench__editor-body,
+  .package-contract-test[data-toolbar="hidden"][data-layers="visible"]
+    .customforge-workbench__editor-body {
+    grid-template-columns: minmax(0, 1fr) 224px;
+  }
+
+  .package-contract-test .customforge-workbench__layers {
+    border-right: 0;
+    border-left: 0 solid var(--cfw-line);
+  }
+
+  .package-contract-test[data-layers-expanded="true"]
+    .customforge-workbench__layers,
+  .package-contract-test[data-toolbar="hidden"][data-layers="visible"]
+    .customforge-workbench__layers {
+    border-right-width: 0;
+    border-left-width: 1px;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 980px) {
+  .package-contract-test .customforge-workbench__workspace {
+    grid-template-columns: minmax(0, 1.75fr) minmax(320px, 1fr);
+  }
+
+  .package-contract-test .customforge-workbench__panel--editor {
+    grid-template-columns: 144px minmax(0, 1fr);
+  }
+
+  .package-contract-test[data-layers-expanded="true"]
+    .customforge-workbench__editor-body,
+  .package-contract-test[data-toolbar="hidden"][data-layers="visible"]
+    .customforge-workbench__editor-body {
+    grid-template-columns: minmax(0, 1fr) 188px;
+  }
 }

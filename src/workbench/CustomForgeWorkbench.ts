@@ -10,7 +10,9 @@ import type {
 } from '../core/types'
 import { ProductCustomizer } from '../customizer/ProductCustomizer'
 import {
+  normalizeWorkbenchExtension,
   normalizeWorkbenchOptions,
+  type NormalizedWorkbenchExtensionButton,
   type NormalizedWorkbenchOptions,
 } from './config'
 import { renderWorkbenchIcons } from './icons'
@@ -18,6 +20,10 @@ import { createWorkbenchElement } from './template'
 import type {
   CustomForgeWorkbenchApi,
   WorkbenchAsset,
+  WorkbenchExtensionActionContext,
+  WorkbenchExtensionButton,
+  WorkbenchExtensionPlacement,
+  WorkbenchExtensionStateContext,
   WorkbenchFeatureName,
   WorkbenchFeatures,
   WorkbenchIconConfiguration,
@@ -32,8 +38,17 @@ import type {
 
 type ImageTab = 'upload' | 'backgrounds' | 'elements'
 type ProductSourceMode = 'file' | 'url'
+type WorkbenchExtensionSlot = Exclude<
+  WorkbenchExtensionPlacement,
+  'layerActions'
+>
 
 const DIALOG_CLOSE_DELAY_MS = 180
+const EXTENSION_SLOTS: readonly WorkbenchExtensionSlot[] = [
+  'globalActions',
+  'editorToolbar',
+  'selectionToolbar',
+]
 
 const TEXT_COLOR_PRESETS = [
   { label: 'colorBlack', value: '#17191c' },
@@ -179,6 +194,14 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
   private readonly fontFamilies: NormalizedWorkbenchOptions['fontFamilies']
   private readonly backgrounds: WorkbenchAsset[]
   private readonly elements: WorkbenchAsset[]
+  private readonly extensions = new Map<
+    string,
+    NormalizedWorkbenchExtensionButton
+  >()
+  private readonly pendingExtensions = new Map<
+    string,
+    NormalizedWorkbenchExtensionButton
+  >()
   private readonly formatError: NormalizedWorkbenchOptions['formatError']
   private readonly layerList: HTMLOListElement
   private readonly deleteButton: HTMLButtonElement
@@ -237,6 +260,9 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     this.fontFamilies = options.fontFamilies
     this.backgrounds = options.backgrounds
     this.elements = options.elements
+    options.extensions.forEach((extension) => {
+      this.extensions.set(extension.id, extension)
+    })
     this.formatError = options.formatError
     this.selectedTextPresetId = this.textPresets[0]?.id
     this.layerList = requiredElement(element, '[data-role="layer-list"]')
@@ -278,6 +304,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     this.renderTextPresets()
     this.renderTextColorPresets()
     this.renderAssetPresets()
+    this.renderExtensionSlots()
     this.bindEvents()
     this.applyVisibility()
     this.setImageTab('upload')
@@ -402,7 +429,114 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
   setTheme(theme: Partial<WorkbenchTheme>): WorkbenchTheme {
     this.theme = { ...this.theme, ...theme }
     applyTheme(this.element, this.theme)
+    this.refreshExtensions()
     return this.getTheme()
+  }
+
+  /** 返回当前已注册扩展按钮的独立配置快照 */
+  getExtensions(): WorkbenchExtensionButton[] {
+    return [...this.extensions.values()].map(({ classNames, ...extension }) => ({
+      ...extension,
+      className: classNames.length > 0 ? classNames.join(' ') : undefined,
+    }))
+  }
+
+  /**
+   * 注册扩展按钮并立即渲染到声明位置
+   *
+   * @param extension 扩展按钮配置
+   * @returns 仅在该注册仍为当前同 ID 项时将其移除的清理函数
+   * @throws ID、位置、文案、图标或回调配置无效以及 ID 重复时抛出错误
+   */
+  registerExtension(extension: WorkbenchExtensionButton): () => void {
+    const normalized = normalizeWorkbenchExtension(extension)
+    if (this.extensions.has(normalized.id)) {
+      throw new TypeError(`Extension id is duplicated: ${normalized.id}`)
+    }
+    this.extensions.set(normalized.id, normalized)
+    this.renderRegisteredExtensions()
+    return () => {
+      if (this.extensions.get(normalized.id) === normalized) {
+        this.removeExtension(normalized.id)
+      }
+    }
+  }
+
+  /** 按稳定 ID 移除扩展按钮并返回是否存在该注册 */
+  removeExtension(id: string): boolean {
+    const normalizedId = id.trim()
+    const extension = this.extensions.get(normalizedId)
+    if (!extension) {
+      return false
+    }
+    this.extensions.delete(normalizedId)
+    for (const [key, pendingExtension] of this.pendingExtensions) {
+      if (pendingExtension === extension) {
+        this.pendingExtensions.delete(key)
+      }
+    }
+    this.renderRegisteredExtensions()
+    return true
+  }
+
+  /** 使用最新核心状态重新计算所有扩展按钮 */
+  refreshExtensions(): void {
+    if (this.destroyed) {
+      return
+    }
+    const state = this.customizer.getState()
+    const objectsById = new Map(state.objects.map((object) => [object.id, object]))
+    const selection = state.selectedObjectIds
+      .map((id) => objectsById.get(id))
+      .filter((object): object is DesignObject => object !== undefined)
+
+    this.element
+      .querySelectorAll<HTMLButtonElement>('[data-extension-id]')
+      .forEach((button) => {
+        const extensionId = button.dataset.extensionId
+        const extension = extensionId
+          ? this.extensions.get(extensionId)
+          : undefined
+        if (!extension) {
+          button.remove()
+          return
+        }
+        const layerId = button.dataset.extensionLayerId
+        const layer = layerId ? objectsById.get(layerId) : undefined
+        const context: WorkbenchExtensionStateContext = {
+          workbench: this,
+          customizer: this.customizer,
+          state,
+          selection,
+          layer,
+        }
+        const hasRequiredContext =
+          (extension.placement !== 'selectionToolbar' || selection.length > 0) &&
+          (extension.placement !== 'layerActions' || layer !== undefined)
+        const visible = hasRequiredContext && this.resolveExtensionPredicate(
+          extension.visible,
+          context,
+          false,
+        )
+        const executionKey = this.extensionExecutionKey(extension.id, layer?.id)
+        const pending = this.pendingExtensions.get(executionKey) === extension
+        button.hidden = !visible
+        button.disabled = !visible || pending || this.resolveExtensionPredicate(
+          extension.disabled,
+          context,
+          true,
+        )
+        button.dataset.loading = String(pending)
+        button.setAttribute('aria-busy', String(pending))
+      })
+
+    EXTENSION_SLOTS.forEach((placement) => {
+      const slot = this.extensionSlot(placement)
+      slot.hidden = ![...slot.querySelectorAll<HTMLButtonElement>('button')]
+        .some((button) => !button.hidden)
+    })
+    this.updateLayerActionWidths()
+    this.updateRegionVisibility()
   }
 
   /**
@@ -428,6 +562,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     this.dialogCloseTimers.forEach((timer) => window.clearTimeout(timer))
     this.dialogCloseTimers.clear()
     this.abortController.abort()
+    this.pendingExtensions.clear()
     this.unsubscribe.splice(0).forEach((stop) => stop())
     this.customizer.destroy()
     this.replaceActiveProductObjectUrl()
@@ -443,6 +578,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         this.renderLayers()
         this.updateTextToolbar()
         this.updateImageToolbar()
+        this.refreshExtensions()
       }),
       this.customizer.on('selectionchange', ({ objectIds }) => {
         this.selectedObjectIds = new Set(objectIds)
@@ -450,8 +586,13 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         this.renderLayers()
         this.updateTextToolbar()
         this.updateImageToolbar()
+        this.refreshExtensions()
       }),
-      this.customizer.on('historychange', () => this.updateHistoryButtons()),
+      this.customizer.on('historychange', () => {
+        this.updateHistoryButtons()
+        this.refreshExtensions()
+      }),
+      this.customizer.on('viewchange', () => this.refreshExtensions()),
       this.customizer.on('status', ({ message }) => {
         const localized = this.localizeStatus(message)
         if (localized) {
@@ -640,6 +781,12 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
 
   private handleRootClick(event: MouseEvent): void {
     const target = event.target as Element
+    const extension = target.closest<HTMLButtonElement>('[data-extension-id]')
+    if (extension && !extension.disabled && !extension.hidden) {
+      void this.runExtension(extension, event)
+      return
+    }
+
     const textColor = target.closest<HTMLButtonElement>('[data-text-color]')
     if (textColor?.dataset.textColor) {
       this.setColorControl(this.textColor, textColor.dataset.textColor)
@@ -814,6 +961,192 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     }
   }
 
+  private extensionSlot(placement: WorkbenchExtensionSlot): HTMLElement {
+    return requiredElement(
+      this.element,
+      `[data-extension-slot="${placement}"]`,
+    )
+  }
+
+  private extensionsAt(
+    placement: WorkbenchExtensionPlacement,
+  ): NormalizedWorkbenchExtensionButton[] {
+    return [...this.extensions.values()]
+      .filter((extension) => extension.placement === placement)
+      .sort((left, right) => left.order - right.order)
+  }
+
+  private renderExtensionSlots(): void {
+    EXTENSION_SLOTS.forEach((placement) => {
+      this.extensionSlot(placement).replaceChildren(
+        ...this.extensionsAt(placement).map((extension) =>
+          this.createExtensionButton(extension),
+        ),
+      )
+    })
+  }
+
+  private renderRegisteredExtensions(): void {
+    this.renderExtensionSlots()
+    this.renderLayers(true)
+  }
+
+  private createExtensionButton(
+    extension: NormalizedWorkbenchExtensionButton,
+    layerId?: string,
+  ): HTMLButtonElement {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.classList.add(
+      'customforge-workbench__extension-button',
+      `customforge-workbench__extension-button--${extension.placement}`,
+      `customforge-workbench__extension-button--${extension.variant}`,
+      ...extension.classNames,
+    )
+    if (extension.placement === 'globalActions') {
+      button.classList.add('customforge-workbench__button')
+    } else if (extension.placement === 'layerActions') {
+      button.classList.add('customforge-workbench__layer-action')
+    } else {
+      button.classList.add('customforge-workbench__tool-button')
+    }
+    button.dataset.extensionId = extension.id
+    button.dataset.extensionPlacement = extension.placement
+    button.dataset.hasIcon = String(Boolean(extension.iconUrl && this.icons.enabled))
+    if (layerId) {
+      button.dataset.extensionLayerId = layerId
+    }
+    button.title = extension.label
+    button.setAttribute('aria-label', extension.label)
+
+    const showLabel = extension.showLabel || !this.icons.enabled
+    button.dataset.labelVisible = String(showLabel)
+    if (extension.iconUrl && this.icons.enabled) {
+      const icon = document.createElement('img')
+      icon.className = 'customforge-workbench__extension-icon'
+      icon.src = extension.iconUrl
+      icon.alt = ''
+      icon.setAttribute('aria-hidden', 'true')
+      button.append(icon)
+    }
+    const label = document.createElement('span')
+    label.className = showLabel
+      ? 'customforge-workbench__extension-label'
+      : 'customforge-workbench__icon-label'
+    label.textContent = extension.label
+    button.append(label)
+    return button
+  }
+
+  private resolveExtensionPredicate(
+    predicate: boolean | ((context: WorkbenchExtensionStateContext) => boolean),
+    context: WorkbenchExtensionStateContext,
+    fallback: boolean,
+  ): boolean {
+    try {
+      return typeof predicate === 'function'
+        ? Boolean(predicate(context))
+        : predicate
+    } catch (error) {
+      this.setStatus(this.formatError(error), 'error')
+      return fallback
+    }
+  }
+
+  private extensionExecutionKey(id: string, layerId?: string): string {
+    return layerId ? `${id}:${layerId}` : id
+  }
+
+  private updateLayerActionWidths(): void {
+    this.layerList
+      .querySelectorAll<HTMLElement>('[data-object-id]')
+      .forEach((item) => {
+        const actions = item.querySelector<HTMLElement>(
+          '.customforge-workbench__layer-actions',
+        )
+        if (!actions) {
+          return
+        }
+        const width = [...actions.children]
+          .filter((child): child is HTMLElement =>
+            child instanceof HTMLElement && !child.hidden,
+          )
+          .reduce((total, child) => total + child.getBoundingClientRect().width, 0)
+        const visibleActionCount = [...actions.children]
+          .filter((child) => child instanceof HTMLElement && !child.hidden)
+          .length
+        item.style.setProperty(
+          '--cfw-layer-action-width',
+          `${Math.ceil(width) + Math.max(visibleActionCount - 1, 0) + 7}px`,
+        )
+      })
+  }
+
+  private async runExtension(
+    button: HTMLButtonElement,
+    event: MouseEvent,
+  ): Promise<void> {
+    const extensionId = button.dataset.extensionId
+    const extension = extensionId
+      ? this.extensions.get(extensionId)
+      : undefined
+    if (!extension || this.destroyed) {
+      return
+    }
+
+    const state = this.customizer.getState()
+    const objectsById = new Map(state.objects.map((object) => [object.id, object]))
+    const selection = state.selectedObjectIds
+      .map((id) => objectsById.get(id))
+      .filter((object): object is DesignObject => object !== undefined)
+    const layerId = button.dataset.extensionLayerId
+    const layer = layerId ? objectsById.get(layerId) : undefined
+    const context: WorkbenchExtensionStateContext = {
+      workbench: this,
+      customizer: this.customizer,
+      state,
+      selection,
+      layer,
+    }
+    if (
+      (extension.placement === 'selectionToolbar' && selection.length === 0) ||
+      (extension.placement === 'layerActions' && !layer) ||
+      !this.resolveExtensionPredicate(extension.visible, context, false) ||
+      this.resolveExtensionPredicate(extension.disabled, context, true)
+    ) {
+      this.refreshExtensions()
+      return
+    }
+
+    const executionKey = this.extensionExecutionKey(extension.id, layer?.id)
+    if (this.pendingExtensions.get(executionKey) === extension) {
+      return
+    }
+    this.pendingExtensions.set(executionKey, extension)
+    this.refreshExtensions()
+
+    const actionContext: WorkbenchExtensionActionContext = {
+      ...context,
+      event,
+      anchor: button,
+      signal: this.abortController.signal,
+    }
+    try {
+      await extension.onClick(actionContext)
+    } catch (error) {
+      if (!this.destroyed && !this.abortController.signal.aborted) {
+        this.setStatus(this.formatError(error), 'error')
+      }
+    } finally {
+      if (this.pendingExtensions.get(executionKey) === extension) {
+        this.pendingExtensions.delete(executionKey)
+      }
+      if (!this.destroyed) {
+        this.refreshExtensions()
+      }
+    }
+  }
+
   private action(name: string): HTMLButtonElement {
     return requiredElement(this.element, `[data-action="${name}"]`)
   }
@@ -883,14 +1216,6 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
       !layersVisible ||
       (!historyVisible && !insertVisible && !documentVisible && !selectionVisible)
 
-    const toolbar = requiredElement<HTMLElement>(this.element, '[data-layout="toolbar"]')
-    toolbar.hidden =
-      !this.layout.toolbar ||
-      (!historyVisible &&
-        !insertVisible &&
-        !documentVisible &&
-        !selectionVisible &&
-        !layersVisible)
     this.element.dataset.toolbar = this.layout.toolbar ? 'visible' : 'hidden'
     this.element.dataset.layers = this.layout.layers ? 'visible' : 'hidden'
     this.element.dataset.layersExpanded =
@@ -901,14 +1226,44 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
       String(this.layout.layers && this.layersExpanded),
     )
 
-    const brandHidden = requiredElement(this.element, '[data-role="brand"]').hidden
-    const hasGlobalActions = this.features.loadRemoteProduct
-    const topbar = requiredElement<HTMLElement>(this.element, '[data-layout="header"]')
-    topbar.hidden = !this.layout.header || (brandHidden && !hasGlobalActions)
-
     renderWorkbenchIcons(this.element, this.icons)
     this.updateTextToolbar()
     this.updateImageToolbar()
+    this.refreshExtensions()
+  }
+
+  private updateRegionVisibility(): void {
+    const hasBuiltInToolbarControls =
+      this.features.undoRedo ||
+      this.features.addText ||
+      this.features.addImage ||
+      this.features.saveDesign ||
+      this.features.loadDesign ||
+      this.features.deleteSelection ||
+      this.layout.layers
+    const hasToolbarExtensions =
+      !this.extensionSlot('editorToolbar').hidden ||
+      !this.extensionSlot('selectionToolbar').hidden
+    const toolbar = requiredElement<HTMLElement>(
+      this.element,
+      '[data-layout="toolbar"]',
+    )
+    toolbar.hidden =
+      !this.layout.toolbar ||
+      (!hasBuiltInToolbarControls && !hasToolbarExtensions)
+
+    const brandHidden = requiredElement(
+      this.element,
+      '[data-role="brand"]',
+    ).hidden
+    const hasGlobalActions =
+      this.features.loadRemoteProduct ||
+      !this.extensionSlot('globalActions').hidden
+    const topbar = requiredElement<HTMLElement>(
+      this.element,
+      '[data-layout="header"]',
+    )
+    topbar.hidden = !this.layout.header || (brandHidden && !hasGlobalActions)
   }
 
   private toolGroup(name: string): HTMLElement {
@@ -931,6 +1286,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     this.layersExpanded = !this.layersExpanded
     this.element.dataset.layersExpanded = String(this.layersExpanded)
     this.layersToggle.setAttribute('aria-expanded', String(this.layersExpanded))
+    this.refreshExtensions()
   }
 
   private updateHistoryButtons(): void {
@@ -1416,6 +1772,11 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         'deleteSelection',
         this.labels.deleteLayer,
         'deleteSelection',
+      ),
+    )
+    actions.append(
+      ...this.extensionsAt('layerActions').map((extension) =>
+        this.createExtensionButton(extension, object.id),
       ),
     )
     item.append(selectButton, actions)

@@ -291,7 +291,71 @@ workbench.setLayout('header', true)
 workbench.setTheme({ accent: '#0057b8' })
 ```
 
-`workbench.getFeatures()`、`workbench.getLayout()` 和 `workbench.getTheme()` 返回互不影响的配置快照。`className` 只添加到当前 Workbench 根元素，宿主 CSS 可以精确作用于某个实例，而不需要依赖全局选择器。需要完全自定义界面时，应使用 `createCustomizer()`，不要查询或改写 Workbench 内部 DOM。
+### 向 Workbench 扩展业务按钮
+
+业务按钮应通过 `extensions` 注册，不要查询或改写 Workbench 内部 DOM。每个操作都会收到公开的 Workbench 与无界面 customizer 接口、最新状态快照、当前选区，并在需要时收到对应图层：
+
+```ts
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  className: 'store-customizer',
+  extensions: [
+    {
+      id: 'store.export-png',
+      placement: 'globalActions',
+      label: t('actions.exportPng'),
+      variant: 'primary',
+      className: 'store-export-command',
+      onClick: async ({ customizer, workbench, signal }) => {
+        const blob = await customizer.getTextureBlob()
+        if (!signal.aborted) {
+          workbench.setStatus(`${blob.size} bytes`)
+        }
+      },
+    },
+    {
+      id: 'store.straighten',
+      placement: 'selectionToolbar',
+      label: t('actions.straighten'),
+      visible: ({ selection }) => selection.length === 1,
+      disabled: ({ selection }) => selection.some(({ locked }) => locked),
+      onClick: ({ customizer, selection }) => {
+        selection.forEach(({ id }) => {
+          customizer.updateObjectTransform(id, { rotation: 0 })
+        })
+      },
+    },
+  ],
+})
+```
+
+| 挂载位置 | 适用场景 | 额外上下文 |
+| --- | --- | --- |
+| `globalActions` | 商品、导出或流程级命令 | 标准状态与选区 |
+| `editorToolbar` | 不要求选中对象的设计命令 | 标准状态与选区 |
+| `selectionToolbar` | 作用于当前选区的命令 | 没有选区时自动隐藏 |
+| `layerActions` | 在每个图层重复出现的紧凑命令 | `layer` 为当前行对象 |
+
+`visible` 和 `disabled` 可以是布尔值或状态判断函数。核心状态、选区、历史和视角事件发生后会自动重新计算；如果条件还依赖宿主应用状态，应调用 `workbench.refreshExtensions()`。返回 Promise 的操作会自动进入 loading 并禁用防重复点击；被拒绝的 Promise 会通过 `formatError` 转换后显示到现有状态区域。
+
+可以通过 `iconUrl`、`showLabel`、`variant`、`order` 和 `className` 控制表现。扩展按钮文案属于业务数据，应传入当前语言对应的字符串。更深层的 CSS 定制应同时使用 Workbench 的 `className` 和扩展自身的 `className` 限定作用域：
+
+```css
+.store-customizer .store-export-command {
+  text-transform: uppercase;
+}
+```
+
+初始化后也可以管理扩展。注册方法返回的清理函数只会移除由该次注册创建的项目：
+
+```ts
+const unregister = workbench.registerExtension(action)
+const actions = workbench.getExtensions()
+workbench.removeExtension('store.export-png')
+unregister()
+```
+
+`workbench.getFeatures()`、`workbench.getLayout()`、`workbench.getTheme()` 和 `workbench.getExtensions()` 返回互不影响的配置快照。`className` 只添加到当前 Workbench 根元素，宿主 CSS 可以精确作用于某个实例，而不需要依赖全局选择器。需要完全自定义界面时，应使用 `createCustomizer()`，不要查询或改写 Workbench 内部 DOM。
 
 | 功能开关 | 控制内容 |
 | --- | --- |

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeWorkbenchOptions } from './config'
+import type { WorkbenchExtensionButton } from './types'
 
 describe('normalizeWorkbenchOptions', () => {
   it('provides a complete default Workbench', () => {
@@ -19,6 +20,7 @@ describe('normalizeWorkbenchOptions', () => {
     expect(options.theme.fontFamily).toContain('Nunito Sans')
     expect(options.theme.controlRadius).toBe('4px')
     expect(options.icons).toEqual({ enabled: true, sources: {} })
+    expect(options.extensions).toEqual([])
     expect(options.textPresets).toHaveLength(4)
     expect(options.textPresets[0]).toMatchObject({ fontSize: 22, width: 220 })
     expect(options.elements.some((asset) => asset.id === 'customforge-logo')).toBe(true)
@@ -38,6 +40,17 @@ describe('normalizeWorkbenchOptions', () => {
         viewer: { backgroundColor: '#eeeeee' },
       },
       icons: { enabled: false },
+      extensions: [
+        {
+          id: 'acme.export',
+          placement: 'globalActions',
+          label: ' Export ',
+          iconUrl: ' /export.svg ',
+          className: 'store-command compact store-command',
+          order: 20,
+          onClick: () => undefined,
+        },
+      ],
     })
 
     expect(options.features.addText).toBe(false)
@@ -58,6 +71,19 @@ describe('normalizeWorkbenchOptions', () => {
       viewer: { backgroundColor: '#eeeeee' },
     })
     expect(options.icons.enabled).toBe(false)
+    expect(options.extensions).toHaveLength(1)
+    expect(options.extensions[0]).toMatchObject({
+      id: 'acme.export',
+      placement: 'globalActions',
+      label: 'Export',
+      iconUrl: '/export.svg',
+      showLabel: true,
+      variant: 'secondary',
+      order: 20,
+      classNames: ['store-command', 'compact'],
+      visible: true,
+      disabled: false,
+    })
   })
 
   it('accepts localized font names and error messages', () => {
@@ -89,5 +115,126 @@ describe('normalizeWorkbenchOptions', () => {
         },
       }),
     ).toThrow('Element asset id is duplicated: flower')
+
+    expect(() =>
+      normalizeWorkbenchOptions({
+        container: '#app',
+        extensions: [
+          {
+            id: 'duplicate',
+            placement: 'editorToolbar',
+            label: 'First',
+            onClick: () => undefined,
+          },
+          {
+            id: 'duplicate',
+            placement: 'globalActions',
+            label: 'Second',
+            onClick: () => undefined,
+          },
+        ],
+      }),
+    ).toThrow('Extension id is duplicated: duplicate')
+
+    expect(() =>
+      normalizeWorkbenchOptions({
+        container: '#app',
+        extensions: [
+          {
+            id: 'icon-only',
+            placement: 'editorToolbar',
+            label: 'Icon only',
+            showLabel: false,
+            onClick: () => undefined,
+          },
+        ],
+      }),
+    ).toThrow('must provide iconUrl')
+
+    expect(() =>
+      normalizeWorkbenchOptions({
+        container: '#app',
+        extensions: [
+          {
+            id: 'invalid id',
+            placement: 'editorToolbar',
+            label: 'Invalid',
+            onClick: () => undefined,
+          },
+        ],
+      }),
+    ).toThrow('Extension id must start with an alphanumeric character')
+
+    expect(() =>
+      normalizeWorkbenchOptions({
+        container: '#app',
+        extensions: [
+          {
+            id: 'invalid-order',
+            placement: 'editorToolbar',
+            label: 'Invalid order',
+            order: Number.POSITIVE_INFINITY,
+            onClick: () => undefined,
+          },
+        ],
+      }),
+    ).toThrow('order must be a finite number')
+
+    expect(() =>
+      normalizeWorkbenchOptions({
+        container: '#app',
+        extensions: [
+          {
+            id: 'invalid-placement',
+            placement: 'sidebar' as WorkbenchExtensionButton['placement'],
+            label: 'Invalid placement',
+            onClick: () => undefined,
+          },
+        ],
+      }),
+    ).toThrow('has an invalid placement')
+
+    expect(() =>
+      normalizeWorkbenchOptions({
+        container: '#app',
+        extensions: [
+          {
+            id: 'invalid-variant',
+            placement: 'editorToolbar',
+            label: 'Invalid variant',
+            variant: 'loud' as WorkbenchExtensionButton['variant'],
+            onClick: () => undefined,
+          },
+        ],
+      }),
+    ).toThrow('has an invalid variant')
+  })
+
+  it('preserves extension callbacks and applies compact layer defaults', () => {
+    const visible = () => true
+    const disabled = () => false
+    const onClick = async () => undefined
+    const options = normalizeWorkbenchOptions({
+      container: '#app',
+      extensions: [
+        {
+          id: 'layer.pin',
+          placement: 'layerActions',
+          label: 'Pin layer',
+          iconUrl: '/pin.svg',
+          visible,
+          disabled,
+          onClick,
+        },
+      ],
+    })
+
+    expect(options.extensions[0]).toMatchObject({
+      showLabel: false,
+      variant: 'plain',
+      visible,
+      disabled,
+      onClick,
+    })
   })
 })

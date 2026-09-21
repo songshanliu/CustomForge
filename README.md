@@ -296,7 +296,71 @@ workbench.setLayout('header', true)
 workbench.setTheme({ accent: '#0057b8' })
 ```
 
-`workbench.getFeatures()`, `workbench.getLayout()`, and `workbench.getTheme()` return independent snapshots. `className` is applied only to that Workbench root, so application CSS can target one instance without relying on a global selector. For a fully custom interface, use `createCustomizer()` instead of restyling or querying Workbench internals.
+### Extend the Workbench with application actions
+
+Register application-owned buttons through `extensions` instead of querying or rewriting Workbench DOM. Each action receives the public Workbench and headless customizer APIs, a current state snapshot, the current selection, and the target layer when applicable:
+
+```ts
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  className: 'store-customizer',
+  extensions: [
+    {
+      id: 'store.export-png',
+      placement: 'globalActions',
+      label: t('actions.exportPng'),
+      variant: 'primary',
+      className: 'store-export-command',
+      onClick: async ({ customizer, workbench, signal }) => {
+        const blob = await customizer.getTextureBlob()
+        if (!signal.aborted) {
+          workbench.setStatus(`${blob.size} bytes`)
+        }
+      },
+    },
+    {
+      id: 'store.straighten',
+      placement: 'selectionToolbar',
+      label: t('actions.straighten'),
+      visible: ({ selection }) => selection.length === 1,
+      disabled: ({ selection }) => selection.some(({ locked }) => locked),
+      onClick: ({ customizer, selection }) => {
+        selection.forEach(({ id }) => {
+          customizer.updateObjectTransform(id, { rotation: 0 })
+        })
+      },
+    },
+  ],
+})
+```
+
+| Placement | Intended use | Additional context |
+| --- | --- | --- |
+| `globalActions` | Product-, export-, or workflow-level commands | Standard state and selection |
+| `editorToolbar` | Design commands that do not require a selection | Standard state and selection |
+| `selectionToolbar` | Commands for the active selection | Hidden automatically without a selection |
+| `layerActions` | Compact commands repeated for each layer | `layer` contains that row's object |
+
+`visible` and `disabled` accept booleans or state predicates. Predicates refresh automatically after CustomForge state, selection, history, and view events; call `workbench.refreshExtensions()` when they also depend on host application state. Promise-returning actions enter a disabled loading state and rejected actions are passed through `formatError` to the existing status region.
+
+Use `iconUrl`, `showLabel`, `variant`, `order`, and `className` to control presentation. Extension labels are application data, so pass the active i18n string. Scope deeper CSS with the Workbench `className` and the extension's own `className`:
+
+```css
+.store-customizer .store-export-command {
+  text-transform: uppercase;
+}
+```
+
+Extensions can also be managed after initialization. The cleanup function only removes the registration that created it:
+
+```ts
+const unregister = workbench.registerExtension(action)
+const actions = workbench.getExtensions()
+workbench.removeExtension('store.export-png')
+unregister()
+```
+
+`workbench.getFeatures()`, `workbench.getLayout()`, `workbench.getTheme()`, and `workbench.getExtensions()` return independent snapshots. `className` is applied only to that Workbench root, so application CSS can target one instance without relying on a global selector. For a fully custom interface, use `createCustomizer()` instead of restyling or querying Workbench internals.
 
 | Feature switch | Controls |
 | --- | --- |

@@ -276,6 +276,14 @@ assert(
 assert(workbenchDeclaration.includes('WorkbenchTextPreset'), 'Workbench text preset type is missing')
 assert(workbenchDeclaration.includes('WorkbenchAsset'), 'Workbench asset type is missing')
 assert(
+  workbenchDeclaration.includes('WorkbenchExtensionButton'),
+  'Workbench extension button type is missing',
+)
+assert(
+  workbenchDeclaration.includes('WorkbenchExtensionPlacement'),
+  'Workbench extension placement type is missing',
+)
+assert(
   workbenchDeclaration.includes('CustomForgeWorkbenchApi'),
   'Workbench API contract is missing',
 )
@@ -285,6 +293,22 @@ const workbenchTypesDeclaration = await readProjectFile(
 assert(
   workbenchTypesDeclaration.includes('setTheme'),
   'Workbench runtime theme API is missing',
+)
+assert(
+  workbenchTypesDeclaration.includes('registerExtension'),
+  'Workbench extension registration API is missing',
+)
+assert(
+  workbenchTypesDeclaration.includes('getExtensions'),
+  'Workbench extension query API is missing',
+)
+assert(
+  workbenchTypesDeclaration.includes('removeExtension'),
+  'Workbench extension removal API is missing',
+)
+assert(
+  workbenchTypesDeclaration.includes('refreshExtensions'),
+  'Workbench extension refresh API is missing',
 )
 assert(!workbenchDeclaration.includes('/demo/'), 'Demo type leaked into Workbench declaration')
 

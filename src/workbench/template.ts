@@ -12,6 +12,7 @@ export function createWorkbenchElement(): HTMLElement {
         </span>
       </div>
       <div class="customforge-workbench__global-actions">
+        <div class="customforge-workbench__extension-slot" data-extension-slot="globalActions"></div>
         <button class="customforge-workbench__button customforge-workbench__button--secondary" data-action="load-remote" data-feature="loadRemoteProduct" data-control-label="loadProduct" type="button">
           <i data-customforge-icon="upload" data-icon-slot="loadProduct"></i>
           <span data-label="loadProduct"></span>
@@ -51,6 +52,7 @@ export function createWorkbenchElement(): HTMLElement {
               <span data-label="addImage"></span>
             </button>
           </div>
+          <div class="customforge-workbench__extension-slot" data-extension-slot="editorToolbar"></div>
           <span class="customforge-workbench__separator" data-tool-group="document-separator" aria-hidden="true"></span>
           <div class="customforge-workbench__tool-group" data-tool-group="document">
             <button class="customforge-workbench__icon-button" data-action="save-design" data-feature="saveDesign" data-control-label="saveDesign" type="button">
@@ -67,6 +69,7 @@ export function createWorkbenchElement(): HTMLElement {
             <i data-customforge-icon="trash-2" data-icon-slot="deleteSelection"></i>
             <span class="customforge-workbench__icon-label" data-label="deleteSelection"></span>
           </button>
+          <div class="customforge-workbench__extension-slot" data-extension-slot="selectionToolbar"></div>
 
           <span class="customforge-workbench__separator" data-tool-group="layers-separator" aria-hidden="true"></span>
           <button class="customforge-workbench__tool-button customforge-workbench__layers-toggle" data-action="toggle-layers" data-control-label="layers" data-role="layers-toggle" type="button" aria-expanded="false">

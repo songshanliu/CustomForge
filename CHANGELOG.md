@@ -12,6 +12,7 @@ All notable changes to CustomForge will be documented in this file
 - Add stable `ProductCustomizerApi` and `CustomForgeWorkbenchApi` contracts for headless and default-UI integrations
 - Expose state snapshots, printable bounds, multi-selection, object transforms, PNG Data URL and Blob output, and 3D view persistence
 - Add instance-scoped Workbench classes, runtime theme access, and configurable editor and viewer drawing appearance
+- Add validated Workbench extension buttons with stable global, editor, selection, and layer action placements
 
 ### Changed
 

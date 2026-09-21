@@ -2,6 +2,8 @@
 
 This standalone project installs CustomForge only from the generated local npm tarball. It verifies both package entry points, public interface declarations, scoped styles, runtime assets, and the production browser bundle.
 
+The page also acts as a host customization example. It supplies a different logo, brand copy, labels, theme, and canvas appearance through public options, then uses the instance `className` to scope a desktop layout with a left tool rail and a right-side layer panel. It registers extension commands in all four stable button placements and exercises synchronous state predicates, asynchronous loading, selection context, and layer context. The package source and Workbench DOM are not modified for this example.
+
 ```powershell
 cd D:\projects\3DRendering\core_code
 pnpm pack:local

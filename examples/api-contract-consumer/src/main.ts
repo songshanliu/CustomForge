@@ -6,9 +6,80 @@ import {
 import {
   createWorkbench,
   type CustomForgeWorkbenchApi,
+  type WorkbenchExtensionButton,
 } from 'customforge/workbench'
 import 'customforge/style.css'
 import './styles.css'
+
+const brandLogoUrl = `data:image/svg+xml,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+    <rect width="48" height="48" rx="12" fill="#17352f"/>
+    <path d="M12 34V14l24 20V14" fill="none" stroke="#d9f99d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="36" cy="12" r="4" fill="#72d6bc"/>
+  </svg>
+`)}`
+
+const extensionButtons: WorkbenchExtensionButton[] = [
+  {
+    id: 'northline.png-snapshot',
+    placement: 'globalActions',
+    label: 'PNG snapshot',
+    variant: 'primary',
+    order: 10,
+    onClick: async ({ customizer, workbench }) => {
+      const blob = await customizer.getTextureBlob()
+      workbench.setStatus(`PNG snapshot ready (${blob.size} bytes)`)
+    },
+  },
+  {
+    id: 'northline.select-all',
+    placement: 'editorToolbar',
+    label: 'Select all',
+    order: 10,
+    disabled: ({ state }) =>
+      state.objects.filter((object) => object.visible !== false).length < 2,
+    onClick: ({ customizer, state }) => {
+      customizer.selectObjects(
+        state.objects
+          .filter((object) => object.visible !== false)
+          .map((object) => object.id),
+      )
+    },
+  },
+  {
+    id: 'northline.straighten',
+    placement: 'selectionToolbar',
+    label: 'Straighten',
+    order: 10,
+    visible: ({ selection }) =>
+      selection.some((object) => object.transform.rotation !== 0),
+    disabled: ({ selection }) =>
+      selection.some((object) => object.locked === true),
+    onClick: ({ customizer, selection }) => {
+      selection.forEach((object) => {
+        customizer.updateObjectTransform(object.id, { rotation: 0 })
+      })
+    },
+  },
+  {
+    id: 'northline.center-layer',
+    placement: 'layerActions',
+    label: 'Center',
+    order: 10,
+    disabled: ({ layer }) =>
+      !layer || layer.locked === true ||
+      (layer.type === 'image' && layer.role === 'background'),
+    onClick: ({ customizer, layer, state }) => {
+      if (!layer) {
+        return
+      }
+      customizer.updateObjectTransform(layer.id, {
+        x: state.printableBounds.left + state.printableBounds.width / 2,
+        y: state.printableBounds.top + state.printableBounds.height / 2,
+      })
+    },
+  },
+]
 
 async function createHeadless(
   editor: HTMLElement,
@@ -28,19 +99,48 @@ const workbench: CustomForgeWorkbenchApi = await createWorkbench({
   container: '#app',
   className: 'package-contract-test',
   branding: {
-    title: 'Package API test',
-    subtitle: 'Installed from the local npm artifact',
+    logoUrl: brandLogoUrl,
+    logoAlt: 'Northline Studio',
+    title: 'Northline Studio',
+    subtitle: 'Custom goods workshop',
+  },
+  labels: {
+    editorTitle: 'Artwork desk',
+    viewerTitle: 'Live mockup',
+    layers: 'Objects',
+  },
+  theme: {
+    ink: '#15231f',
+    muted: '#64736d',
+    border: '#d6e0dc',
+    surface: '#ffffff',
+    surfaceMuted: '#f3f7f5',
+    stage: '#e8efec',
+    accent: '#0f766e',
+    accentHover: '#0b5e58',
+    accentContrast: '#ffffff',
+    danger: '#b5473d',
+    controlRadius: '7px',
   },
   appearance: {
-    editor: { controlSize: 6, objectBorder: '#0057b8' },
-    viewer: { backgroundColor: '#f4f4f5' },
+    editor: {
+      controlSize: 6,
+      objectBorder: '#0f766e',
+      controlBorder: '#0f766e',
+      selectionBorder: '#0f766e',
+      selectionFill: 'rgba(15, 118, 110, 0.1)',
+      uvFill: 'rgba(15, 118, 110, 0.06)',
+      uvBoundary: '#dc6b4e',
+    },
+    viewer: { backgroundColor: '#e8efec' },
   },
+  extensions: extensionButtons,
 })
 
 const customizer: ProductCustomizerApi = workbench.customizer
 const text = customizer.addText({
-  text: 'PACKAGE API',
-  name: 'Contract label',
+  text: 'NORTHLINE',
+  name: 'Front artwork',
   x: 160,
   y: 210,
   fontSize: 48,
@@ -67,7 +167,7 @@ const stopViewChange = customizer.on('viewchange', ({ position }) => {
 
 workbench.setFeature('textFormatting', true)
 workbench.setLayout('layers', true)
-workbench.setTheme({ accent: '#0057b8', accentHover: '#00458f' })
+workbench.setTheme({ accent: '#0f766e', accentHover: '#0b5e58' })
 workbench.setStatus(
   `${state.objects.length} object, ${textureBlob.size} byte PNG`,
 )
@@ -82,6 +182,7 @@ document.body.dataset.themeAccent = workbench.getTheme().accent
 document.body.dataset.featureCount =
   String(Object.keys(workbench.getFeatures()).length)
 document.body.dataset.layoutCount = String(Object.keys(workbench.getLayout()).length)
+document.body.dataset.extensionCount = String(workbench.getExtensions().length)
 
 window.addEventListener('beforeunload', () => {
   stopViewChange()

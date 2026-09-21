@@ -3,6 +3,10 @@ import { builtInAssetLibrary } from './assets/catalog'
 import type {
   WorkbenchAsset,
   WorkbenchBranding,
+  WorkbenchExtensionButton,
+  WorkbenchExtensionPlacement,
+  WorkbenchExtensionPredicate,
+  WorkbenchExtensionVariant,
   WorkbenchFeatures,
   WorkbenchFontFamily,
   WorkbenchIconConfiguration,
@@ -87,8 +91,45 @@ export interface NormalizedWorkbenchOptions {
   /** 可用装饰元素 */
   elements: WorkbenchAsset[]
 
+  /** 完成校验和默认值补全的扩展按钮 */
+  extensions: NormalizedWorkbenchExtensionButton[]
+
   /** 用户可见异常文案格式化函数 */
   formatError: NonNullable<WorkbenchOptions['formatError']>
+}
+
+/** Workbench 内部使用的完整扩展按钮配置 */
+export interface NormalizedWorkbenchExtensionButton
+  extends Omit<
+    WorkbenchExtensionButton,
+    | 'className'
+    | 'iconUrl'
+    | 'showLabel'
+    | 'variant'
+    | 'order'
+    | 'visible'
+    | 'disabled'
+  > {
+  /** 清理空白后的可选图标地址 */
+  iconUrl?: string
+
+  /** 是否在图标旁显示文案 */
+  showLabel: boolean
+
+  /** 按钮视觉语义 */
+  variant: WorkbenchExtensionVariant
+
+  /** 同一位置内的升序排列值 */
+  order: number
+
+  /** 添加到按钮元素的宿主 CSS 类名 */
+  classNames: string[]
+
+  /** 固定或动态可见条件 */
+  visible: boolean | WorkbenchExtensionPredicate
+
+  /** 固定或动态禁用条件 */
+  disabled: boolean | WorkbenchExtensionPredicate
 }
 
 const defaultFeatures: WorkbenchFeatures = {
@@ -358,6 +399,115 @@ function normalizeClassNames(value?: string): string[] {
   return [...new Set(value?.trim().split(/\s+/).filter(Boolean) ?? [])]
 }
 
+const extensionPlacements = new Set<WorkbenchExtensionPlacement>([
+  'globalActions',
+  'editorToolbar',
+  'selectionToolbar',
+  'layerActions',
+])
+
+const extensionVariants = new Set<WorkbenchExtensionVariant>([
+  'primary',
+  'secondary',
+  'plain',
+  'danger',
+])
+
+function normalizeExtensionPredicate(
+  value: boolean | WorkbenchExtensionPredicate | undefined,
+  fallback: boolean,
+  field: 'visible' | 'disabled',
+): boolean | WorkbenchExtensionPredicate {
+  if (value === undefined) {
+    return fallback
+  }
+  if (typeof value !== 'boolean' && typeof value !== 'function') {
+    throw new TypeError(`Extension ${field} must be a boolean or function`)
+  }
+  return value
+}
+
+/**
+ * 校验并补全单个 Workbench 扩展按钮配置
+ *
+ * @param extension 外部扩展按钮配置
+ * @returns 可直接渲染的内部配置
+ */
+export function normalizeWorkbenchExtension(
+  extension: WorkbenchExtensionButton,
+): NormalizedWorkbenchExtensionButton {
+  const id = extension.id.trim()
+  const label = extension.label.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) {
+    throw new TypeError(
+      'Extension id must start with an alphanumeric character and contain only letters, numbers, dots, underscores, or hyphens',
+    )
+  }
+  if (!extensionPlacements.has(extension.placement)) {
+    throw new TypeError(`Extension ${id} has an invalid placement`)
+  }
+  if (!label) {
+    throw new TypeError(`Extension ${id} requires a label`)
+  }
+  if (typeof extension.onClick !== 'function') {
+    throw new TypeError(`Extension ${id} requires an onClick function`)
+  }
+
+  const iconUrl = extension.iconUrl?.trim() || undefined
+  const showLabel = extension.showLabel ??
+    (extension.placement !== 'layerActions' || iconUrl === undefined)
+  if (!showLabel && !iconUrl) {
+    throw new TypeError(
+      `Extension ${id} must provide iconUrl when showLabel is false`,
+    )
+  }
+
+  const variant = extension.variant ??
+    (extension.placement === 'globalActions' ? 'secondary' : 'plain')
+  if (!extensionVariants.has(variant)) {
+    throw new TypeError(`Extension ${id} has an invalid variant`)
+  }
+
+  const order = extension.order ?? 0
+  if (!Number.isFinite(order)) {
+    throw new TypeError(`Extension ${id} order must be a finite number`)
+  }
+
+  return {
+    id,
+    placement: extension.placement,
+    label,
+    iconUrl,
+    showLabel,
+    variant,
+    order,
+    classNames: normalizeClassNames(extension.className),
+    visible: normalizeExtensionPredicate(extension.visible, true, 'visible'),
+    disabled: normalizeExtensionPredicate(extension.disabled, false, 'disabled'),
+    onClick: extension.onClick,
+  }
+}
+
+/**
+ * 校验 Workbench 扩展按钮集合并拒绝重复 ID
+ *
+ * @param extensions 外部扩展按钮集合
+ * @returns 保持声明顺序的完整内部配置
+ */
+export function normalizeWorkbenchExtensions(
+  extensions: readonly WorkbenchExtensionButton[],
+): NormalizedWorkbenchExtensionButton[] {
+  const ids = new Set<string>()
+  return extensions.map((extension) => {
+    const normalized = normalizeWorkbenchExtension(extension)
+    if (ids.has(normalized.id)) {
+      throw new TypeError(`Extension id is duplicated: ${normalized.id}`)
+    }
+    ids.add(normalized.id)
+    return normalized
+  })
+}
+
 function uniqueFontFamilies(fonts: WorkbenchFontFamily[]): WorkbenchFontFamily[] {
   const values = new Set<string>()
   return fonts.map((font) => {
@@ -423,6 +573,7 @@ export function normalizeWorkbenchOptions(
       options.assets?.elements ?? builtInAssetLibrary.elements,
       'Element',
     ),
+    extensions: normalizeWorkbenchExtensions(options.extensions ?? []),
     formatError: options.formatError ?? defaultErrorFormatter,
   }
 }

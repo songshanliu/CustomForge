@@ -1,6 +1,8 @@
 import type { ProductCustomizerApi } from '../core/api'
 import type {
   CustomizerAppearance,
+  CustomizerState,
+  DesignObject,
   ElementTarget,
   ProductConfiguration,
 } from '../core/types'
@@ -611,6 +613,97 @@ export interface WorkbenchAssetLibrary {
   elements?: WorkbenchAsset[]
 }
 
+/** Workbench 扩展按钮可挂载的稳定位置 */
+export type WorkbenchExtensionPlacement =
+  | 'globalActions'
+  | 'editorToolbar'
+  | 'selectionToolbar'
+  | 'layerActions'
+
+/** Workbench 扩展按钮的视觉语义 */
+export type WorkbenchExtensionVariant =
+  | 'primary'
+  | 'secondary'
+  | 'plain'
+  | 'danger'
+
+/** 扩展按钮判断显示和禁用状态时接收的独立业务快照 */
+export interface WorkbenchExtensionStateContext {
+  /** 当前 Workbench 公共接口 */
+  workbench: CustomForgeWorkbenchApi
+
+  /** 当前无界面核心公共接口 */
+  customizer: ProductCustomizerApi
+
+  /** 计算本轮扩展状态时取得的核心状态快照 */
+  state: CustomizerState
+
+  /** 按画布层级排列的当前选中对象快照 */
+  selection: DesignObject[]
+
+  /** 当前图层对象，仅 layerActions 位置提供 */
+  layer?: DesignObject
+}
+
+/** 扩展按钮执行点击处理时接收的上下文 */
+export interface WorkbenchExtensionActionContext
+  extends WorkbenchExtensionStateContext {
+  /** 触发扩展命令的原始鼠标事件 */
+  event: MouseEvent
+
+  /** 可用于定位菜单、浮层或读取按钮尺寸的实际按钮元素 */
+  anchor: HTMLButtonElement
+
+  /** Workbench 销毁时会中止的信号，异步扩展应主动响应 */
+  signal: AbortSignal
+}
+
+/** 根据最新 Workbench 状态计算扩展按钮布尔状态的函数 */
+export type WorkbenchExtensionPredicate = (
+  context: WorkbenchExtensionStateContext,
+) => boolean
+
+/** 扩展按钮执行的同步或异步命令 */
+export type WorkbenchExtensionAction = (
+  context: WorkbenchExtensionActionContext,
+) => void | Promise<void>
+
+/** 可注册到默认 Workbench 稳定位置的扩展按钮 */
+export interface WorkbenchExtensionButton {
+  /** 当前 Workbench 内唯一的稳定标识，必须以字母或数字开头，且只允许字母、数字、点、下划线和连字符 */
+  id: string
+
+  /** 按钮挂载位置 */
+  placement: WorkbenchExtensionPlacement
+
+  /** 可见文案、Tooltip 和无障碍名称 */
+  label: string
+
+  /** 自定义装饰图标地址，支持普通 URL、Data URL 和 Blob URL；Blob URL 的释放由调用方负责 */
+  iconUrl?: string
+
+  /** 是否显示文字，默认除紧凑图层操作外均为 true；隐藏文字时必须提供 iconUrl */
+  showLabel?: boolean
+
+  /** 按钮视觉语义，全局操作默认为 secondary，其他位置默认为 plain */
+  variant?: WorkbenchExtensionVariant
+
+  /** 同一挂载位置内的升序排列值，默认为 0 */
+  order?: number
+
+  /** 添加到按钮元素的一个或多个宿主 CSS 类名 */
+  className?: string
+
+  /** 固定值或根据最新状态同步计算的可见条件，默认为 true；判断函数应保持无副作用 */
+  visible?: boolean | WorkbenchExtensionPredicate
+
+  /** 固定值或根据最新状态同步计算的禁用条件，默认为 false；判断函数应保持无副作用 */
+  disabled?: boolean | WorkbenchExtensionPredicate
+
+  /** 点击按钮时执行的命令；Promise 未结束时自动进入 loading，异常通过 formatError 显示 */
+  onClick: WorkbenchExtensionAction
+}
+
 /** Workbench 初始化配置 */
 export interface WorkbenchOptions {
   /** Workbench 独占使用的挂载元素或 CSS 选择器 */
@@ -661,6 +754,9 @@ export interface WorkbenchOptions {
   /** 图片 Dialog 使用的背景与装饰素材 */
   assets?: WorkbenchAssetLibrary
 
+  /** 初始化时注册到默认界面稳定位置的扩展按钮 */
+  extensions?: readonly WorkbenchExtensionButton[]
+
   /** 将模型、图片和 Design JSON 异常转换为界面提示 */
   formatError?: WorkbenchErrorFormatter
 }
@@ -703,6 +799,29 @@ export interface CustomForgeWorkbenchApi {
 
   /** 合并主题变量、立即更新当前实例并返回完整主题 */
   setTheme(theme: Partial<WorkbenchTheme>): WorkbenchTheme
+
+  /** 返回当前已注册扩展按钮的独立配置快照，不包含运行中的 loading 状态 */
+  getExtensions(): WorkbenchExtensionButton[]
+
+  /**
+   * 注册并立即渲染一个扩展按钮
+   *
+   * @param extension 扩展按钮配置
+   * @returns 仅在本次注册仍有效时移除该扩展的幂等清理函数
+   * @throws 配置无效、ID 重复或 Workbench 无法渲染时抛出错误
+   */
+  registerExtension(extension: WorkbenchExtensionButton): () => void
+
+  /**
+   * 按稳定 ID 移除扩展按钮
+   *
+   * @param id 注册时使用的扩展 ID
+   * @returns 移除前是否存在该扩展
+   */
+  removeExtension(id: string): boolean
+
+  /** 使用最新核心状态重新计算所有扩展按钮的显示和禁用条件，供宿主状态变化后调用 */
+  refreshExtensions(): void
 
   /** 更新默认界面的状态文案和状态样式 */
   setStatus(message: string, mode?: WorkbenchStatusMode): void
