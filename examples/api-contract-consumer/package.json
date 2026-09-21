@@ -9,7 +9,7 @@
     "build": "tsc --noEmit --pretty false && vite build"
   },
   "dependencies": {
-    "customforge": "file:../../customforge-0.1.0.tgz"
+    "customforge": "file:../../customforge-0.1.1.tgz"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

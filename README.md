@@ -105,13 +105,13 @@ pnpm pack:local
 The command builds JavaScript, TypeScript declarations, and public styles, checks the npm file list, and creates:
 
 ```text
-customforge-0.1.0.tgz
+customforge-0.1.1.tgz
 ```
 
 Install that local package in an independent Vite TypeScript project:
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.1.tgz
 ```
 
 The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace

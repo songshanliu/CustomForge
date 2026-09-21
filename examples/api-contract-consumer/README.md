@@ -21,6 +21,6 @@ pnpm check
 pnpm build
 ```
 
-The dependency path expects `customforge-0.1.0.tgz` in the `core_code` directory. `--ignore-workspace` keeps this consumer independent from the repository workspace, `--lockfile=false` avoids retaining integrity data for a regenerated tarball, and `--ignore-scripts` prevents transitive install scripts from running during this contract check.
+The dependency path expects `customforge-0.1.1.tgz` in the `core_code` directory. `--ignore-workspace` keeps this consumer independent from the repository workspace, `--lockfile=false` avoids retaining integrity data for a regenerated tarball, and `--ignore-scripts` prevents transitive install scripts from running during this contract check.
 
 `pnpm test:browser` starts this consumer temporarily with `?smoke=1` and verifies the packaged model, design operations, history, persistence, PNG output, view state, maximum zoom-out rendering, runtime extensions, and instance teardown in headless Chrome.

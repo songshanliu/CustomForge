@@ -438,11 +438,12 @@ export class ProductViewer {
     }
 
     const pixel = new Uint8Array(4)
-    let minimum = 255
-    let maximum = 0
+    const minimum = [255, 255, 255, 255]
+    const maximum = [0, 0, 0, 0]
+    const sampleRatios = [0.1, 0.25, 0.4, 0.45, 0.5, 0.55, 0.6, 0.75, 0.9]
 
-    for (const xRatio of [0.25, 0.5, 0.75]) {
-      for (const yRatio of [0.25, 0.5, 0.75]) {
+    for (const xRatio of sampleRatios) {
+      for (const yRatio of sampleRatios) {
         context.readPixels(
           Math.floor(width * xRatio),
           Math.floor(height * yRatio),
@@ -452,13 +453,14 @@ export class ProductViewer {
           context.UNSIGNED_BYTE,
           pixel,
         )
-        const luminance = (pixel[0] + pixel[1] + pixel[2]) / 3
-        minimum = Math.min(minimum, luminance)
-        maximum = Math.max(maximum, luminance)
+        for (let channel = 0; channel < pixel.length; channel += 1) {
+          minimum[channel] = Math.min(minimum[channel], pixel[channel])
+          maximum[channel] = Math.max(maximum[channel], pixel[channel])
+        }
       }
     }
 
-    if (maximum - minimum > 8) {
+    if (maximum.some((value, channel) => value - minimum[channel] > 4)) {
       this.host.dataset.renderState = 'nonblank'
     }
   }

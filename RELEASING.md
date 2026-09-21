@@ -22,7 +22,7 @@ pnpm release:check
 
 The gate verifies release metadata, checks TypeScript, runs unit tests, rebuilds and inspects the package, creates the local tarball, installs that tarball into both independent consumer projects, builds both consumers, and executes the API contract consumer in headless Chrome
 
-The generated archive for version `0.1.0` is `customforge-0.1.0.tgz`
+The generated archive for version `0.1.1` is `customforge-0.1.1.tgz`
 
 ## Publish a release
 
@@ -30,7 +30,7 @@ The generated archive for version `0.1.0` is `customforge-0.1.0.tgz`
 2. Set the same stable SemVer in `package.json` and both local consumer dependency paths
 3. Run the complete release gate and review the packed file list and unpacked size
 4. Commit the release preparation and merge it to `main`
-5. Create an annotated tag such as `v0.1.0` on that commit and push the tag
+5. Create an annotated tag such as `v0.1.1` on that commit and push the tag
 6. Confirm the `Release npm package` workflow completed and the npm page shows the expected version, provenance, files, README, and `latest` dist-tag
 7. Install the registry version into a clean external application and repeat the primary editor workflow before announcing the release
 

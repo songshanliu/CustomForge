@@ -103,13 +103,13 @@ pnpm pack:local
 命令依次生成 JavaScript、TypeScript 声明和公开样式，检查 npm 文件清单，并创建：
 
 ```text
-customforge-0.1.0.tgz
+customforge-0.1.1.tgz
 ```
 
 在独立 Vite TypeScript 项目中安装该本地制品：
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.1.tgz
 ```
 
 仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装

@@ -4,6 +4,12 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-21
+
+### Fixed
+
+- Keep the 3D product visible at the maximum zoom-out distance by aligning the camera far clipping plane with the OrbitControls distance limit
+
 ## [0.1.0] - 2026-09-21
 
 ### Added

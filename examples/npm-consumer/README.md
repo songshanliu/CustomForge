@@ -14,7 +14,7 @@ pnpm build
 pnpm dev
 ```
 
-The dependency path in `package.json` expects `customforge-0.1.0.tgz` in the repository root. The example intentionally does not keep a lockfile because each local pack produces new tarball integrity data
+The dependency path in `package.json` expects `customforge-0.1.1.tgz` in the repository root. The example intentionally does not keep a lockfile because each local pack produces new tarball integrity data
 
 `--ignore-workspace` is required because this example deliberately consumes the tarball as an independent project instead of joining the parent pnpm workspace
 
