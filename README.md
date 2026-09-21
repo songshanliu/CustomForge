@@ -10,6 +10,8 @@
 
 <p>A lightweight, framework-agnostic toolkit for building browser-based product customization experiences with Fabric.js and Three.js</p>
 
+<p><strong>Website:</strong> <a href="https://customforge.org">https://customforge.org</a></p>
+
 <p>
   <strong>English</strong>
   <span> · </span>
