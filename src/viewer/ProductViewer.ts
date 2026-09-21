@@ -337,13 +337,16 @@ export class ProductViewer {
     }
     distance = Math.max(distance, diagonal * 0.55, 0.1)
 
+    const minDistance = Math.max(diagonal * 0.45, distance * 0.3, 0.05)
+    const maxDistance = Math.max(distance * 4, diagonal * 4)
+
     this.controls.target.copy(center)
     this.camera.position.copy(center).addScaledVector(viewDirection, distance)
     this.camera.near = Math.max(Math.min(distance * 0.02, diagonal * 0.01), 0.01)
-    this.camera.far = Math.max(distance + diagonal * 2, 10)
+    this.camera.far = Math.max(maxDistance + diagonal * 2, 10)
     this.camera.updateProjectionMatrix()
-    this.controls.minDistance = Math.max(diagonal * 0.45, distance * 0.3, 0.05)
-    this.controls.maxDistance = Math.max(distance * 4, diagonal * 4)
+    this.controls.minDistance = minDistance
+    this.controls.maxDistance = maxDistance
     this.controls.update()
   }
 

@@ -117,6 +117,33 @@ async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> 
   }
 }
 
+function waitForNonblankRender(host: HTMLElement): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let observer: MutationObserver | undefined
+    const timeout = window.setTimeout(() => {
+      observer?.disconnect()
+      reject(new Error('3D model disappeared at maximum zoom-out'))
+    }, 2_000)
+    const finish = (): void => {
+      window.clearTimeout(timeout)
+      observer?.disconnect()
+      resolve()
+    }
+    const checkState = (): void => {
+      if (host.dataset.renderState === 'nonblank') {
+        finish()
+      }
+    }
+
+    observer = new MutationObserver(checkState)
+    observer.observe(host, {
+      attributes: true,
+      attributeFilter: ['data-render-state'],
+    })
+    checkState()
+  })
+}
+
 async function runBrowserSmoke(
   activeWorkbench: CustomForgeWorkbenchApi,
   activeCustomizer: ProductCustomizerApi,
@@ -189,6 +216,26 @@ async function runBrowserSmoke(
       Math.abs(movedView.position.x - originalView.position.x - 0.25) < 0.0001,
       '3D view restore failed',
     )
+    activeCustomizer.setViewState(originalView)
+
+    const viewerHost = activeWorkbench.element.querySelector<HTMLElement>(
+      '[data-role="viewer-host"]',
+    )
+    const viewerCanvas = viewerHost?.querySelector<HTMLCanvasElement>(
+      '.customforge-viewer-canvas',
+    )
+    assertSmoke(viewerHost && viewerCanvas, '3D viewer canvas was not found')
+    viewerHost.dataset.renderState = 'pending'
+    for (let index = 0; index < 40; index += 1) {
+      viewerCanvas.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: viewerCanvas.clientWidth / 2,
+        clientY: viewerCanvas.clientHeight / 2,
+        deltaY: 100,
+      }))
+    }
+    await waitForNonblankRender(viewerHost)
     activeCustomizer.setViewState(originalView)
 
     let resolveExtension: () => void = () => {}
