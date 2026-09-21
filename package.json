@@ -1,12 +1,11 @@
 {
   "name": "customforge",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0",
   "description": "A framework-agnostic browser library for live 2D-to-3D product customization",
   "license": "Apache-2.0",
   "private": false,
   "publishConfig": {
-    "access": "public",
-    "tag": "alpha"
+    "access": "public"
   },
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -41,16 +40,18 @@
     "check": "tsc -b --pretty false",
     "test": "vitest run",
     "preview": "vite preview",
+    "prepack": "pnpm build:lib && pnpm verify:package",
+    "prepublishOnly": "pnpm release:check",
+    "verify:release": "node scripts/verify-release.mjs",
     "verify:package": "node scripts/verify-package.mjs",
-    "pack:local": "pnpm build:lib && pnpm verify:package && pnpm pack",
-    "release:check": "pnpm check && pnpm test && pnpm pack:local"
+    "verify:consumers": "node scripts/verify-consumers.mjs",
+    "test:browser": "node scripts/run-browser-smoke.mjs",
+    "pack:local": "pnpm pack",
+    "release:check": "pnpm verify:release && pnpm check && pnpm test && pnpm pack:local && pnpm verify:consumers && pnpm test:browser"
   },
   "dependencies": {
     "fabric": "^7.4.0",
     "three": "^0.185.1"
-  },
-  "engines": {
-    "node": ">=22.12.0"
   },
   "repository": {
     "type": "git",

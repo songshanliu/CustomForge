@@ -95,6 +95,143 @@ async function createHeadless(
   })
 }
 
+function assertSmoke(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message)
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  let timeout: number | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = window.setTimeout(() => reject(new Error(message)), 2_000)
+      }),
+    ])
+  } finally {
+    if (timeout !== undefined) {
+      window.clearTimeout(timeout)
+    }
+  }
+}
+
+async function runBrowserSmoke(
+  activeWorkbench: CustomForgeWorkbenchApi,
+  activeCustomizer: ProductCustomizerApi,
+  stopViewListener: () => void,
+): Promise<void> {
+  document.body.dataset.smokeStatus = 'running'
+  try {
+    const initialState = activeCustomizer.getState()
+    assertSmoke(initialState.product.surfaceMesh === 'PrintArea', 'Model did not initialize')
+    assertSmoke(initialState.printableBounds.width > 0, 'Printable bounds are empty')
+
+    activeCustomizer.clearHistory()
+    const smokeText = activeCustomizer.addText({
+      text: 'SMOKE TEST',
+      name: 'Smoke text',
+      x: 180,
+      y: 160,
+      fontSize: 36,
+    })
+    const smokeImage = await activeCustomizer.addImage({
+      src: brandLogoUrl,
+      name: 'Smoke image',
+      x: 700,
+      y: 260,
+      width: 120,
+    })
+    assertSmoke(
+      activeCustomizer.selectObjects([smokeText.id, smokeImage.id]),
+      'Multi-selection failed',
+    )
+
+    const transformed = activeCustomizer.updateObjectTransform(smokeImage.id, {
+      x: 640,
+      y: 240,
+      rotation: 13,
+      scaleX: 0.9,
+      scaleY: 0.9,
+    })
+    assertSmoke(transformed?.transform.rotation === 13, 'Object transform failed')
+    const savedDesign = activeCustomizer.saveDesign()
+
+    assertSmoke(await activeCustomizer.undo(), 'Undo failed')
+    assertSmoke(await activeCustomizer.redo(), 'Redo failed')
+    assertSmoke(
+      activeCustomizer.getObjects()
+        .find(({ id }) => id === smokeImage.id)
+        ?.transform.rotation === 13,
+      'Redo did not restore the transform',
+    )
+
+    assertSmoke(activeCustomizer.removeObject(smokeText.id), 'Object removal failed')
+    await activeCustomizer.loadDesign(savedDesign)
+    assertSmoke(
+      activeCustomizer.getObjects().length === savedDesign.objects.length,
+      'Design restore changed the object count',
+    )
+
+    const png = await activeCustomizer.getTextureBlob()
+    assertSmoke(png.type === 'image/png' && png.size > 0, 'PNG Blob export failed')
+
+    const originalView = activeCustomizer.getViewState()
+    const movedView = activeCustomizer.setViewState({
+      position: {
+        ...originalView.position,
+        x: originalView.position.x + 0.25,
+      },
+      target: originalView.target,
+    })
+    assertSmoke(
+      Math.abs(movedView.position.x - originalView.position.x - 0.25) < 0.0001,
+      '3D view restore failed',
+    )
+    activeCustomizer.setViewState(originalView)
+
+    let resolveExtension: () => void = () => {}
+    const extensionClicked = new Promise<void>((resolve) => {
+      resolveExtension = () => resolve()
+    })
+    const removeSmokeExtension = activeWorkbench.registerExtension({
+      id: 'smoke.runtime-command',
+      placement: 'globalActions',
+      label: 'Smoke command',
+      onClick: () => resolveExtension(),
+    })
+    const extensionButton = activeWorkbench.element.querySelector<HTMLButtonElement>(
+      '[data-extension-id="smoke.runtime-command"]',
+    )
+    assertSmoke(extensionButton, 'Runtime extension did not render')
+    extensionButton.click()
+    await withTimeout(extensionClicked, 'Runtime extension did not execute')
+    removeSmokeExtension()
+    assertSmoke(
+      !activeWorkbench.getExtensions()
+        .some(({ id }) => id === 'smoke.runtime-command'),
+      'Runtime extension did not unregister',
+    )
+
+    stopViewListener()
+    activeWorkbench.destroy()
+    const rebuiltWorkbench = await createWorkbench({ container: '#app' })
+    assertSmoke(
+      rebuiltWorkbench.customizer.getProduct().surfaceMesh === 'PrintArea',
+      'Workbench did not rebuild after destroy',
+    )
+    rebuiltWorkbench.destroy()
+    document.body.dataset.smokeStatus = 'passed'
+  } catch (error) {
+    document.body.dataset.smokeStatus = 'failed'
+    document.body.dataset.smokeError = error instanceof Error
+      ? error.message
+      : String(error)
+    throw error
+  }
+}
+
 const workbench: CustomForgeWorkbenchApi = await createWorkbench({
   container: '#app',
   className: 'package-contract-test',
@@ -188,5 +325,9 @@ window.addEventListener('beforeunload', () => {
   stopViewChange()
   workbench.destroy()
 }, { once: true })
+
+if (new URLSearchParams(window.location.search).get('smoke') === '1') {
+  await runBrowserSmoke(workbench, customizer, stopViewChange)
+}
 
 void createHeadless

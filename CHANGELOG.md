@@ -4,6 +4,8 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-21
+
 ### Added
 
 - Display the active Mesh UV printable region and boundary as a non-exported editor overlay
@@ -13,6 +15,8 @@ All notable changes to CustomForge will be documented in this file
 - Expose state snapshots, printable bounds, multi-selection, object transforms, PNG Data URL and Blob output, and 3D view persistence
 - Add instance-scoped Workbench classes, runtime theme access, and configurable editor and viewer drawing appearance
 - Add validated Workbench extension buttons with stable global, editor, selection, and layer action placements
+- Add stable-release metadata checks, independent tarball consumers, and a packaged browser smoke gate
+- Add continuous integration and provenance-enabled npm release workflows
 
 ### Changed
 
@@ -21,6 +25,7 @@ All notable changes to CustomForge will be documented in this file
 - Replace the shadow-casting viewer setup with balanced non-shadow studio lighting and remove the floor and fixed scene background
 - Adjust the initial and reset camera framing for a smaller, more front-facing product view
 - Seed the demo with the built-in CustomForge logo and 22px project-name text
+- Publish the first non-prerelease version through npm's default `latest` channel without imposing a Node.js engine on browser consumers
 
 ### Fixed
 

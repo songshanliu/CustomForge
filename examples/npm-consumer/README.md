@@ -8,15 +8,13 @@ Build and pack the Library from the repository root before installing this examp
 cd D:\projects\3DRendering\core_code
 pnpm pack:local
 cd examples\npm-consumer
-pnpm install --ignore-workspace
+pnpm install --ignore-workspace --lockfile=false --ignore-scripts
 pnpm check
 pnpm build
 pnpm dev
 ```
 
-The dependency path in `package.json` expects `customforge-0.1.0-alpha.2.tgz` in the repository root
-
-The checked-in lockfile still describes the last generated tarball until `pnpm pack:local` and the independent install command refresh it with the new artifact integrity
+The dependency path in `package.json` expects `customforge-0.1.0.tgz` in the repository root. The example intentionally does not keep a lockfile because each local pack produces new tarball integrity data
 
 `--ignore-workspace` is required because this example deliberately consumes the tarball as an independent project instead of joining the parent pnpm workspace
 

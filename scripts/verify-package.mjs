@@ -82,12 +82,13 @@ assert(
 )
 
 const packageJson = JSON.parse(await readProjectFile('package.json'))
+const stableSemver = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/
 
 assert(packageJson.name === 'customforge', 'Unexpected package name')
-assert(packageJson.version === '0.1.0-alpha.2', 'Unexpected package version')
-assert(packageJson.private === false, 'Public alpha package must not be private')
+assert(stableSemver.test(packageJson.version), 'Package version must be stable SemVer')
+assert(packageJson.private === false, 'Public package must not be private')
 assert(packageJson.publishConfig?.access === 'public', 'Public package access is invalid')
-assert(packageJson.publishConfig?.tag === 'alpha', 'Public package tag must remain alpha')
+assert(!packageJson.publishConfig?.tag, 'Stable package must use the default latest tag')
 assert(packageJson.type === 'module', 'Package must use ESM')
 assert(packageJson.types === './dist/index.d.ts', 'Package types entry is invalid')
 assert(packageJson.exports?.['.']?.import === './dist/index.js', 'ESM export is invalid')
@@ -396,6 +397,8 @@ for (const file of expectedPackageFiles) {
   assert(fileStats.isFile(), `Package entry is not a file: ${file}`)
   unpackedSize += fileStats.size
 }
+
+assert(unpackedSize < 2_500_000, 'Unpacked npm package exceeds the 2.5 MB budget')
 
 console.log(
   `Package verified: ${packageJson.name}-${packageJson.version}.tgz (${expectedPackageFiles.length} files, ${unpackedSize} bytes unpacked)`,

@@ -66,14 +66,14 @@ Open the URL printed by Vite
 
 The built-in demo appears with a UV workspace on the left and a live 3D preview on the right
 
-## npm Alpha Package
+## npm Package
 
-CustomForge is available from the npm Registry under the `alpha` dist-tag and the API and Design JSON Schema may change between alpha versions
+CustomForge `0.1.0` is the first non-prerelease version published to the npm Registry. Public APIs follow semantic versioning, and Design JSON version 1 documents remain readable throughout the `0.1.x` line
 
-Install the current public alpha with:
+Install the current release with:
 
 ```powershell
-pnpm add customforge@alpha
+pnpm add customforge
 ```
 
 Fabric.js and Three.js are installed automatically as transitive dependencies
@@ -94,6 +94,8 @@ Consumer projects can explicitly acknowledge this browser-only choice in `packag
 
 Package page: [npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
 
+Browser baseline: Chrome and Edge 111+, Firefox 113+, and Safari 16.4+. CustomForge requires ES2022 modules, Canvas 2D, WebGL, `ResizeObserver`, native `dialog`, container queries, and `color-mix()` support
+
 For repository-independent verification before publishing, build and create the local package from the repository root:
 
 ```powershell
@@ -103,13 +105,13 @@ pnpm pack:local
 The command builds JavaScript, TypeScript declarations, and public styles, checks the npm file list, and creates:
 
 ```text
-customforge-0.1.0-alpha.2.tgz
+customforge-0.1.0.tgz
 ```
 
 Install that local package in an independent Vite TypeScript project:
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.2.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0.tgz
 ```
 
 The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace
@@ -199,7 +201,7 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 })
 ```
 
-The public package uses the same root and style imports as the local `.tgz`; pin an exact alpha version when reproducible installs are required
+The public package uses the same root and style imports as the local `.tgz`; pin an exact version when reproducible installs are required
 
 ## Ready-made Workbench
 
@@ -431,7 +433,7 @@ An image with `role: 'background'` is a design object rather than the product ba
 
 Loading is transactional: the current design remains unchanged unless the document validates and every referenced image loads successfully. Blob URL images are converted to Data URLs when added; remote image URLs remain URLs and must continue to satisfy browser CORS requirements when restored
 
-The Schema is still an alpha contract and may change in later alpha versions
+Design JSON version 1 remains readable throughout the `0.1.x` release line. New optional fields may be added without invalidating existing version 1 documents
 
 ## Undo and Redo
 
@@ -532,7 +534,7 @@ The optional Workbench and demo use Vanilla TypeScript; the core does not depend
 
 ## Model Contract
 
-The current prototype expects:
+The current model contract expects:
 
 - A GLB or GLTF model with valid UV coordinates
 - An uncompressed model that can be loaded by the standard Three.js `GLTFLoader`
@@ -558,10 +560,14 @@ src/
 `-- index.ts          Framework-independent source entry
 
 examples/
-`-- npm-consumer/     Independent local .tgz consumer
+|-- api-contract-consumer/  Public API, custom UI, and browser smoke consumer
+`-- npm-consumer/           Independent local .tgz consumer
 
 scripts/
-`-- verify-package.mjs  npm file and artifact boundary checks
+|-- run-browser-smoke.mjs  Headless browser contract gate
+|-- verify-consumers.mjs   Independent tarball consumer gate
+|-- verify-package.mjs     npm file and artifact boundary checks
+`-- verify-release.mjs     Version, changelog, tag, and example checks
 ```
 
 ## Development Commands
@@ -571,21 +577,22 @@ pnpm check       # TypeScript project check
 pnpm test        # Unit tests
 pnpm build       # Type-check and production build
 pnpm build:lib   # Build core and Workbench ESM, declarations, and styles
+pnpm verify:release # Check stable version, changelog, tag, and consumer paths
 pnpm verify:package # Check dist and the npm file list
-pnpm pack:local  # Build, verify, and create the local .tgz
-pnpm release:check # Run checks, tests, package build, verification, and local pack
+pnpm verify:consumers # Install the local .tgz into and build both consumers
+pnpm test:browser # Run the packaged API consumer in headless Chrome
+pnpm pack:local  # Build, verify, and create the local .tgz through prepack
+pnpm release:check # Run the complete stable release gate
 pnpm preview     # Preview the production build
 ```
 
+See the [release guide](https://github.com/songshanliu/CustomForge/blob/main/RELEASING.md) for npm Trusted Publishing setup, tag rules, the release sequence, and failure handling
+
 ## Current Scope
 
-This is an early technical prototype
+Version `0.1.0` is the first non-prerelease package. Because the project remains on the `0.x` line, breaking public API changes may be introduced only in a future minor release and will be documented in the changelog
 
-The public API and design document format are not stable yet
-
-The current milestone intentionally focuses on one texture and one customizable mesh
-
-Public npm releases use the `alpha` dist-tag until the API and Design JSON contract are ready for a more stable channel
+The current release intentionally focuses on one logical design canvas mapped to one named Mesh and its first material slot. Design JSON version 1 documents remain readable across `0.1.x`
 
 Multi-surface products, advanced alignment tools, and framework adapters are not implemented yet
 

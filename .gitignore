@@ -5,6 +5,8 @@ node_modules/
 dist/
 coverage/
 *.tgz
+examples/api-contract-consumer/pnpm-lock.yaml
+examples/npm-consumer/pnpm-lock.yaml
 
 # Local environment files
 .env

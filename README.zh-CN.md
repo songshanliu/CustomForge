@@ -66,14 +66,14 @@ pnpm dev
 
 内置演示的左侧是 UV 编辑区，右侧是实时三维预览
 
-## npm Alpha 制品
+## npm 制品
 
-CustomForge 已通过 `alpha` dist-tag 发布到 npm Registry，不同 alpha 版本之间的 API 和 Design JSON Schema 可能发生变化
+CustomForge `0.1.0` 是发布到 npm Registry 的首个非预发布版本。公共 API 遵循语义化版本规则，Design JSON version 1 文档在整个 `0.1.x` 版本线内保持可读取兼容
 
-使用以下命令安装当前公开 alpha：
+使用以下命令安装当前版本：
 
 ```powershell
-pnpm add customforge@alpha
+pnpm add customforge
 ```
 
 Fabric.js 和 Three.js 会作为传递依赖自动安装
@@ -92,6 +92,8 @@ pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略，CustomForge
 
 包页面：[npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
 
+浏览器基线：Chrome 和 Edge 111+、Firefox 113+、Safari 16.4+。CustomForge 需要 ES2022 模块、Canvas 2D、WebGL、`ResizeObserver`、原生 `dialog`、容器查询和 `color-mix()` 支持
+
 发布前如需进行独立于仓库源码的验证，可在仓库根目录构建并生成本地包：
 
 ```powershell
@@ -101,13 +103,13 @@ pnpm pack:local
 命令依次生成 JavaScript、TypeScript 声明和公开样式，检查 npm 文件清单，并创建：
 
 ```text
-customforge-0.1.0-alpha.2.tgz
+customforge-0.1.0.tgz
 ```
 
 在独立 Vite TypeScript 项目中安装该本地制品：
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0-alpha.2.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.0.tgz
 ```
 
 仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装
@@ -195,7 +197,7 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 })
 ```
 
-公开包与本地 `.tgz` 使用相同的根入口和样式入口；需要可重复安装时应固定具体 alpha 版本
+公开包与本地 `.tgz` 使用相同的根入口和样式入口；需要可重复安装时应固定具体版本
 
 ## 开箱即用的 Workbench
 
@@ -426,7 +428,7 @@ Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只�
 
 加载具有事务性：只有文档校验通过且全部引用图片成功加载后，当前设计才会被替换。Blob URL 图片会在添加时转换为 Data URL；远程图片仍保留 URL，恢复时必须继续满足浏览器 CORS 要求
 
-该 Schema 目前仍属于 alpha 契约，后续 alpha 版本可能调整
+Design JSON version 1 在整个 `0.1.x` 版本线内保持可读取兼容。后续可以增加可选字段，但不会让现有 version 1 文档失效
 
 ## 撤销与重做
 
@@ -527,7 +529,7 @@ ProductCustomizer
 
 ## 模型约定
 
-当前原型要求：
+当前模型约定要求：
 
 - GLB 或 GLTF 模型包含有效的 UV 坐标
 - 模型未经压缩，能够由标准 Three.js `GLTFLoader` 直接加载
@@ -553,10 +555,14 @@ src/
 `-- index.ts          与框架无关的源码入口
 
 examples/
-`-- npm-consumer/     本地 .tgz 独立消费示例
+|-- api-contract-consumer/  公共 API、自定义界面与浏览器 smoke 消费示例
+`-- npm-consumer/           本地 .tgz 独立消费示例
 
 scripts/
-`-- verify-package.mjs  npm 文件和制品边界检查
+|-- run-browser-smoke.mjs  无头浏览器契约门禁
+|-- verify-consumers.mjs   独立 tarball 消费门禁
+|-- verify-package.mjs     npm 文件和制品边界检查
+`-- verify-release.mjs     版本、变更日志、标签和示例检查
 ```
 
 ## 开发命令
@@ -566,21 +572,22 @@ pnpm check       # TypeScript 项目检查
 pnpm test        # 单元测试
 pnpm build       # 类型检查和生产构建
 pnpm build:lib   # 构建核心与 Workbench ESM、类型声明和样式
+pnpm verify:release # 检查稳定版本、变更日志、标签和消费路径
 pnpm verify:package # 检查 dist 和 npm 文件清单
-pnpm pack:local  # 构建、检查并生成本地 .tgz
-pnpm release:check # 执行检查、测试、制品构建、校验和本地打包
+pnpm verify:consumers # 在两个独立消费项目中安装并构建本地 .tgz
+pnpm test:browser # 在无头 Chrome 中运行打包后的 API 消费示例
+pnpm pack:local  # 通过 prepack 构建、检查并生成本地 .tgz
+pnpm release:check # 执行完整的稳定版发布门禁
 pnpm preview     # 预览生产构建
 ```
 
+npm Trusted Publishing 配置、标签规则、发布步骤和失败处理参见[发布指南](https://github.com/songshanliu/CustomForge/blob/main/RELEASING.md)
+
 ## 当前范围
 
-这是一个早期技术原型
+`0.1.0` 是首个非预发布制品。项目仍处于 `0.x` 版本线，公共 API 的破坏性调整只会进入后续次版本，并记录在变更日志中
 
-公共 API 和设计文档格式尚未稳定
-
-当前里程碑有意聚焦于一张纹理和一个可定制 Mesh
-
-在 API 和 Design JSON 契约进入更稳定阶段前，公开 npm 版本统一使用 `alpha` dist-tag
+当前版本聚焦于一张逻辑设计画布映射到一个命名 Mesh 的第一个材质槽。Design JSON version 1 文档在 `0.1.x` 内保持可读取兼容
 
 多定制面、高级对齐工具和框架适配器仍未实现
 
