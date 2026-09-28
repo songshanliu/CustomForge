@@ -4,6 +4,17 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-28
+
+### Fixed
+
+- Build high-density printable UV fills without synchronously closing every triangle path
+- Remove repeated Canvas 2D and WebGL pixel-readback diagnostics from production rendering
+
+### Changed
+
+- Move nonblank canvas checks into the packaged browser smoke test and cover a generated 47,432-triangle GLB without shipping that fixture in the npm package
+
 ## [0.1.1] - 2026-09-21
 
 ### Fixed

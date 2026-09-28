@@ -80,7 +80,6 @@ export class ProductViewer {
     this.renderer.domElement.setAttribute('aria-label', ariaLabel)
     this.renderer.domElement.classList.add('customforge-viewer-canvas')
     host.append(this.renderer.domElement)
-    host.dataset.renderState = 'pending'
 
     this.camera.position.set(4.6, 2.8, 5.8)
 
@@ -422,46 +421,5 @@ export class ProductViewer {
     this.animationFrame = requestAnimationFrame(this.render)
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
-    this.markRenderState()
-  }
-
-  private markRenderState(): void {
-    if (this.host.dataset.renderState === 'nonblank') {
-      return
-    }
-
-    const context = this.renderer.getContext()
-    const width = context.drawingBufferWidth
-    const height = context.drawingBufferHeight
-    if (width < 2 || height < 2) {
-      return
-    }
-
-    const pixel = new Uint8Array(4)
-    const minimum = [255, 255, 255, 255]
-    const maximum = [0, 0, 0, 0]
-    const sampleRatios = [0.1, 0.25, 0.4, 0.45, 0.5, 0.55, 0.6, 0.75, 0.9]
-
-    for (const xRatio of sampleRatios) {
-      for (const yRatio of sampleRatios) {
-        context.readPixels(
-          Math.floor(width * xRatio),
-          Math.floor(height * yRatio),
-          1,
-          1,
-          context.RGBA,
-          context.UNSIGNED_BYTE,
-          pixel,
-        )
-        for (let channel = 0; channel < pixel.length; channel += 1) {
-          minimum[channel] = Math.min(minimum[channel], pixel[channel])
-          maximum[channel] = Math.max(maximum[channel], pixel[channel])
-        }
-      }
-    }
-
-    if (maximum.some((value, channel) => value - minimum[channel] > 4)) {
-      this.host.dataset.renderState = 'nonblank'
-    }
   }
 }

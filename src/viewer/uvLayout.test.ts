@@ -41,6 +41,24 @@ describe('extractUvLayout', () => {
     ])
   })
 
+  it('extracts non-indexed UV triangles', () => {
+    const geometry = createQuadGeometry().toNonIndexed()
+    const mesh = new Mesh(geometry, new MeshStandardMaterial())
+
+    const layout = extractUvLayout(mesh)
+
+    expect(Array.from(layout.triangleCoordinates)).toEqual([
+      0, 0, 1, 0, 1, 1,
+      0, 0, 1, 1, 0, 1,
+    ])
+    expect(Array.from(layout.boundaryCoordinates)).toEqual([
+      0, 0, 1, 0,
+      1, 0, 1, 1,
+      1, 1, 0, 1,
+      0, 1, 0, 0,
+    ])
+  })
+
   it('keeps only triangles assigned to the first material slot', () => {
     const geometry = createQuadGeometry()
     geometry.addGroup(0, 3, 1)

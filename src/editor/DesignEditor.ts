@@ -34,6 +34,7 @@ import {
 } from './objectBounds'
 import { calculateUvCanvasBounds } from './uvBounds'
 import { resolvePersistentImageSource } from './imageSource'
+import { drawUvOverlay } from './uvOverlay'
 
 const EDITOR_DISPLAY_GUTTER = 56
 
@@ -215,14 +216,12 @@ export class DesignEditor {
       this.uvOverlay,
       this.canvas.upperCanvasEl,
     )
-    this.host.dataset.renderState = 'pending'
     this.canvas.on('after:render', () => {
       if (this.renderingTexture) {
         return
       }
 
       this.renderTextureCanvas()
-      this.markRenderState()
       this.renderListeners.forEach((listener) => listener())
     })
 
@@ -278,8 +277,7 @@ export class DesignEditor {
     }
 
     context.clearRect(0, 0, this.width, this.height)
-    const { triangleCoordinates, boundaryCoordinates } = layout
-    if (triangleCoordinates.length === 0) {
+    if (layout.triangleCoordinates.length === 0) {
       this.uvOverlay.hidden = true
       return
     }
@@ -289,54 +287,10 @@ export class DesignEditor {
       (getComputedStyle(this.canvas.wrapperEl)
         .getPropertyValue('--cfw-accent')
         .trim() || '#268a4b')
-    const canvasX = (u: number) =>
-      Math.min(Math.max(u * this.width, 1), this.width - 1)
-    const canvasY = (v: number) =>
-      Math.min(
-        Math.max((flipY ? 1 - v : v) * this.height, 1),
-        this.height - 1,
-      )
-
-    context.save()
-    context.beginPath()
-    for (let index = 0; index < triangleCoordinates.length; index += 6) {
-      context.moveTo(
-        canvasX(triangleCoordinates[index]),
-        canvasY(triangleCoordinates[index + 1]),
-      )
-      context.lineTo(
-        canvasX(triangleCoordinates[index + 2]),
-        canvasY(triangleCoordinates[index + 3]),
-      )
-      context.lineTo(
-        canvasX(triangleCoordinates[index + 4]),
-        canvasY(triangleCoordinates[index + 5]),
-      )
-      context.closePath()
-    }
-    context.fillStyle = accent
-    context.globalAlpha = 0.012
-    context.fill()
-
-    context.beginPath()
-    for (let index = 0; index < boundaryCoordinates.length; index += 4) {
-      context.moveTo(
-        canvasX(boundaryCoordinates[index]),
-        canvasY(boundaryCoordinates[index + 1]),
-      )
-      context.lineTo(
-        canvasX(boundaryCoordinates[index + 2]),
-        canvasY(boundaryCoordinates[index + 3]),
-      )
-    }
-    context.globalAlpha = 0.28
-    context.strokeStyle = this.appearance.uvBoundary
-    context.lineWidth = 1
-    context.lineCap = 'round'
-    context.lineJoin = 'round'
-    context.setLineDash([6, 6])
-    context.stroke()
-    context.restore()
+    drawUvOverlay(context, layout, flipY, this.width, this.height, {
+      fill: accent,
+      boundary: this.appearance.uvBoundary,
+    })
   }
 
   /** 当前画布中设计对象的数量，不包含产品基础纹理 */
@@ -1512,35 +1466,6 @@ export class DesignEditor {
       this.textureRenderer.renderTexture(this.textureContext)
     } finally {
       this.renderingTexture = false
-    }
-  }
-
-  private markRenderState(): void {
-    if (this.host.dataset.renderState === 'nonblank') {
-      return
-    }
-
-    const context = this.canvas.getContext()
-    let minimum = 255
-    let maximum = 0
-    let opaqueSamples = 0
-
-    for (let row = 1; row < 8; row += 1) {
-      for (let column = 1; column < 16; column += 1) {
-        const x = Math.floor((column / 16) * this.width)
-        const y = Math.floor((row / 8) * this.height)
-        const pixel = context.getImageData(x, y, 1, 1).data
-        const luminance = (pixel[0] + pixel[1] + pixel[2]) / 3
-        minimum = Math.min(minimum, luminance)
-        maximum = Math.max(maximum, luminance)
-        if (pixel[3] > 0) {
-          opaqueSamples += 1
-        }
-      }
-    }
-
-    if (opaqueSamples > 0 && maximum - minimum > 8) {
-      this.host.dataset.renderState = 'nonblank'
     }
   }
 }

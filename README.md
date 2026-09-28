@@ -107,13 +107,13 @@ pnpm pack:local
 The command builds JavaScript, TypeScript declarations, and public styles, checks the npm file list, and creates:
 
 ```text
-customforge-0.1.1.tgz
+customforge-0.1.2.tgz
 ```
 
 Install that local package in an independent Vite TypeScript project:
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.1.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.2.tgz
 ```
 
 The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace
@@ -137,6 +137,8 @@ UV coordinates are expected to be stored in the 3D model
 The optional texture image is the visual base layer, not a replacement for model UV data. Without one, the design canvas and printable overlay remain transparent
 
 After each product load, the editor reads the target mesh UV coordinates and displays a subtle printable-region fill with its outer boundary above the design canvas. Internal triangulation stays hidden, and the guide is not written into the live texture, Design JSON, or exported PNG
+
+High-density printable meshes are supported without synchronously closing every UV triangle path or reading canvas pixels during production rendering. Model download, geometry extraction, GPU work, and memory usage still scale with mesh complexity, so production assets should retain only the detail required by the product and printable surface
 
 > [!IMPORTANT]
 > Remote models, textures, decals, and fonts must be served with CORS headers that allow the app origin

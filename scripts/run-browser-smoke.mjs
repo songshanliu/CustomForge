@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,10 +8,56 @@ const consumerRoot = fileURLToPath(
   new URL('../examples/api-contract-consumer/', import.meta.url),
 )
 const viteEntry = join(consumerRoot, 'node_modules', 'vite', 'bin', 'vite.js')
-const smokeUrl = 'http://127.0.0.1:5175/?smoke=1'
+const installedPackageDist = join(
+  consumerRoot,
+  'node_modules',
+  'customforge',
+  'dist',
+)
+const serverUrl = 'http://127.0.0.1:5175/'
+const desktopSmokeUrl = `${serverUrl}?smoke=desktop`
+const mobileSmokeUrl = `${serverUrl}?smoke=mobile`
+const browserStartupTimeoutMs = 10_000
+const smokeTimeoutMs = 90_000
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function listJavaScriptFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true })
+  const files = []
+
+  for (const entry of entries) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...await listJavaScriptFiles(path))
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      files.push(path)
+    }
+  }
+
+  return files
+}
+
+async function assertInstalledPackageIsFresh() {
+  const runtimeFiles = await listJavaScriptFiles(installedPackageDist)
+  const runtimeSources = await Promise.all(
+    runtimeFiles.map((file) => readFile(file, 'utf8')),
+  )
+  const staleMarkers = ['readPixels(', 'getImageData(', 'renderState']
+  const detectedMarkers = staleMarkers.filter((marker) =>
+    runtimeSources.some((source) => source.includes(marker)),
+  )
+
+  if (detectedMarkers.length > 0) {
+    throw new Error(
+      'The api-contract-consumer has a stale customforge package installed ' +
+      `(${detectedMarkers.join(', ')} detected). ` +
+      'Run "pnpm pack:local" and then "pnpm verify:consumers" before ' +
+      'running "pnpm test:browser".',
+    )
+  }
 }
 
 async function findBrowser() {
@@ -64,7 +110,7 @@ async function waitForServer(server, output) {
       throw new Error(`Vite exited before startup\n${output()}`)
     }
     try {
-      const response = await fetch(smokeUrl)
+      const response = await fetch(serverUrl)
       if (response.ok) {
         return
       }
@@ -73,53 +119,263 @@ async function waitForServer(server, output) {
     }
     await delay(200)
   }
-  throw new Error(`Timed out waiting for ${smokeUrl}\n${output()}`)
+  throw new Error(`Timed out waiting for ${serverUrl}\n${output()}`)
 }
 
-function runBrowser(browser, profileDirectory) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(browser, [
-      '--headless=new',
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--enable-unsafe-swiftshader',
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
-      '--run-all-compositor-stages-before-draw',
-      '--virtual-time-budget=30000',
-      '--dump-dom',
-      `--user-data-dir=${profileDirectory}`,
-      smokeUrl,
-    ], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
-    const timeout = setTimeout(() => {
-      child.kill()
-      reject(new Error('Browser smoke test timed out'))
-    }, 60_000)
+async function waitForDevToolsPort(browser, profileDirectory, getStderr) {
+  const portFile = join(profileDirectory, 'DevToolsActivePort')
+  const deadline = Date.now() + browserStartupTimeoutMs
 
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk) => { stdout += chunk })
-    child.stderr.on('data', (chunk) => { stderr += chunk })
-    child.once('error', (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-    child.once('exit', (code, signal) => {
-      clearTimeout(timeout)
-      if (code !== 0) {
-        reject(new Error(
-          `Browser exited with ${signal ?? `exit code ${code}`}\n${stderr}`,
-        ))
+  while (Date.now() < deadline) {
+    if (browser.exitCode !== null) {
+      throw new Error(`Browser exited before DevTools startup\n${getStderr()}`)
+    }
+    try {
+      const [port] = (await readFile(portFile, 'utf8')).split(/\r?\n/)
+      if (/^\d+$/.test(port)) {
+        return Number(port)
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error
+      }
+    }
+    await delay(50)
+  }
+
+  throw new Error(`Timed out waiting for Chrome DevTools\n${getStderr()}`)
+}
+
+async function waitForPageTarget(port, browser, getStderr) {
+  const deadline = Date.now() + browserStartupTimeoutMs
+
+  while (Date.now() < deadline) {
+    if (browser.exitCode !== null) {
+      throw new Error(`Browser exited before page target startup\n${getStderr()}`)
+    }
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/list`)
+      if (response.ok) {
+        const targets = await response.json()
+        const page = targets.find((target) =>
+          target.type === 'page' && target.webSocketDebuggerUrl,
+        )
+        if (page) {
+          return page.webSocketDebuggerUrl
+        }
+      }
+    } catch {
+      // DevTools may not have published its HTTP endpoint yet
+    }
+    await delay(50)
+  }
+
+  throw new Error(`Timed out waiting for a Chrome page target\n${getStderr()}`)
+}
+
+function connectToDevTools(webSocketUrl) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(webSocketUrl)
+    const pending = new Map()
+    const exceptions = []
+    let nextId = 1
+
+    socket.addEventListener('open', () => {
+      resolve({
+        exceptions,
+        send(method, params = {}) {
+          return new Promise((resolveCommand, rejectCommand) => {
+            const id = nextId
+            nextId += 1
+            pending.set(id, { resolve: resolveCommand, reject: rejectCommand })
+            socket.send(JSON.stringify({ id, method, params }))
+          })
+        },
+        close() {
+          socket.close()
+        },
+      })
+    }, { once: true })
+    socket.addEventListener('message', (event) => {
+      const message = JSON.parse(event.data)
+      if (message.id) {
+        const command = pending.get(message.id)
+        if (!command) {
+          return
+        }
+        pending.delete(message.id)
+        if (message.error) {
+          command.reject(new Error(message.error.message))
+        } else {
+          command.resolve(message.result)
+        }
         return
       }
-      resolve({ stdout, stderr })
+      if (message.method === 'Runtime.exceptionThrown') {
+        const details = message.params?.exceptionDetails
+        exceptions.push(
+          details?.exception?.description ?? details?.text ?? 'Unknown page exception',
+        )
+      }
+    })
+    socket.addEventListener('error', () => {
+      reject(new Error('Could not connect to Chrome DevTools'))
+    }, { once: true })
+    socket.addEventListener('close', () => {
+      for (const command of pending.values()) {
+        command.reject(new Error('Chrome DevTools connection closed'))
+      }
+      pending.clear()
     })
   })
 }
 
+async function readSmokeSnapshot(devTools) {
+  const evaluation = await devTools.send('Runtime.evaluate', {
+    expression: `(() => {
+      const body = document.body
+      return {
+        readyState: document.readyState,
+        status: body?.dataset.smokeStatus ?? null,
+        phase: body?.dataset.smokePhase ?? null,
+        error: body?.dataset.smokeError ?? null,
+        highDensityMilliseconds: body?.dataset.highDensityInitMs ?? null,
+        highDensityTriangles: body?.dataset.highDensityTriangles ?? null,
+        maximumLongTaskMilliseconds:
+          body?.dataset.highDensityMaxLongTaskMs ?? null,
+        domTail: document.documentElement?.outerHTML.slice(-4000) ?? '',
+      }
+    })()`,
+    returnByValue: true,
+  })
+  return evaluation.result?.value
+}
+
+async function waitForSmokeResult(devTools, browser, getStderr) {
+  const deadline = Date.now() + smokeTimeoutMs
+  let latestSnapshot
+
+  while (Date.now() < deadline) {
+    if (browser.exitCode !== null) {
+      throw new Error(`Browser exited during smoke test\n${getStderr()}`)
+    }
+    try {
+      latestSnapshot = await readSmokeSnapshot(devTools)
+      if (['passed', 'failed'].includes(latestSnapshot?.status)) {
+        return latestSnapshot
+      }
+    } catch (error) {
+      if (!error.message.includes('context')) {
+        throw error
+      }
+    }
+    await delay(100)
+  }
+
+  return {
+    ...latestSnapshot,
+    status: 'timed-out',
+    error: `No final smoke result after ${smokeTimeoutMs}ms`,
+  }
+}
+
+async function runBrowser(browser, profileDirectory, url, windowSize) {
+  const [width, height] = windowSize.split(',').map(Number)
+  const child = spawn(browser, [
+    '--headless=new',
+    '--no-sandbox',
+    '--disable-background-networking',
+    '--disable-component-update',
+    '--disable-default-apps',
+    '--disable-dev-shm-usage',
+    '--disable-sync',
+    '--enable-unsafe-swiftshader',
+    '--no-default-browser-check',
+    '--no-first-run',
+    '--remote-allow-origins=*',
+    '--remote-debugging-port=0',
+    '--use-gl=angle',
+    '--use-angle=swiftshader',
+    `--window-size=${windowSize}`,
+    `--user-data-dir=${profileDirectory}`,
+    'about:blank',
+  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  let stdout = ''
+  let stderr = ''
+  let launchError
+  let devTools
+
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', (chunk) => { stdout += chunk })
+  child.stderr.on('data', (chunk) => { stderr += chunk })
+  child.once('error', (error) => { launchError = error })
+
+  try {
+    const port = await waitForDevToolsPort(child, profileDirectory, () => stderr)
+    if (launchError) {
+      throw launchError
+    }
+    const pageTarget = await waitForPageTarget(port, child, () => stderr)
+    devTools = await connectToDevTools(pageTarget)
+    await devTools.send('Runtime.enable')
+    await devTools.send('Page.enable')
+    await devTools.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    })
+    await devTools.send('Page.navigate', { url })
+    const snapshot = await waitForSmokeResult(devTools, child, () => stderr)
+    return { snapshot, stdout, stderr, exceptions: devTools.exceptions }
+  } finally {
+    devTools?.close()
+    if (child.exitCode === null) {
+      child.kill()
+      await Promise.race([
+        new Promise((resolve) => child.once('exit', resolve)),
+        delay(5_000),
+      ])
+    }
+  }
+}
+
+function outputTail(output, maximumLength = 4000) {
+  const normalized = output.trim()
+  return normalized.length > maximumLength
+    ? `...${normalized.slice(-maximumLength)}`
+    : normalized
+}
+
+function browserErrorTail(stderr) {
+  return outputTail(
+    stderr
+      .split(/\r?\n/)
+      .filter((line) => !line.includes('DEPRECATED_ENDPOINT'))
+      .join('\n'),
+  )
+}
+
+function assertSmokePassed(result, viewport, viteOutput) {
+  if (result.snapshot?.status !== 'passed') {
+    const details = [
+      `Smoke status: ${result.snapshot?.status ?? 'missing'}`,
+      `Smoke phase: ${result.snapshot?.phase ?? 'missing'}`,
+      `Smoke error: ${result.snapshot?.error ?? 'missing'}`,
+      `Page exceptions:\n${outputTail(result.exceptions.join('\n')) || '(empty)'}`,
+      `DOM output tail:\n${result.snapshot?.domTail || '(empty)'}`,
+      `Browser error tail:\n${browserErrorTail(result.stderr) || '(empty)'}`,
+      `Vite output:\n${outputTail(viteOutput) || '(empty)'}`,
+    ]
+    throw new Error(
+      `${viewport} browser smoke test did not report success\n${details.join('\n\n')}`,
+    )
+  }
+}
+
 await access(viteEntry)
+await assertInstalledPackageIsFresh()
 const browser = await findBrowser()
 const profileDirectory = await mkdtemp(join(tmpdir(), 'customforge-smoke-'))
 let serverOutput = ''
@@ -142,14 +398,35 @@ server.stderr.on('data', (chunk) => { serverOutput += chunk })
 
 try {
   await waitForServer(server, () => serverOutput)
-  const result = await runBrowser(browser, profileDirectory)
-  if (!result.stdout.includes('data-smoke-status="passed"')) {
-    const failure = result.stdout.match(/data-smoke-error="([^"]*)"/)?.[1]
-    throw new Error(
-      `Browser smoke test did not report success${failure ? `: ${failure}` : ''}\n${result.stderr}`,
-    )
+  const desktopResult = await runBrowser(
+    browser,
+    join(profileDirectory, 'desktop'),
+    desktopSmokeUrl,
+    '1440,900',
+  )
+  assertSmokePassed(desktopResult, 'Desktop', serverOutput)
+  const mobileResult = await runBrowser(
+    browser,
+    join(profileDirectory, 'mobile'),
+    mobileSmokeUrl,
+    '390,844',
+  )
+  assertSmokePassed(mobileResult, 'Mobile', serverOutput)
+  const highDensityMilliseconds =
+    desktopResult.snapshot.highDensityMilliseconds
+  const highDensityTriangles = desktopResult.snapshot.highDensityTriangles
+  const maximumLongTaskMilliseconds =
+    desktopResult.snapshot.maximumLongTaskMilliseconds
+  if (
+    !highDensityMilliseconds ||
+    !highDensityTriangles ||
+    !maximumLongTaskMilliseconds
+  ) {
+    throw new Error('Browser smoke test did not report high-density timing')
   }
-  console.log('Browser smoke test passed')
+  console.log(
+    `Browser smoke test passed at desktop and mobile sizes (${highDensityTriangles} UV triangles initialized in ${highDensityMilliseconds}ms; maximum Long Task ${maximumLongTaskMilliseconds}ms)`,
+  )
 } finally {
   if (server.exitCode === null) {
     server.kill()

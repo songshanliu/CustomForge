@@ -10,6 +10,20 @@ import {
 } from 'customforge/workbench'
 import 'customforge/style.css'
 import './styles.css'
+import { createHighDensityProductFixture } from './highDensityProduct'
+
+const HIGH_DENSITY_INITIALIZATION_BUDGET_MS = 2_000
+const HIGH_DENSITY_LONG_TASK_BUDGET_MS = 500
+const smokeMode = new URLSearchParams(window.location.search).get('smoke')
+
+function setSmokePhase(phase: string): void {
+  document.body.dataset.smokePhase = phase
+}
+
+if (smokeMode) {
+  document.body.dataset.smokeStatus = 'initializing'
+  setSmokePhase('default-workbench')
+}
 
 const brandLogoUrl = `data:image/svg+xml,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
@@ -101,13 +115,17 @@ function assertSmoke(condition: unknown, message: string): asserts condition {
   }
 }
 
-async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  message: string,
+  milliseconds = 2_000,
+): Promise<T> {
   let timeout: number | undefined
   try {
     return await Promise.race([
       promise,
       new Promise<never>((_resolve, reject) => {
-        timeout = window.setTimeout(() => reject(new Error(message)), 2_000)
+        timeout = window.setTimeout(() => reject(new Error(message)), milliseconds)
       }),
     ])
   } finally {
@@ -117,44 +135,144 @@ async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> 
   }
 }
 
-function waitForNonblankRender(host: HTMLElement): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let observer: MutationObserver | undefined
-    const timeout = window.setTimeout(() => {
-      observer?.disconnect()
-      reject(new Error('3D model disappeared at maximum zoom-out'))
-    }, 2_000)
-    const finish = (): void => {
-      window.clearTimeout(timeout)
-      observer?.disconnect()
-      resolve()
-    }
-    const checkState = (): void => {
-      if (host.dataset.renderState === 'nonblank') {
-        finish()
+function inspectWebGlFrame(canvas: HTMLCanvasElement): void {
+  const context = canvas.getContext('webgl2')
+  assertSmoke(context, '3D viewer WebGL context was not found')
+  const width = context.drawingBufferWidth
+  const height = context.drawingBufferHeight
+  assertSmoke(width > 1 && height > 1, '3D viewer drawing buffer is empty')
+
+  const pixels = new Uint8Array(width * height * 4)
+  context.readPixels(
+    0,
+    0,
+    width,
+    height,
+    context.RGBA,
+    context.UNSIGNED_BYTE,
+    pixels,
+  )
+  const minimum = [255, 255, 255]
+  const maximum = [0, 0, 0]
+  const sampleRatios = [0.1, 0.25, 0.4, 0.45, 0.5, 0.55, 0.6, 0.75, 0.9]
+  for (const xRatio of sampleRatios) {
+    for (const yRatio of sampleRatios) {
+      const x = Math.min(Math.floor(width * xRatio), width - 1)
+      const y = Math.min(Math.floor(height * yRatio), height - 1)
+      const offset = (y * width + x) * 4
+      for (let channel = 0; channel < 3; channel += 1) {
+        minimum[channel] = Math.min(minimum[channel], pixels[offset + channel])
+        maximum[channel] = Math.max(maximum[channel], pixels[offset + channel])
       }
     }
+  }
 
-    observer = new MutationObserver(checkState)
-    observer.observe(host, {
-      attributes: true,
-      attributeFilter: ['data-render-state'],
+  assertSmoke(
+    maximum.some((value, channel) => value - minimum[channel] > 4),
+    '3D model disappeared at maximum zoom-out',
+  )
+}
+
+async function inspectNextWebGlFrame(canvas: HTMLCanvasElement): Promise<void> {
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+  await new Promise<void>((resolve, reject) => {
+    window.requestAnimationFrame(() => {
+      try {
+        inspectWebGlFrame(canvas)
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
     })
-    checkState()
   })
+}
+
+function assertUvOverlayIsVisible(workbench: CustomForgeWorkbenchApi): void {
+  const overlay = workbench.element.querySelector<HTMLCanvasElement>(
+    '.customforge-uv-layout',
+  )
+  const context = overlay?.getContext('2d')
+  assertSmoke(overlay && context && !overlay.hidden, 'UV overlay was not rendered')
+  const center = context.getImageData(
+    Math.floor(overlay.width * 0.503),
+    Math.floor(overlay.height * 0.503),
+    1,
+    1,
+  ).data
+  assertSmoke(center[3] > 0, 'High-density UV printable fill is empty')
+}
+
+async function verifyHighDensityInitialization(): Promise<void> {
+  setSmokePhase('high-density-fixture')
+  const fixture = createHighDensityProductFixture()
+  let benchmarkWorkbench: CustomForgeWorkbenchApi | undefined
+  const longTaskDurations: number[] = []
+  assertSmoke(
+    PerformanceObserver.supportedEntryTypes.includes('longtask'),
+    'Long Task observation is unavailable',
+  )
+  const longTaskObserver = new PerformanceObserver((list) => {
+    list.getEntries().forEach((entry) => longTaskDurations.push(entry.duration))
+  })
+  try {
+    longTaskObserver.observe({ type: 'longtask' })
+    const startedAt = performance.now()
+    setSmokePhase('high-density-workbench')
+    benchmarkWorkbench = await createWorkbench({
+      container: '#app',
+      product: {
+        modelUrl: fixture.modelUrl,
+        surfaceMesh: 'PrintArea',
+        textureFlipY: false,
+      },
+    })
+    const elapsed = performance.now() - startedAt
+    await new Promise<void>((resolve) => window.setTimeout(resolve))
+    const maximumLongTask = Math.max(0, ...longTaskDurations)
+    document.body.dataset.highDensityTriangles = String(fixture.triangleCount)
+    document.body.dataset.highDensityInitMs = elapsed.toFixed(1)
+    document.body.dataset.highDensityMaxLongTaskMs = maximumLongTask.toFixed(1)
+    assertSmoke(
+      elapsed < HIGH_DENSITY_INITIALIZATION_BUDGET_MS,
+      `High-density initialization exceeded ${HIGH_DENSITY_INITIALIZATION_BUDGET_MS}ms: ${elapsed.toFixed(1)}ms`,
+    )
+    assertSmoke(
+      maximumLongTask < HIGH_DENSITY_LONG_TASK_BUDGET_MS,
+      `High-density initialization produced a Long Task over ${HIGH_DENSITY_LONG_TASK_BUDGET_MS}ms: ${maximumLongTask.toFixed(1)}ms`,
+    )
+    assertSmoke(
+      benchmarkWorkbench.customizer.getPrintableBounds().width > 0,
+      'High-density printable bounds are empty',
+    )
+    setSmokePhase('high-density-overlay')
+    assertUvOverlayIsVisible(benchmarkWorkbench)
+    setSmokePhase('high-density-default-product')
+    await benchmarkWorkbench.customizer.loadProduct({})
+    assertSmoke(
+      benchmarkWorkbench.customizer.getProduct().surfaceMesh === 'PrintArea',
+      'Default product did not load after the high-density product',
+    )
+  } finally {
+    longTaskObserver.disconnect()
+    benchmarkWorkbench?.destroy()
+    fixture.dispose()
+  }
 }
 
 async function runBrowserSmoke(
   activeWorkbench: CustomForgeWorkbenchApi,
   activeCustomizer: ProductCustomizerApi,
   stopViewListener: () => void,
+  includeHighDensityBenchmark: boolean,
 ): Promise<void> {
   document.body.dataset.smokeStatus = 'running'
+  setSmokePhase('initial-state')
   try {
     const initialState = activeCustomizer.getState()
     assertSmoke(initialState.product.surfaceMesh === 'PrintArea', 'Model did not initialize')
     assertSmoke(initialState.printableBounds.width > 0, 'Printable bounds are empty')
 
+    setSmokePhase('object-editing')
     activeCustomizer.clearHistory()
     const smokeText = activeCustomizer.addText({
       text: 'SMOKE TEST',
@@ -201,9 +319,11 @@ async function runBrowserSmoke(
       'Design restore changed the object count',
     )
 
+    setSmokePhase('png-export')
     const png = await activeCustomizer.getTextureBlob()
     assertSmoke(png.type === 'image/png' && png.size > 0, 'PNG Blob export failed')
 
+    setSmokePhase('camera-state')
     const originalView = activeCustomizer.getViewState()
     const movedView = activeCustomizer.setViewState({
       position: {
@@ -218,14 +338,11 @@ async function runBrowserSmoke(
     )
     activeCustomizer.setViewState(originalView)
 
-    const viewerHost = activeWorkbench.element.querySelector<HTMLElement>(
-      '[data-role="viewer-host"]',
+    setSmokePhase('zoom-out-render')
+    const viewerCanvas = activeWorkbench.element.querySelector<HTMLCanvasElement>(
+      '[data-role="viewer-host"] .customforge-viewer-canvas',
     )
-    const viewerCanvas = viewerHost?.querySelector<HTMLCanvasElement>(
-      '.customforge-viewer-canvas',
-    )
-    assertSmoke(viewerHost && viewerCanvas, '3D viewer canvas was not found')
-    viewerHost.dataset.renderState = 'pending'
+    assertSmoke(viewerCanvas, '3D viewer canvas was not found')
     for (let index = 0; index < 40; index += 1) {
       viewerCanvas.dispatchEvent(new WheelEvent('wheel', {
         bubbles: true,
@@ -235,9 +352,25 @@ async function runBrowserSmoke(
         deltaY: 100,
       }))
     }
-    await waitForNonblankRender(viewerHost)
+    await withTimeout(
+      inspectNextWebGlFrame(viewerCanvas),
+      '3D viewer did not produce a frame after zoom-out',
+      5_000,
+    )
     activeCustomizer.setViewState(originalView)
 
+    const viewerHost = activeWorkbench.element.querySelector<HTMLElement>(
+      '[data-role="viewer-host"]',
+    )
+    const mountedViewerCanvas = viewerHost?.querySelector<HTMLCanvasElement>(
+      '.customforge-viewer-canvas',
+    )
+    assertSmoke(
+      viewerHost && mountedViewerCanvas === viewerCanvas,
+      '3D viewer canvas was replaced during interaction',
+    )
+
+    setSmokePhase('runtime-extension')
     let resolveExtension: () => void = () => {}
     const extensionClicked = new Promise<void>((resolve) => {
       resolveExtension = () => resolve()
@@ -261,14 +394,20 @@ async function runBrowserSmoke(
       'Runtime extension did not unregister',
     )
 
+    setSmokePhase('destroy-initial-workbench')
     stopViewListener()
     activeWorkbench.destroy()
+    if (includeHighDensityBenchmark) {
+      await verifyHighDensityInitialization()
+    }
+    setSmokePhase('rebuild-workbench')
     const rebuiltWorkbench = await createWorkbench({ container: '#app' })
     assertSmoke(
       rebuiltWorkbench.customizer.getProduct().surfaceMesh === 'PrintArea',
       'Workbench did not rebuild after destroy',
     )
     rebuiltWorkbench.destroy()
+    setSmokePhase('complete')
     document.body.dataset.smokeStatus = 'passed'
   } catch (error) {
     document.body.dataset.smokeStatus = 'failed'
@@ -373,8 +512,13 @@ window.addEventListener('beforeunload', () => {
   workbench.destroy()
 }, { once: true })
 
-if (new URLSearchParams(window.location.search).get('smoke') === '1') {
-  await runBrowserSmoke(workbench, customizer, stopViewChange)
+if (smokeMode) {
+  await runBrowserSmoke(
+    workbench,
+    customizer,
+    stopViewChange,
+    smokeMode === 'desktop',
+  )
 }
 
 void createHeadless

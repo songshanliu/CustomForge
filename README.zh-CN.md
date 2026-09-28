@@ -105,13 +105,13 @@ pnpm pack:local
 命令依次生成 JavaScript、TypeScript 声明和公开样式，检查 npm 文件清单，并创建：
 
 ```text
-customforge-0.1.1.tgz
+customforge-0.1.2.tgz
 ```
 
 在独立 Vite TypeScript 项目中安装该本地制品：
 
 ```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.1.tgz
+pnpm add D:\projects\3DRendering\core_code\customforge-0.1.2.tgz
 ```
 
 仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装
@@ -133,6 +133,8 @@ UV 坐标应当保存在三维模型中
 可选的纹理图片只是二维编辑器的基础图层，不能替代模型中的 UV 数据；未提供时，设计画布和可打印贴花层保持透明
 
 每次加载产品后，编辑器会读取目标 Mesh 的 UV 坐标，并在设计画布上方显示轻微的可打印区域底纹及其外边界。内部三角剖分保持隐藏，该辅助层不会写入实时纹理、Design JSON 或导出的 PNG
+
+高面数可打印 Mesh 的辅助填充不会再逐三角形同步闭合路径，生产渲染也不会读取 Canvas 像素。模型下载、Geometry 提取、GPU 工作量和内存占用仍会随模型复杂度增长，因此生产模型仍应只保留商品外观和可打印表面需要的细节
 
 > [!IMPORTANT]
 > 远程模型、纹理、贴图和字体必须提供允许当前页面来源访问的 CORS 响应头

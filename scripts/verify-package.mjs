@@ -175,9 +175,26 @@ const runtimeJavaScriptFiles = distFiles.filter((file) => file.endsWith('.js'))
 const runtimeSources = await Promise.all(
   runtimeJavaScriptFiles.map((file) => readProjectFile(`dist/${file}`)),
 )
+const combinedRuntimeSource = runtimeSources.join('\n')
 assert(
   runtimeSources.some((source) => source.includes(defaultModelFile)),
   'Runtime bundles do not reference the bundled cup_decal_small_margins.glb asset',
+)
+assert(
+  !combinedRuntimeSource.includes('readPixels('),
+  'Synchronous WebGL pixel diagnostics leaked into the runtime bundle',
+)
+assert(
+  !combinedRuntimeSource.includes('getImageData('),
+  'Synchronous Canvas 2D pixel diagnostics leaked into the runtime bundle',
+)
+assert(
+  !combinedRuntimeSource.includes('renderState'),
+  'Internal render-state diagnostics leaked into the runtime bundle',
+)
+assert(
+  !combinedRuntimeSource.includes('CustomForge browser performance fixture'),
+  'High-density browser fixture leaked into the runtime bundle',
 )
 const runtimeImportSpecifiers = runtimeSources.flatMap(collectImportSpecifiers)
 assert(

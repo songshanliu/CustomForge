@@ -34,6 +34,7 @@ for (const example of examples) {
     '--ignore-workspace',
     '--lockfile=false',
     '--ignore-scripts',
+    '--force',
   ], cwd)
   await runPnpm(['check'], cwd)
   await runPnpm(['build'], cwd)
