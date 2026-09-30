@@ -4,11 +4,7 @@
 
 <h1>CustomForge</h1>
 
-<hr>
-
-<p><strong>让二维纹理画布实时呈现在三维产品上</strong></p>
-
-<p>一个轻量、与前端框架无关的产品定制工具，基于 Fabric.js 和 Three.js 构建浏览器端 2D 到 3D 定制体验</p>
+<p>用 TypeScript 在二维画布上编辑文字和图片，实时查看它们在三维商品上的效果</p>
 
 <p><strong>官网：</strong><a href="https://customforge.org">https://customforge.org</a></p>
 
@@ -19,70 +15,74 @@
 </p>
 
 <p>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-2563EB?style=flat-square&logo=typescript&logoColor=white&labelColor=1F2937">
-  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-7C3AED?style=flat-square&logo=vite&logoColor=white&labelColor=1F2937">
-  <img alt="Three.js" src="https://img.shields.io/badge/Three.js-r185-27272A?style=flat-square&logo=threedotjs&logoColor=white&labelColor=1F2937">
-  <img alt="Fabric.js" src="https://img.shields.io/badge/Fabric.js-7-BE185D?style=flat-square&labelColor=1F2937">
-  <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-0F766E?style=flat-square&logo=apache&logoColor=white&labelColor=1F2937">
+  <a href="https://www.npmjs.com/package/customforge"><img alt="npm version" src="https://img.shields.io/npm/v/customforge?style=flat-square"></a>
+  <a href="./LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
 </p>
 
 </div>
-
----
 
 ## 操作演示
 
 ![CustomForge 商品定制操作演示](./.github/assets/demo.gif)
 
-## 项目能力
+## 快速开始
 
-CustomForge 将常见的二维设计界面与带 UV 的三维模型连接起来：
-
-- 在二维纹理画布上添加和编辑文字
-- 通过 Office 风格的上下文格式栏调整选中文字
-- 上传、移动、缩放和旋转图片
-- 将画布的每次变化实时呈现在三维产品上
-- 上传本地 GLB 模型，或加载远程 GLB/GLTF 模型和可选的基础纹理
-- 通过 Mesh 名称指定可定制表面
-- 将目标 Mesh 的 UV 可打印区域和外边界显示为不会导出的编辑辅助层
-- 使用 OrbitControls 旋转和缩放三维预览
-- 将合成后的纹理导出为 PNG
-- 通过版本化 Design JSON 保存和恢复可编辑对象
-- 通过名称、显隐、锁定和顺序管理对象图层
-- 使用设计快照撤销和重做修改
-- 使用可配置的文字、背景和装饰素材 Dialog
-- 通过品牌、文案、主题变量和图标适配默认 Workbench
-
-工作台默认加载随包提供的 `cup_decal_small_margins.glb`，无需请求外部模型即可直接运行
-
-## 仓库开发
-
-环境要求：Node.js 22+ 和 pnpm 11+
+在你的前端项目中安装：
 
 ```bash
-pnpm install
-pnpm dev
+npm install customforge
 ```
 
-打开 Vite 输出的地址
+使用 pnpm 时运行 `pnpm add customforge`。Fabric.js 和 Three.js 会随包安装
 
-内置演示的左侧是 UV 编辑区，右侧是实时三维预览
+添加一个有明确高度的容器：
 
-## npm 制品
-
-CustomForge `0.1.0` 是发布到 npm Registry 的首个非预发布版本。公共 API 遵循语义化版本规则，Design JSON version 1 文档在整个 `0.1.x` 版本线内保持可读取兼容
-
-使用以下命令安装当前版本：
-
-```powershell
-pnpm add customforge
+```html
+<div id="customforge-workbench" style="height: 640px"></div>
 ```
 
-Fabric.js 和 Three.js 会作为传递依赖自动安装
+在应用的客户端入口中，等容器挂载后创建工作台：
 
-pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略，CustomForge 运行在浏览器中，不使用 Node 原生 canvas，因此不需要执行 `pnpm approve-builds`
+```ts
+import { createWorkbench } from 'customforge/workbench'
+import 'customforge/style.css'
 
-消费项目可以在 `package.json` 中明确记录这一浏览器端选择：
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+})
+```
+
+这个示例会加载随包提供的杯子模型和默认编辑界面。在左侧添加文字或上传图片，杯子上的设计会随编辑实时更新，不需要先准备模型文件
+
+不再使用编辑器时调用 `workbench.destroy()`。在 React、Vue 等组件框架中，应在客户端挂载后初始化，并在组件卸载时销毁实例
+
+需要使用自己的按钮和面板时，从 `customforge` 导入 `createCustomizer()`，参见[自定义界面](#自定义界面)
+
+## 文档
+
+- [快速开始](https://customforge.org/zh/guide/quick-start.html)
+- [配置 Workbench](https://customforge.org/zh/guide/workbench.html)
+- [使用核心 API 自定义界面](https://customforge.org/zh/guide/core-library.html)
+- [准备商品模型](https://customforge.org/zh/guide/product-assets.html)
+
+## 功能
+
+CustomForge 使用 Fabric.js 编辑二维画布，使用 Three.js 预览商品。可以在原生 TypeScript 项目或前端框架中接入
+
+- 编辑文字内容、字体、字号、颜色、对齐方式和间距
+- 上传、移动、缩放和旋转图片，或将图片铺满可打印区域作为背景
+- 上传 GLB 或加载远程 GLB/GLTF，指定可打印 Mesh，并旋转、缩放商品预览
+- 按模型 UV 边界显示编辑辅助线，导出 PNG 时不包含辅助线和选择框
+- 管理图层、撤销和重做，通过 Design JSON 保存和恢复可编辑设计
+- 调整工作台的品牌、文案、主题、图标和预设素材，扩展业务按钮，或通过核心 API 自建界面
+
+## 浏览器与安装说明
+
+浏览器基线：Chrome 和 Edge 111+、Firefox 113+、Safari 16.4+。CustomForge 需要 ES2022 模块、Canvas 2D、WebGL、`ResizeObserver`、原生 `dialog`、容器查询和 `color-mix()` 支持
+
+pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略。CustomForge 运行在浏览器中，不使用 Node 原生 canvas，因此接入这个包不需要执行 `pnpm approve-builds`
+
+项目可以在 `package.json` 中明确记录这一选择：
 
 ```json
 {
@@ -91,30 +91,6 @@ pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略，CustomForge
   }
 }
 ```
-
-包页面：[npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
-
-浏览器基线：Chrome 和 Edge 111+、Firefox 113+、Safari 16.4+。CustomForge 需要 ES2022 模块、Canvas 2D、WebGL、`ResizeObserver`、原生 `dialog`、容器查询和 `color-mix()` 支持
-
-发布前如需进行独立于仓库源码的验证，可在仓库根目录构建并生成本地包：
-
-```powershell
-pnpm pack:local
-```
-
-命令依次生成 JavaScript、TypeScript 声明和公开样式，检查 npm 文件清单，并创建：
-
-```text
-customforge-0.1.2.tgz
-```
-
-在独立 Vite TypeScript 项目中安装该本地制品：
-
-```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.2.tgz
-```
-
-仓库中的 `examples/npm-consumer` 提供了一个只通过该 `.tgz` 导入的消费示例。在该目录中使用 `pnpm install --ignore-workspace`，确保 pnpm 将其作为独立于父级 workspace 的项目安装
 
 ## 加载你的产品
 
@@ -141,9 +117,9 @@ UV 坐标应当保存在三维模型中
 >
 > 被浏览器阻止或污染 Canvas 的资源可能无法加载，也会导致 PNG 导出失败
 
-## 基本用法
+## 自定义界面
 
-消费方需要完全掌控界面时，应使用 `ProductCustomizerApi` 核心入口。它可以挂载到任意两个 DOM 容器中，不依赖 Workbench 的 DOM 结构或 CSS 类：
+`createCustomizer()` 提供编辑器和查看器，将它们挂载到两个不同的 DOM 容器后，通过返回的 `ProductCustomizerApi` 连接你自己的控件：
 
 CustomForge 仅支持浏览器环境，应在 DOM 挂载容器可用后创建实例
 
@@ -203,9 +179,9 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 公开包与本地 `.tgz` 使用相同的根入口和样式入口；需要可重复安装时应固定具体版本
 
-## 开箱即用的 Workbench
+## 配置 Workbench
 
-不希望从零编写控制界面时，可以使用可选的 Workbench 入口
+通过 `createWorkbench()` 的配置传入商品、品牌和界面文案，或调整工作台布局
 
 挂载元素必须设置明确高度，设计画布、图层面板和三维区域才能正确计算可用空间
 
@@ -542,6 +518,33 @@ ProductCustomizer
 - 浏览器可以在 CORS 策略下访问远程资源地址
 
 随包提供的默认模型将完整杯体保存为 `MugBody`，并将带 UV 的可打印贴花层保存为 `PrintArea`。CustomForge 会保留杯体材质，只把实时设计纹理应用到 `PrintArea`
+
+## 仓库开发
+
+环境要求：Node.js 22+ 和 pnpm 11+。在仓库根目录运行：
+
+```bash
+pnpm install
+pnpm dev
+```
+
+打开 Vite 输出的地址即可运行本地演示
+
+### 本地验证 npm 包
+
+构建并打包：
+
+```bash
+pnpm pack:local
+```
+
+命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.1.2.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
+
+```bash
+pnpm add /absolute/path/to/customforge-0.1.2.tgz
+```
+
+仓库中的 [npm 消费示例](./examples/npm-consumer)和 [API 契约消费示例](./examples/api-contract-consumer)独立于源码 workspace 安装该 tarball，具体启动和验证方法见各自的 README
 
 ## 项目结构
 

@@ -4,11 +4,7 @@
 
 <h1>CustomForge</h1>
 
-<hr>
-
-<p><strong>Turn a 2D texture canvas into a live 3D product preview</strong></p>
-
-<p>A lightweight, framework-agnostic toolkit for building browser-based product customization experiences with Fabric.js and Three.js</p>
+<p>A TypeScript library for editing text and images on a 2D canvas and previewing them on a 3D product</p>
 
 <p><strong>Website:</strong> <a href="https://customforge.org">https://customforge.org</a></p>
 
@@ -19,72 +15,74 @@
 </p>
 
 <p>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-2563EB?style=flat-square&logo=typescript&logoColor=white&labelColor=1F2937">
-  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-7C3AED?style=flat-square&logo=vite&logoColor=white&labelColor=1F2937">
-  <img alt="Three.js" src="https://img.shields.io/badge/Three.js-r185-27272A?style=flat-square&logo=threedotjs&logoColor=white&labelColor=1F2937">
-  <img alt="Fabric.js" src="https://img.shields.io/badge/Fabric.js-7-BE185D?style=flat-square&labelColor=1F2937">
-  <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-0F766E?style=flat-square&logo=apache&logoColor=white&labelColor=1F2937">
+  <a href="https://www.npmjs.com/package/customforge"><img alt="npm version" src="https://img.shields.io/npm/v/customforge?style=flat-square"></a>
+  <a href="./LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
 </p>
 
 </div>
-
----
 
 ## Demo
 
 ![CustomForge product customization workflow](./.github/assets/demo.gif)
 
-## What It Does
+## Quick Start
 
-CustomForge connects a familiar 2D design surface to a UV-mapped 3D model:
-
-- Add and edit text on a 2D texture canvas
-- Format selected text through an Office-style contextual toolbar
-- Upload, move, scale, and rotate images
-- Preview every canvas change on a 3D product in real time
-- Load remote GLB/GLTF models and optional base textures
-- Select the customizable surface by mesh name
-- Display the target mesh UV printable region and boundary as a non-exported editor guide
-- Rotate and zoom the 3D preview with OrbitControls
-- Export the composed texture as a PNG
-- Save and restore editable objects through versioned Design JSON
-- Organize objects through names, visibility, locking, and layer order
-- Undo and redo design changes through snapshot history
-- Use configurable typography, background, and decorative asset Dialogs
-- Adapt the default Workbench with branding, labels, theme tokens, and icons
-
-The included workbench starts with the bundled `cup_decal_small_margins.glb`, so the project works immediately without fetching an external model
-
-## Repository Development
-
-Requirements: Node.js 22+ and pnpm 11+
+Install the package in your frontend project:
 
 ```bash
-pnpm install
-pnpm dev
+npm install customforge
 ```
 
-Open the URL printed by Vite
+With pnpm, use `pnpm add customforge`. Fabric.js and Three.js are included as dependencies
 
-The built-in demo appears with a UV workspace on the left and a live 3D preview on the right
+Add a container with an explicit height:
 
-## npm Package
-
-CustomForge `0.1.0` is the first non-prerelease version published to the npm Registry. Public APIs follow semantic versioning, and Design JSON version 1 documents remain readable throughout the `0.1.x` line
-
-Install the current release with:
-
-```powershell
-pnpm add customforge
+```html
+<div id="customforge-workbench" style="height: 640px"></div>
 ```
 
-Fabric.js and Three.js are installed automatically as transitive dependencies
+Then initialize the Workbench from your application's client entry, after the container is mounted:
 
-pnpm may report that the optional native `canvas` build script was ignored
+```ts
+import { createWorkbench } from 'customforge/workbench'
+import 'customforge/style.css'
 
-CustomForge runs in the browser and does not use Node native canvas, so `pnpm approve-builds` is not required
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+})
+```
 
-Consumer projects can explicitly acknowledge this browser-only choice in `package.json`:
+This loads the bundled cup model and the default editing interface. Add text or upload an image in the left panel; the design appears on the cup as you edit. No model files are needed for this example
+
+Call `workbench.destroy()` when the editor is no longer needed. In React, Vue, or another component framework, initialize it on the client and destroy it during component cleanup
+
+If your application supplies its own controls, use `createCustomizer()` from `customforge`; see [Build Your Own UI](#build-your-own-ui)
+
+## Documentation
+
+- [Quick start](https://customforge.org/guide/quick-start.html)
+- [Configure the Workbench](https://customforge.org/guide/workbench.html)
+- [Build your own UI with the core API](https://customforge.org/guide/core-library.html)
+- [Prepare a product model](https://customforge.org/guide/product-assets.html)
+
+## Features
+
+CustomForge uses Fabric.js for 2D editing and Three.js for the product preview. It works with plain TypeScript or a frontend framework
+
+- Edit text content, font, size, color, alignment, and spacing
+- Upload, move, resize, and rotate images, or fit an image to the printable area as a background
+- Upload a GLB or load a remote GLB/GLTF, choose the printable mesh, and rotate or zoom the preview
+- Use the model's UV boundary as an editing guide and export the design as a PNG without the guide or selection controls
+- Manage layers, undo and redo changes, and save or restore editable designs as Design JSON
+- Customize the Workbench's branding, labels, theme, icons, and asset presets; add application buttons or build a separate UI through the core API
+
+## Browser and Installation Notes
+
+Browser baseline: Chrome and Edge 111+, Firefox 113+, and Safari 16.4+. CustomForge requires ES2022 modules, Canvas 2D, WebGL, `ResizeObserver`, native `dialog`, container queries, and `color-mix()` support
+
+pnpm may report that the optional native `canvas` build script was ignored. CustomForge runs in the browser and does not use Node native canvas, so `pnpm approve-builds` is not required for this package
+
+Projects can record this choice in `package.json`:
 
 ```json
 {
@@ -93,30 +91,6 @@ Consumer projects can explicitly acknowledge this browser-only choice in `packag
   }
 }
 ```
-
-Package page: [npmjs.com/package/customforge](https://www.npmjs.com/package/customforge)
-
-Browser baseline: Chrome and Edge 111+, Firefox 113+, and Safari 16.4+. CustomForge requires ES2022 modules, Canvas 2D, WebGL, `ResizeObserver`, native `dialog`, container queries, and `color-mix()` support
-
-For repository-independent verification before publishing, build and create the local package from the repository root:
-
-```powershell
-pnpm pack:local
-```
-
-The command builds JavaScript, TypeScript declarations, and public styles, checks the npm file list, and creates:
-
-```text
-customforge-0.1.2.tgz
-```
-
-Install that local package in an independent Vite TypeScript project:
-
-```powershell
-pnpm add D:\projects\3DRendering\core_code\customforge-0.1.2.tgz
-```
-
-The checked-in `examples/npm-consumer` project imports CustomForge only through this `.tgz`. Run `pnpm install --ignore-workspace` in that directory so pnpm installs it independently from the parent workspace
 
 ## Load Your Product
 
@@ -145,9 +119,9 @@ High-density printable meshes are supported without synchronously closing every 
 >
 > A blocked or canvas-tainting resource may fail to load and can prevent PNG export
 
-## Basic Usage
+## Build Your Own UI
 
-Use the `ProductCustomizerApi` core when the consuming application owns the complete UI. It can be mounted into any two DOM containers and does not require the Workbench DOM structure or CSS classes:
+`createCustomizer()` provides the editor and viewer without the Workbench controls. Mount them in two separate DOM containers and connect your own UI to the returned `ProductCustomizerApi`:
 
 CustomForge is browser-only and must be initialized after its DOM containers are available
 
@@ -207,9 +181,9 @@ window.addEventListener('beforeunload', () => customizer.destroy(), {
 
 The public package uses the same root and style imports as the local `.tgz`; pin an exact version when reproducible installs are required
 
-## Ready-made Workbench
+## Configure the Workbench
 
-Use the optional Workbench entry when a complete default interface is preferable to building controls from scratch
+Pass options to `createWorkbench()` to load your product, set branding and labels, or adjust the interface
 
 The host element must have an explicit height so the design surface, collapsible layers panel, and 3D preview can measure their available space
 
@@ -547,6 +521,33 @@ The current model contract expects:
 - Remote asset URLs accessible under the browser's CORS policy
 
 The bundled default model separates the complete cup into `MugBody` and the UV-mapped printable overlay into `PrintArea`. CustomForge preserves the body material and applies the live design texture only to `PrintArea`
+
+## Repository Development
+
+Requirements: Node.js 22+ and pnpm 11+. Run these commands from the repository root:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Open the URL printed by Vite to run the local demo
+
+### Test the npm package locally
+
+Build and pack the library:
+
+```bash
+pnpm pack:local
+```
+
+This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.1.2.tgz`. To install it in another project, use the tarball's absolute path:
+
+```bash
+pnpm add /absolute/path/to/customforge-0.1.2.tgz
+```
+
+The checked-in [npm consumer](./examples/npm-consumer) and [API contract consumer](./examples/api-contract-consumer) install this tarball independently of the source workspace. Their READMEs describe setup and verification
 
 ## Project Structure
 
