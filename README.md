@@ -108,7 +108,7 @@ The following fields are available under **Advanced options**:
 
 UV coordinates are expected to be stored in the 3D model
 
-The optional texture image is the visual base layer, not a replacement for model UV data. Without one, the design canvas and printable overlay remain transparent
+The optional texture image is the visual base layer, not a replacement for model UV data. Without one, the design canvas remains transparent; the preview retains the model's own base material
 
 After each product load, the editor reads the target mesh UV coordinates and displays a subtle printable-region fill with its outer boundary above the design canvas. Internal triangulation stays hidden, and the guide is not written into the live texture, Design JSON, or exported PNG
 
@@ -119,6 +119,99 @@ High-density printable meshes are supported without synchronously closing every 
 >
 > A blocked or canvas-tainting resource may fail to load and can prevent PNG export
 
+## UV Mapping and Canvas Metadata
+
+The following additions are **unreleased source changes**, not APIs available in the published `0.1.2` package. Test a freshly packed local artifact before upgrading consumers
+
+The default remains UV0 with the original `[0,1] × [0,1]` domain. Existing margins stay in place. Negative UVs are valid model data, but original mapping clamps samples outside that domain. To fit the entire printable layout explicitly:
+
+```ts
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  editorWidth: 1200,
+  editorHeight: 600,
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    surfaceMesh: 'PrintArea',
+    uvChannel: 0,
+    uvMapping: { mode: 'fit-bounds' },
+    textureFlipY: false,
+    modelRevision: 'sha256:content-hash-from-your-asset-service',
+  },
+  onDiagnostic: (diagnostic) => console.log(diagnostic.code, diagnostic.message),
+  formatDiagnostic: (diagnostic) => diagnostic.message,
+})
+
+const resolved = workbench.customizer.getPrintSurfaceInfo()
+const design = workbench.customizer.saveDesign()
+```
+
+`1200 × 600` is an example configuration, not a physical print size inferred from a model. Both `createCustomizer()` and `createWorkbench()` accept mapping, size, initial-design, and diagnostic-callback options; `formatDiagnostic` belongs to Workbench
+
+| Product option | Behavior |
+| --- | --- |
+| `uvMapping: { mode: 'original' }` | Default; preserves the standard domain and existing margins |
+| `uvMapping: { mode: 'fit-bounds' }` | One affine transform for all triangles in the first material slot, retaining island relationships |
+| `uvMapping: { mode: 'domain', domain: { minU, minV, maxU, maxV } }` | Uses a finite, non-degenerate reference rectangle, including any intentional margins |
+| `uvChannel: 0 \| 1 \| 2 \| 3` | Selects the same channel for guides, bounds, and 3D sampling; a missing channel fails instead of falling back |
+| `modelRevision` | Optional immutable content identity provided by the host; a URL alone is not identity proof |
+
+The design texture has its own matrix and alpha composition. Model UVs, base textures and their transformations, and original PBR parameters remain intact. An empty design reveals the existing material; CustomForge does not erase the model's base color
+
+To let a product declare its settings, place this structure on the selected glTF **node**, under `extras`, and explicitly enable `readModelMetadata: true`:
+
+```json
+{
+  "customforge": {
+    "version": 1,
+    "canvas": { "width": 1200, "height": 600 },
+    "printSurface": {
+      "uvChannel": 0,
+      "textureFlipY": false,
+      "uvMapping": { "mode": "fit-bounds" }
+    }
+  }
+}
+```
+
+For a new design, an explicit width/height pair wins over formal node metadata, then the supported `customforgeGuide.canvas` or `canvasWidth/canvasHeight` aliases, then `1024 × 512`. Metadata is ignored unless enabled. Never mix an explicit width with a metadata height: metadata mode requires both explicit dimensions. With metadata disabled, the old single-dimension configuration still uses the other default side
+
+Dimensions must be positive integers, no more than 8192 per side, no more than 16,777,216 pixels in total, and within the current device's maximum texture size. These are logical pixels; resizing the UI only changes its display scale. Malformed or excessive metadata fails before Fabric canvas allocation
+
+`getPrintSurfaceInfo()` returns final sizes, raw bounds, triangle count, numerical mapping, per-field sources, and diagnostics as an independent snapshot. Initialization diagnostics are available through `onDiagnostic` and the snapshot; subscribe to `diagnostic` for later loads. Workbench warnings can be translated with `formatDiagnostic`, while thrown `PrintSurfaceError` instances expose a stable `code` for `formatError` or host handling
+
+Out-of-domain sampling reports `UV_OUTSIDE_DESIGN_DOMAIN`. Missing channels, invalid UVs, degenerate new domains, incompatible sizes, and mapping conflicts fail with explicit errors. Original mode retains its historical full-canvas fallback for degenerate visible bounds and reports that fallback. Missing enabled metadata reports `CANVAS_METADATA_MISSING`; unverifiable content identity reports `MODEL_REVISION_UNVERIFIED`
+
+### Restore and Upgrade
+
+| Document | Read behavior | Default write behavior |
+| --- | --- | --- |
+| Schema 1 | Saved size, legacy UV0/original mapping, and outer `textureFlipY` configuration | Remains Schema 1 when no new mapping capability is enabled |
+| Schema 2 | Saved size, numerical domain, surface, channel, direction, and optional content revision | Used for new mappings, non-default channels, or explicitly persisted mapping configuration |
+
+Restore before creating the canvas:
+
+```ts
+const restored = await createWorkbench({
+  container: '#customforge-workbench',
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    modelRevision: 'sha256:content-hash-from-your-asset-service',
+  },
+  initialDesign: savedDesignDocument,
+})
+```
+
+For Schema 1, also pass the saved outer `textureFlipY`; the document never stored it. Saved design settings take precedence over current model metadata, and conflicting explicit settings are rejected. Schema 2 stores the resolved **numbers**, so replay does not recalculate `fit-bounds` from a newer model. Different known content revisions are rejected; a missing revision is reported as unverified
+
+Runtime restores preserve the document's own optional `modelRevision`, including its absence. A revision inherited from an earlier document is not proof of the current model's identity. `modelRevisionVerified` and the corresponding diagnostic refresh after restore, undo, and redo; verification requires a matching revision supplied by the host for the actual model
+
+Runtime `loadDesign()` requires the current canvas and mapping to match. It does not migrate coordinates or switch models. `loadProduct()` keeps object coordinates and the existing canvas, resets mapping state and history after success, and rejects a product requiring another size. If no size is declared, the current canvas remains in use (`sources.canvas: 'instance'`). Prepare failures retain the active product; superseded or destroyed requests reject with `AbortError`. An unexpected commit failure destroys the unusable instance and requires recreation
+
+Upgrade all document readers, including administrative replay, **before** enabling Schema 2 writers. The published `0.1.2` reader cannot read Schema 2. Keep product URLs and resource ownership outside Design JSON, and review server validation of document version and size before enabling writes
+
+This is not UV unwrapping, independent UDIM editing, overlap removal, distortion correction, or physical size inference. Background images still stretch to the printable bounding rectangle. That rectangle is not an exact contour mask; `cover`/`contain` and contour-clipped export are not implemented here
+
 ## Build Your Own UI
 
 `createCustomizer()` provides the editor and viewer without the Workbench controls. Mount them in two separate DOM containers and connect your own UI to the returned `ProductCustomizerApi`:
@@ -126,6 +219,8 @@ High-density printable meshes are supported without synchronously closing every 
 CustomForge is browser-only and must be initialized after its DOM containers are available
 
 The editor and viewer require two different containers; call `destroy()` when the page, host component, or instance is no longer in use to release Fabric, WebGL, observer, and event resources
+
+Model-owned decoded images are released on product replacement or failure. Destroying the instance also loses its WebGL context; create a new instance to use the editor again.
 
 ```html
 <div id="texture-editor"></div>
@@ -403,9 +498,9 @@ if (savedDesign) {
 }
 ```
 
-The current Schema version is `1`. It stores the logical canvas size and the text and image objects in back-to-front render order, including stable object IDs, names, visibility, locking, image roles, center-based transforms, and rich text formatting. Existing version 1 documents without the optional formatting fields continue to load with the original bold, centered defaults
+The document reader supports Schema `1` and `2`. Both store the logical canvas size and text and image objects in back-to-front render order, including stable IDs, layer state, center-based transforms, and rich text formatting. Schema 2 also stores the resolved print mapping described above. Existing version 1 documents retain the original bold, centered defaults for omitted formatting fields
 
-Design JSON intentionally excludes the product model, target mesh, and base texture. A document can only be loaded into an editor with exactly the same logical width and height
+Design JSON excludes model files, model URLs, and the base texture; Schema 2 does include the print-node name as part of its mapping. A document can only be loaded into an editor with the same logical dimensions and compatible mapping
 
 An image with `role: 'background'` is a design object rather than the product base texture. Only one is allowed, it must be the first object, and older version 1 documents without `role` continue to load as ordinary image elements
 
@@ -448,6 +543,7 @@ Successful product replacement keeps the current design but starts a new history
 | `getProduct()` | Return the resolved current product configuration |
 | `getCanvasSize()` | Return the logical texture dimensions |
 | `getPrintableBounds()` | Return the UV printable bounds in logical canvas coordinates |
+| `getPrintSurfaceInfo()` | Return resolved mapping, sources, final canvas, content verification, and diagnostics |
 | `getObjects()` | Return the current objects in back-to-front layer order |
 | `getSelectedObjectIds()` | Return stable IDs for the current selection |
 | `selectObject(id)` | Select a visible object by stable ID |
@@ -477,7 +573,7 @@ Successful product replacement keeps the current design but starts a new history
 | `on(event, listener)` | Subscribe to instance events; returns an unsubscribe function |
 | `destroy()` | Release DOM events, Fabric state, and WebGL resources |
 
-Available events are `ready`, `change`, `selectionchange`, `historychange`, `viewchange`, `status`, and `error`
+Available events are `ready`, `change`, `selectionchange`, `historychange`, `viewchange`, `diagnostic`, `status`, and `error`
 
 The headless contract is exported as `ProductCustomizerApi`; the default UI contract is exported as `CustomForgeWorkbenchApi`. The concrete classes remain available, but consumers can depend on these interfaces without coupling application code to their implementation.
 

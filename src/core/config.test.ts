@@ -8,6 +8,8 @@ describe('normalizeProductConfiguration', () => {
       textureUrl: undefined,
       surfaceMesh: 'PrintArea',
       textureFlipY: false,
+      uvChannel: 0,
+      uvMapping: { mode: 'original' },
     })
   })
 
@@ -23,6 +25,8 @@ describe('normalizeProductConfiguration', () => {
       textureUrl: 'https://example.com/texture.png',
       surfaceMesh: 'Label',
       textureFlipY: false,
+      uvChannel: 0,
+      uvMapping: { mode: 'original' },
     })
   })
 })

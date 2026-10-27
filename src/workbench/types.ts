@@ -1,10 +1,12 @@
 import type { ProductCustomizerApi } from '../core/api'
 import type {
   CustomizerAppearance,
+  CustomizerOptions,
   CustomizerState,
   DesignObject,
   ElementTarget,
   ProductConfiguration,
+  PrintDiagnostic,
 } from '../core/types'
 
 /** Workbench 可显示的功能控件 */
@@ -712,10 +714,10 @@ export interface WorkbenchOptions {
   /** 添加到 Workbench 根元素的一个或多个 CSS 类名 */
   className?: string
 
-  /** 二维编辑画布的逻辑宽度，单位为像素，默认为 1024 */
+  /** 二维逻辑宽度，单位为像素；恢复文档和元数据解析后才回退为 1024 */
   editorWidth?: number
 
-  /** 二维编辑画布的逻辑高度，单位为像素，默认为 512 */
+  /** 二维逻辑高度，单位为像素；启用元数据时必须与宽度一起提供 */
   editorHeight?: number
 
   /** 最多保留的撤销步骤数量，默认为 50 */
@@ -723,6 +725,15 @@ export interface WorkbenchOptions {
 
   /** 初始化时加载的产品配置 */
   product?: ProductConfiguration
+
+  /** 是否读取选定打印节点的正式元数据及受支持别名，默认 false */
+  readModelMetadata?: boolean
+
+  /** 创建编辑器前恢复 Schema 1/2 文档，不读取其中的模型地址 */
+  initialDesign?: unknown
+
+  /** 接收初始化、产品切换和设计恢复诊断；可同时通过 customizer 查询诊断快照 */
+  onDiagnostic?: CustomizerOptions['onDiagnostic']
 
   /** 二维选择控件、UV 辅助层和三维画布的外观配置 */
   appearance?: CustomizerAppearance
@@ -759,7 +770,13 @@ export interface WorkbenchOptions {
 
   /** 将模型、图片和 Design JSON 异常转换为界面提示 */
   formatError?: WorkbenchErrorFormatter
+
+  /** 将打印配置警告转换为界面文案，缺省时使用诊断自带的英文说明 */
+  formatDiagnostic?: WorkbenchDiagnosticFormatter
 }
+
+/** 将 SDK 打印诊断转换为宿主界面语言，不改变稳定的 code */
+export type WorkbenchDiagnosticFormatter = (diagnostic: PrintDiagnostic) => string
 
 /** Workbench 功能控件名称 */
 export type WorkbenchFeatureName = keyof WorkbenchFeatures
@@ -768,7 +785,7 @@ export type WorkbenchFeatureName = keyof WorkbenchFeatures
 export type WorkbenchLayoutName = keyof WorkbenchLayout
 
 /** Workbench 状态提示样式 */
-export type WorkbenchStatusMode = 'ready' | 'busy' | 'error'
+export type WorkbenchStatusMode = 'ready' | 'busy' | 'warning' | 'error'
 
 /**
  * 带默认界面的产品定制工作台能力契约

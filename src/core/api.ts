@@ -10,6 +10,7 @@ import type {
   DesignObject,
   ImageDesignObject,
   ProductConfiguration,
+  PrintSurfaceInfo,
   ProductViewState,
   ResolvedProductConfiguration,
   TextDesignObject,
@@ -56,6 +57,9 @@ export interface ProductCustomizerApi {
 
   /** 返回当前产品 UV 在逻辑画布中的可打印包围框 */
   getPrintableBounds(): CanvasBounds
+
+  /** 返回数值映射、最终尺寸、配置来源及初始化诊断的独立快照 */
+  getPrintSurfaceInfo(): PrintSurfaceInfo
 
   /** 按从后到前顺序返回设计对象快照 */
   getObjects(): DesignObject[]
@@ -109,10 +113,10 @@ export interface ProductCustomizerApi {
   /** 删除当前对象或多选对象 */
   deleteSelected(): boolean
 
-  /** 返回当前版本化 Design JSON 快照 */
+  /** 返回当前版本化 Design JSON 快照，旧配置保存为 Schema 1，新映射保存为 Schema 2 */
   saveDesign(): DesignDocument
 
-  /** 校验并以事务方式恢复 Design JSON */
+  /** 校验并以事务方式恢复 Design JSON，尺寸或数值映射不匹配时拒绝，不迁移对象坐标 */
   loadDesign(value: unknown): Promise<void>
 
   /** 查询当前是否可以撤销 */
@@ -148,9 +152,15 @@ export interface ProductCustomizerApi {
   /** 恢复适配当前模型的默认三维观察视角 */
   resetView(): void
 
-  /** 更换模型、基础纹理和目标 Mesh，远程资源必须允许跨域访问 */
+  /**
+   * 更换模型、基础纹理与打印映射，远程资源必须允许跨域访问
+   *
+   * 沿用逻辑画布与对象坐标，成功后重置历史；新产品声明其他尺寸时拒绝
+   * 准备失败保留旧状态，后发请求或销毁取消旧提交并以 AbortError 拒绝
+   * 意外提交失败会销毁不可用实例并要求重建
+   */
   loadProduct(product: ProductConfiguration): Promise<void>
 
-  /** 释放事件、Canvas、观察器和 WebGL 资源 */
+  /** 幂等释放事件、Canvas、观察器、模型解码位图及 WebGL 上下文；销毁后不得继续调用实例 */
   destroy(): void
 }

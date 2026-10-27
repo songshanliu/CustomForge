@@ -47,16 +47,25 @@ export interface NormalizedWorkbenchOptions {
   classNames: string[]
 
   /** 二维编辑画布的逻辑宽度 */
-  editorWidth: number
+  editorWidth: number | undefined
 
   /** 二维编辑画布的逻辑高度 */
-  editorHeight: number
+  editorHeight: number | undefined
 
   /** 最多保留的撤销步骤数量 */
   historyLimit: number
 
   /** 初始化产品配置 */
   product: WorkbenchOptions['product']
+
+  /** 保留主动元数据开关，不提前创建默认尺寸 */
+  readModelMetadata: WorkbenchOptions['readModelMetadata']
+
+  /** 创建核心前需要恢复的文档 */
+  initialDesign: WorkbenchOptions['initialDesign']
+
+  /** 包含初始化阶段的诊断回调 */
+  onDiagnostic: WorkbenchOptions['onDiagnostic']
 
   /** 二维编辑器与三维查看器外观配置 */
   appearance: WorkbenchOptions['appearance']
@@ -96,6 +105,9 @@ export interface NormalizedWorkbenchOptions {
 
   /** 用户可见异常文案格式化函数 */
   formatError: NonNullable<WorkbenchOptions['formatError']>
+
+  /** 打印配置诊断的宿主文案格式化函数 */
+  formatDiagnostic: NonNullable<WorkbenchOptions['formatDiagnostic']>
 }
 
 /** Workbench 内部使用的完整扩展按钮配置 */
@@ -545,12 +557,18 @@ function normalizeBranding(branding?: WorkbenchBranding): NormalizedWorkbenchBra
 export function normalizeWorkbenchOptions(
   options: WorkbenchOptions,
 ): NormalizedWorkbenchOptions {
+  if (options.formatDiagnostic !== undefined && typeof options.formatDiagnostic !== 'function') {
+    throw new TypeError('formatDiagnostic must be a function')
+  }
   return {
     classNames: normalizeClassNames(options.className),
-    editorWidth: positiveInteger(options.editorWidth, 1024, 'editorWidth'),
-    editorHeight: positiveInteger(options.editorHeight, 512, 'editorHeight'),
+    editorWidth: options.editorWidth === undefined ? undefined : positiveInteger(options.editorWidth, 1024, 'editorWidth'),
+    editorHeight: options.editorHeight === undefined ? undefined : positiveInteger(options.editorHeight, 512, 'editorHeight'),
     historyLimit: positiveInteger(options.historyLimit, 50, 'historyLimit'),
     product: options.product,
+    readModelMetadata: options.readModelMetadata,
+    initialDesign: options.initialDesign,
+    onDiagnostic: options.onDiagnostic,
     appearance: options.appearance,
     features: { ...defaultFeatures, ...options.features },
     layout: { ...defaultLayout, ...options.layout },
@@ -575,5 +593,6 @@ export function normalizeWorkbenchOptions(
     ),
     extensions: normalizeWorkbenchExtensions(options.extensions ?? []),
     formatError: options.formatError ?? defaultErrorFormatter,
+    formatDiagnostic: options.formatDiagnostic ?? ((diagnostic) => diagnostic.message),
   }
 }

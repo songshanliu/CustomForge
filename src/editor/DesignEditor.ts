@@ -7,6 +7,8 @@ import {
   type FabricObject,
 } from 'fabric'
 import { parseDesignDocument } from '../core/design'
+import { resolveRestoredPrintMapping } from '../core/printMapping'
+import { PrintSurfaceError } from '../core/printErrors'
 import type {
   AddImageOptions,
   AddTextOptions,
@@ -14,6 +16,7 @@ import type {
   DesignCanvas as DesignCanvasSize,
   DesignImageRole,
   DesignDocument,
+  DesignPrintMapping,
   DesignObject,
   DesignObjectTransform,
   EditorAppearance,
@@ -71,6 +74,14 @@ function normalizeEditorAppearance(
 
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
+  /** 三维共用的已解析映射 */
+  printMapping?: DesignPrintMapping
+  /** 宿主为实际模型提供的内容版本，不从待恢复文档推断 */
+  modelRevision?: string
+  /** 是否使用 Schema 2 保存 */
+  usesMappingDocument?: boolean
+  /** 当前是否允许无映射的 Schema 1 恢复，默认 true */
+  legacyMapping?: boolean
   /** 画布逻辑宽度，单位为像素 */
   width: number
 
@@ -158,6 +169,13 @@ export class DesignEditor {
   private historyBusy = false
   private renderingTexture = false
   private objectIdSequence = 0
+  private printMapping?: DesignPrintMapping
+  private restoredPrintMapping?: DesignPrintMapping
+  private modelRevision?: string
+  private persistMapping = false
+  private legacyMapping = true
+  private destroyed = false
+  private contentGeneration = 0
 
   /**
    * @param host 二维编辑器挂载容器
@@ -167,6 +185,10 @@ export class DesignEditor {
     this.host = host
     this.width = options.width
     this.height = options.height
+    this.printMapping = options.printMapping
+    this.modelRevision = options.modelRevision
+    this.persistMapping = options.usesMappingDocument ?? false
+    this.legacyMapping = options.legacyMapping ?? true
     this.defaultText = options.defaultText ?? 'Edit this text'
     this.textObjectName = options.textObjectName ?? 'Text'
     this.imageObjectName = options.imageObjectName ?? 'Image'
@@ -263,13 +285,15 @@ export class DesignEditor {
    *
    * @param layout 从当前目标 Mesh 提取的 UV 布局
    * @param flipY 是否按照垂直翻转后的纹理方向显示
+   * @param legacyMapping 是否保留原始模式的历史边界回退，默认 true
    */
-  setUvLayout(layout: UvLayout, flipY: boolean): void {
+  setUvLayout(layout: UvLayout, flipY: boolean, legacyMapping = true): void {
     this.editableBounds = calculateUvCanvasBounds(
       layout,
       flipY,
       this.width,
       this.height,
+      legacyMapping,
     )
     const context = this.uvOverlay.getContext('2d')
     if (!context) {
@@ -290,7 +314,35 @@ export class DesignEditor {
     drawUvOverlay(context, layout, flipY, this.width, this.height, {
       fill: accent,
       boundary: this.appearance.uvBoundary,
-    })
+    }, legacyMapping)
+  }
+
+  /**
+   * 更新产品映射契约，不迁移已有对象；提交产品后须重设历史起点
+   *
+   * @param mapping 三维共用的数值映射
+   * @param usesMappingDocument 是否需要 Schema 2
+   * @param legacyMapping 是否允许恢复 Schema 1
+   * @param modelRevision 宿主为新产品提供的内容版本，不继承之前设计声明的版本
+   */
+  setPrintMapping(mapping: DesignPrintMapping, usesMappingDocument: boolean, legacyMapping: boolean, modelRevision?: string): void {
+    this.contentGeneration += 1
+    this.printMapping = { ...mapping, domain: { ...mapping.domain } }
+    this.restoredPrintMapping = undefined
+    this.modelRevision = modelRevision
+    this.persistMapping = usesMappingDocument
+    this.legacyMapping = legacyMapping
+  }
+
+  /** 当前快照是否需要携带已解析映射 */
+  get usesMappingDocument(): boolean {
+    return this.persistMapping
+  }
+
+  /** 返回最近成功恢复文档的映射副本，未恢复 Schema 2 或已切换产品时返回 undefined */
+  getRestoredPrintMapping(): DesignPrintMapping | undefined {
+    const mapping = this.restoredPrintMapping
+    return mapping ? { ...mapping, domain: { ...mapping.domain } } : undefined
   }
 
   /** 当前画布中设计对象的数量，不包含产品基础纹理 */
@@ -497,9 +549,9 @@ export class DesignEditor {
       return false
     }
 
+    this.fitImageToEditableBounds(object)
     this.removeDesignBackgrounds()
     this.imageRoles.set(object, 'background')
-    this.fitImageToEditableBounds(object)
     this.applyObjectLock(object, true)
     this.canvas.moveObjectTo(object, 0)
     this.canvas.setActiveObject(object)
@@ -760,14 +812,13 @@ export class DesignEditor {
    * @throws 图片加载失败或被 CORS 策略阻止时抛出错误
    */
   async setBackgroundTexture(url?: string): Promise<void> {
-    if (!url) {
-      this.canvas.backgroundImage = undefined
-      this.canvas.backgroundColor = ''
-      this.canvas.requestRenderAll()
-      return
-    }
+    this.commitBackgroundTexture(await this.prepareBackgroundTexture(url))
+  }
 
-    const image = await FabricImage.fromURL(url, { crossOrigin: 'anonymous' })
+  /** 加载并准备基础纹理，不替换当前背景，失败时保留旧设计 */
+  async prepareBackgroundTexture(url?: string): Promise<FabricImage | undefined> {
+    if (!url) return undefined
+    const image = await this.loadImage(url)
     const scaleX = this.width / Math.max(image.width, 1)
     const scaleY = this.height / Math.max(image.height, 1)
 
@@ -782,8 +833,16 @@ export class DesignEditor {
       evented: false,
     })
 
+    return image
+  }
+
+  /** 提交已经加载的基础纹理并释放旧背景，不触发异步加载 */
+  commitBackgroundTexture(image?: FabricImage): void {
+    const previous = this.canvas.backgroundImage
     this.canvas.backgroundImage = image
+    this.canvas.backgroundColor = ''
     this.canvas.requestRenderAll()
+    if (previous !== image) previous?.dispose()
   }
 
   /**
@@ -852,8 +911,13 @@ export class DesignEditor {
     })
 
     if (role === 'background') {
+      try {
+        this.fitImageToEditableBounds(image)
+      } catch (error) {
+        image.dispose()
+        throw error
+      }
       this.removeDesignBackgrounds()
-      this.fitImageToEditableBounds(image)
     }
     this.imageSources.set(image, source)
     this.addAndSelect(image, options.name, role === 'background', role)
@@ -863,17 +927,18 @@ export class DesignEditor {
   /**
    * 返回与 Fabric.js 无关的当前设计快照
    *
-   * 文档包含设计背景等设计对象和逻辑画布尺寸，不包含产品基础纹理或模型配置
+   * 文档包含设计对象和逻辑画布尺寸；启用新映射时包含已解析的打印映射，不包含基础纹理或模型地址
    *
    * @returns 可以安全传给 JSON.stringify 的 Design JSON 文档
    * @throws 画布包含不支持的对象或非字符串文字填充时抛出错误
    */
   saveDesign(): DesignDocument {
-    return {
-      version: 1,
-      canvas: { width: this.width, height: this.height },
-      objects: this.getObjects(),
-    }
+    const canvas = { width: this.width, height: this.height }
+    const objects = this.getObjects()
+    const mapping = this.restoredPrintMapping ?? this.printMapping
+    return this.persistMapping && mapping
+      ? { version: 2, canvas, printMapping: { ...mapping, domain: { ...mapping.domain } }, objects }
+      : { version: 1, canvas, objects }
   }
 
   /**
@@ -891,9 +956,17 @@ export class DesignEditor {
   }
 
   private async replaceDesign(value: unknown): Promise<void> {
+    const generation = ++this.contentGeneration
     const design = parseDesignDocument(value)
+    let restoredMapping: DesignPrintMapping | undefined
+    if (design.version === 2) {
+      if (!this.printMapping) throw new PrintSurfaceError('DESIGN_MAPPING_MISMATCH', 'Editor has no resolved print mapping')
+      restoredMapping = resolveRestoredPrintMapping(design.printMapping, this.printMapping, this.modelRevision)
+    } else if (!this.legacyMapping) {
+      throw new PrintSurfaceError('DESIGN_MAPPING_MISMATCH', 'Schema 1 cannot be loaded into a non-original UV mapping; migrate explicitly')
+    }
     if (design.canvas.width !== this.width || design.canvas.height !== this.height) {
-      throw new RangeError(
+      throw new PrintSurfaceError('CANVAS_SIZE_MISMATCH',
         `Design canvas ${design.canvas.width}x${design.canvas.height} does not match editor canvas ${this.width}x${this.height}`,
       )
     }
@@ -918,12 +991,17 @@ export class DesignEditor {
           role: object.type === 'image' ? object.role ?? 'element' : 'element',
         })
       }
+      if (this.destroyed || generation !== this.contentGeneration) {
+        throw new DOMException('Design loading was superseded or the product mapping changed', 'AbortError')
+      }
     } catch (error) {
       entries.forEach(({ object }) => object.dispose())
       throw error
     }
 
     const previousObjects = this.canvas.getObjects()
+    this.persistMapping = design.version === 2
+    this.restoredPrintMapping = restoredMapping
     this.canvas.discardActiveObject()
     this.canvas.remove(...previousObjects)
     previousObjects.forEach((object) => object.dispose())
@@ -1075,6 +1153,9 @@ export class DesignEditor {
 
   /** 释放 ResizeObserver、事件监听和 Fabric Canvas */
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
+    this.contentGeneration += 1
     if (this.historyTimer !== undefined) {
       clearTimeout(this.historyTimer)
       this.historyTimer = undefined
@@ -1252,11 +1333,16 @@ export class DesignEditor {
     return image
   }
 
-  private loadImage(source: string): Promise<FabricImage> {
-    return FabricImage.fromURL(
+  private async loadImage(source: string): Promise<FabricImage> {
+    const image = await FabricImage.fromURL(
       source,
       source.startsWith('data:') ? undefined : { crossOrigin: 'anonymous' },
     )
+    if (this.destroyed) {
+      image.dispose()
+      throw new DOMException('Editor was destroyed during image loading', 'AbortError')
+    }
+    return image
   }
 
   private createObjectName(object: FabricObject): string {
@@ -1450,6 +1536,7 @@ export class DesignEditor {
 
   private fitImageToEditableBounds(image: FabricImage): void {
     const bounds = this.editableBounds
+    if (bounds.width <= 0 || bounds.height <= 0) throw new PrintSurfaceError('UV_OUTSIDE_DESIGN_DOMAIN', 'Print surface has no editable extent inside the configured domain')
     image.set({
       left: bounds.left + bounds.width / 2,
       top: bounds.top + bounds.height / 2,

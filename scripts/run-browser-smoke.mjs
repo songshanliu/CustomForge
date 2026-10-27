@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,10 +16,15 @@ const installedPackageDist = join(
   'dist',
 )
 const serverUrl = 'http://127.0.0.1:5175/'
-const desktopSmokeUrl = `${serverUrl}?smoke=desktop`
-const mobileSmokeUrl = `${serverUrl}?smoke=mobile`
+const realModelPath = process.env.CUSTOMFORGE_SMOKE_MODEL
+const realModelRevision = realModelPath ? createHash('sha256').update(await readFile(realModelPath)).digest('hex') : undefined
+const modelQuery = realModelRevision ? `&real-model=${realModelRevision}` : ''
+const baselineDirectory = process.env.CUSTOMFORGE_SMOKE_BASELINE
+const baselineQuery = baselineDirectory ? `&baseline=${encodeURIComponent(`/@fs/${baselineDirectory.replaceAll('\\', '/')}/workbench.js`)}` : ''
+const desktopSmokeUrl = `${serverUrl}?smoke=desktop${modelQuery}${baselineQuery}`
+const mobileSmokeUrl = `${serverUrl}?smoke=mobile${modelQuery}${baselineQuery}`
 const browserStartupTimeoutMs = 10_000
-const smokeTimeoutMs = 90_000
+const smokeTimeoutMs = realModelPath ? 180_000 : 90_000
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -243,6 +249,9 @@ async function readSmokeSnapshot(devTools) {
         highDensityTriangles: body?.dataset.highDensityTriangles ?? null,
         maximumLongTaskMilliseconds:
           body?.dataset.highDensityMaxLongTaskMs ?? null,
+        realModel: ['passed', 'failed'].includes(body?.dataset.smokeStatus)
+          ? JSON.parse(document.getElementById('customforge-real-model-evidence')?.textContent ?? 'null')
+          : null,
         domTail: document.documentElement?.outerHTML.slice(-4000) ?? '',
       }
     })()`,
@@ -320,6 +329,10 @@ async function runBrowser(browser, profileDirectory, url, windowSize) {
     devTools = await connectToDevTools(pageTarget)
     await devTools.send('Runtime.enable')
     await devTools.send('Page.enable')
+    if (baselineDirectory) {
+      await devTools.send('Network.enable')
+      await devTools.send('Network.setCacheDisabled', { cacheDisabled: true })
+    }
     await devTools.send('Emulation.setDeviceMetricsOverride', {
       width,
       height,
@@ -374,6 +387,20 @@ function assertSmokePassed(result, viewport, viteOutput) {
   }
 }
 
+async function saveRealModelEvidence(snapshot, viewport) {
+  if (!realModelPath) return
+  if (!snapshot.realModel) throw new Error('Real-model smoke test produced no evidence')
+  const directory = process.env.CUSTOMFORGE_SMOKE_ARTIFACT_DIR
+  if (directory) {
+    await mkdir(directory, { recursive: true })
+    for (const [name, dataUrl] of Object.entries(snapshot.realModel.images)) {
+      await writeFile(join(directory, `${viewport}-${name}.png`), Buffer.from(dataUrl.split(',')[1], 'base64'))
+    }
+    await writeFile(join(directory, `${viewport}-real-model.json`), JSON.stringify({ sha256: realModelRevision, cases: snapshot.realModel.cases, benchmark: snapshot.realModel.benchmark }, null, 2))
+  }
+  console.log(`${viewport} real-model mapping verified (${realModelRevision}; ${snapshot.realModel.cases.length} original/fit/direction cases)`)
+}
+
 await access(viteEntry)
 await assertInstalledPackageIsFresh()
 const browser = await findBrowser()
@@ -386,6 +413,8 @@ const server = spawn(process.execPath, [
   '--port',
   '5175',
   '--strictPort',
+  '--config',
+  join(consumerRoot, 'vite.smoke.config.mjs'),
 ], {
   cwd: consumerRoot,
   env: process.env,
@@ -405,6 +434,7 @@ try {
     '1440,900',
   )
   assertSmokePassed(desktopResult, 'Desktop', serverOutput)
+  await saveRealModelEvidence(desktopResult.snapshot, 'desktop')
   const mobileResult = await runBrowser(
     browser,
     join(profileDirectory, 'mobile'),
@@ -412,6 +442,7 @@ try {
     '390,844',
   )
   assertSmokePassed(mobileResult, 'Mobile', serverOutput)
+  await saveRealModelEvidence(mobileResult.snapshot, 'mobile')
   const highDensityMilliseconds =
     desktopResult.snapshot.highDensityMilliseconds
   const highDensityTriangles = desktopResult.snapshot.highDensityTriangles

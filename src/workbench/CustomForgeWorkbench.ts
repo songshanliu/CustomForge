@@ -203,6 +203,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     NormalizedWorkbenchExtensionButton
   >()
   private readonly formatError: NormalizedWorkbenchOptions['formatError']
+  private readonly formatDiagnostic: NormalizedWorkbenchOptions['formatDiagnostic']
   private readonly layerList: HTMLOListElement
   private readonly deleteButton: HTMLButtonElement
   private readonly undoButton: HTMLButtonElement
@@ -264,6 +265,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
       this.extensions.set(extension.id, extension)
     })
     this.formatError = options.formatError
+    this.formatDiagnostic = options.formatDiagnostic
     this.selectedTextPresetId = this.textPresets[0]?.id
     this.layerList = requiredElement(element, '[data-role="layer-list"]')
     this.deleteButton = this.action('delete-selection')
@@ -313,7 +315,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     this.renderLayers(true)
     this.updateTextToolbar()
     this.updateImageToolbar()
-    this.setStatus(this.labels.productReady)
+    this.setProductReadyStatus()
   }
 
   /**
@@ -333,19 +335,21 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
     applyLabels(element, normalized.labels)
     applyBranding(element, normalized.branding)
     applyTheme(element, normalized.theme)
-    requiredElement(element, '[data-role="resolution"]').textContent =
-      `${normalized.editorWidth} x ${normalized.editorHeight}`
     host.replaceChildren(element)
     renderWorkbenchIcons(element, normalized.icons)
 
+    let customizer: ProductCustomizerApi | undefined
     try {
-      const customizer = await ProductCustomizer.create({
+      customizer = await ProductCustomizer.create({
         editor: requiredElement(element, '[data-role="editor-host"]'),
         viewer: requiredElement(element, '[data-role="viewer-host"]'),
         editorWidth: normalized.editorWidth,
         editorHeight: normalized.editorHeight,
         historyLimit: normalized.historyLimit,
         product: normalized.product,
+        readModelMetadata: normalized.readModelMetadata,
+        initialDesign: normalized.initialDesign,
+        onDiagnostic: normalized.onDiagnostic,
         appearance: normalized.appearance,
         editorAriaLabel: normalized.labels.editorCanvas,
         viewerAriaLabel: normalized.labels.viewerCanvas,
@@ -354,8 +358,12 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         imageObjectName: normalized.labels.imageObject,
         backgroundObjectName: normalized.labels.backgroundObject,
       })
+      const canvas = customizer.getCanvasSize()
+      requiredElement(element, '[data-role="resolution"]').textContent =
+        `${canvas.width} x ${canvas.height}`
       return new CustomForgeWorkbench(host, element, customizer, normalized)
     } catch (error) {
+      customizer?.destroy()
       host.replaceChildren()
       throw error
     }
@@ -593,7 +601,12 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         this.refreshExtensions()
       }),
       this.customizer.on('viewchange', () => this.refreshExtensions()),
+      this.customizer.on('ready', () => this.setProductReadyStatus()),
       this.customizer.on('status', ({ message }) => {
+        if (message === 'Remote product ready' || message === 'Demo product ready') {
+          this.setProductReadyStatus()
+          return
+        }
         const localized = this.localizeStatus(message)
         if (localized) {
           this.setStatus(localized)
@@ -777,6 +790,17 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
       once: true,
       signal,
     })
+  }
+
+  private setProductReadyStatus(): void {
+    const warnings = this.customizer.getPrintSurfaceInfo().diagnostics.filter(
+      (entry) => entry.severity === 'warning' && entry.code !== 'MODEL_REVISION_UNVERIFIED',
+    )
+    if (warnings.length === 0) {
+      this.setStatus(this.labels.productReady)
+      return
+    }
+    this.setStatus(warnings.map((entry) => this.formatDiagnostic({ ...entry })).join(' · '), 'warning')
   }
 
   private handleRootClick(event: MouseEvent): void {
@@ -2348,7 +2372,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
       await this.customizer.loadProduct({})
       this.replaceActiveProductObjectUrl()
       this.closeDialog(this.productDialog)
-      this.setStatus(this.labels.productReady)
+      this.setProductReadyStatus()
     } catch (error) {
       this.setStatus(this.formatError(error), 'error')
     } finally {
@@ -2389,7 +2413,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
       this.replaceActiveProductObjectUrl(pendingObjectUrl)
       pendingObjectUrl = undefined
       this.closeDialog(this.productDialog)
-      this.setStatus(this.labels.productReady)
+      this.setProductReadyStatus()
     } catch (error) {
       this.setStatus(this.formatError(error), 'error')
     } finally {

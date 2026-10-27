@@ -4,6 +4,23 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `fit-bounds` and explicit `domain` print mappings with consistent UV0–UV3 selection across the editor and design texture
+- Versioned print-node metadata, canvas allocation limits, `initialDesign`, structured diagnostics, and `getPrintSurfaceInfo()` in the core and Workbench
+- Schema 2 documents that store the resolved numerical domain, channel, direction, surface, and optional model content revision while retaining Schema 1 defaults for legacy integrations
+- Small generated GLB and directional artwork fixtures in the independent package consumer, plus mapping, metadata, serialization, and material regression cases
+
+### Fixed
+
+- Negative print UVs can be explicitly fitted without collapsing all horizontal design samples to a texture edge
+- Composite design alpha independently while retaining original UVs, shared geometry, PBR properties, base maps, and texture transforms
+- Prepare product changes before committing them, reject incompatible canvas sizes, discard superseded requests, and reset old mapping state on successful switches
+- Preserve optional saved model revisions on runtime restore and refresh identity verification after restore and history operations without trusting document metadata as model proof
+- Release model-owned ImageBitmaps on replacement and failed preparation, and lose the renderer context when destroying an instance
+
+These changes are unreleased. Package version remains `0.1.2` until release validation and an explicit version update.
+
 ## [0.1.2] - 2026-09-28
 
 ### Fixed

@@ -106,7 +106,7 @@ pnpm 可能提示可选的原生 `canvas` 构建脚本已被忽略。CustomForge
 
 UV 坐标应当保存在三维模型中
 
-可选的纹理图片只是二维编辑器的基础图层，不能替代模型中的 UV 数据；未提供时，设计画布和可打印贴花层保持透明
+可选的纹理图片只是二维编辑器的基础图层，不能替代模型中的 UV 数据；未提供时，设计画布保持透明，三维端透出模型原有底材
 
 每次加载产品后，编辑器会读取目标 Mesh 的 UV 坐标，并在设计画布上方显示轻微的可打印区域底纹及其外边界。内部三角剖分保持隐藏，该辅助层不会写入实时纹理、Design JSON 或导出的 PNG
 
@@ -117,6 +117,99 @@ UV 坐标应当保存在三维模型中
 >
 > 被浏览器阻止或污染 Canvas 的资源可能无法加载，也会导致 PNG 导出失败
 
+## UV 映射与画布元数据
+
+以下能力属于**尚未发布的源码改动**，已发布的 `0.1.2` 不支持这些新增接口。升级消费方前请使用重新打包的本地制品验证
+
+默认仍使用 UV0 和 `[0,1] × [0,1]` 原始坐标域，不会自动填满模型的 UV 留白。负 UV 是有效的模型数据，但原始模式会把域外采样夹到纹理边缘。需要将整个打印布局对应到完整设计图时，显式配置：
+
+```ts
+const workbench = await createWorkbench({
+  container: '#customforge-workbench',
+  editorWidth: 1200,
+  editorHeight: 600,
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    surfaceMesh: 'PrintArea',
+    uvChannel: 0,
+    uvMapping: { mode: 'fit-bounds' },
+    textureFlipY: false,
+    modelRevision: 'sha256:content-hash-from-your-asset-service',
+  },
+  onDiagnostic: (diagnostic) => console.log(diagnostic.code, diagnostic.message),
+  formatDiagnostic: (diagnostic) => diagnostic.message,
+})
+
+const resolved = workbench.customizer.getPrintSurfaceInfo()
+const design = workbench.customizer.saveDesign()
+```
+
+`1200 × 600` 仅演示配置方式，不是从模型推断出的物理印刷尺寸。核心 `createCustomizer()` 和 `createWorkbench()` 均支持映射、尺寸、初始文档和诊断回调；`formatDiagnostic` 仅属于 Workbench
+
+| 产品选项 | 行为 |
+| --- | --- |
+| `uvMapping: { mode: 'original' }` | 默认行为，保留标准域与原有留白 |
+| `uvMapping: { mode: 'fit-bounds' }` | 对第一材质槽实际三角形执行统一仿射转换，保留各 UV 岛的相对关系 |
+| `uvMapping: { mode: 'domain', domain: { minU, minV, maxU, maxV } }` | 使用有限且非退化的参考矩形，可保留作者约定的边距 |
+| `uvChannel: 0 \| 1 \| 2 \| 3` | 二维辅助线、边界和三维采样使用同一通道，缺失时失败，不回退到其他通道 |
+| `modelRevision` | 由宿主提供的不可变内容标识，不能仅凭 URL 判断模型内容一致 |
+
+设计纹理使用独立矩阵和 alpha 合成。模型原始 UV、底材贴图及其变换、PBR 参数保持独立；空白设计会露出原有底材，不会清除模型本身的颜色
+
+模型需要声明配置时，在选定 glTF **节点**的 `extras` 中放入以下结构，并主动启用 `readModelMetadata: true`：
+
+```json
+{
+  "customforge": {
+    "version": 1,
+    "canvas": { "width": 1200, "height": 600 },
+    "printSurface": {
+      "uvChannel": 0,
+      "textureFlipY": false,
+      "uvMapping": { "mode": "fit-bounds" }
+    }
+  }
+}
+```
+
+新建设计按成对显式宽高、正式节点元数据、兼容的 `customforgeGuide.canvas` 或 `canvasWidth/canvasHeight`、`1024 × 512` 默认值依次解析。未启用时不读取元数据。元数据模式必须同时传入显式宽高，不会将显式宽度与元数据高度拼接；关闭元数据时，旧版只传单边的方式仍用另一边默认值
+
+宽高必须是正整数，单边不超过 8192，总面积不超过 16,777,216 像素，同时受当前设备最大纹理尺寸限制。以上均为逻辑像素；调整界面只改变显示比例。非法或超限元数据在创建 Fabric 画布前被拒绝
+
+`getPrintSurfaceInfo()` 返回实际尺寸、原始边界、三角形数量、数值映射、逐项来源和诊断的独立快照。初始化诊断可从 `onDiagnostic` 和快照取得；后续加载可订阅 `diagnostic`。Workbench 警告文案可通过 `formatDiagnostic` 翻译，抛出的 `PrintSurfaceError` 提供稳定 `code`，供 `formatError` 或宿主处理
+
+域外采样会报告 `UV_OUTSIDE_DESIGN_DOMAIN`。缺少通道、非法 UV、新模式退化域、尺寸不兼容和映射冲突会明确失败。原始模式保留可见区域退化时的历史整画布边界回退，并提供诊断；启用读取却没有尺寸时报告 `CANVAS_METADATA_MISSING`，无法验证模型内容身份时报告 `MODEL_REVISION_UNVERIFIED`
+
+### 恢复与升级
+
+| 文档 | 读取行为 | 默认写入行为 |
+| --- | --- | --- |
+| Schema 1 | 使用保存尺寸、旧版 UV0/原始域和外层 `textureFlipY` 配置 | 未启用新映射能力时继续保存为 Schema 1 |
+| Schema 2 | 使用保存尺寸、数值域、节点、通道、方向及可选内容版本 | 新映射、非默认通道或显式持久化映射配置使用 Schema 2 |
+
+在创建画布前恢复设计：
+
+```ts
+const restored = await createWorkbench({
+  container: '#customforge-workbench',
+  product: {
+    modelUrl: 'https://example.com/product.glb',
+    modelRevision: 'sha256:content-hash-from-your-asset-service',
+  },
+  initialDesign: savedDesignDocument,
+})
+```
+
+Schema 1 还需传入外层保存的 `textureFlipY`，旧文档本身未保存方向。保存的配置优先于当前模型元数据，显式传入的冲突配置会被拒绝。Schema 2 保存解析后的**数值**，回放不会按新模型重算 `fit-bounds`。已知内容版本不同会失败；缺少内容版本时报告未验证
+
+运行时恢复会保留文档自身的可选 `modelRevision`，包括字段缺省的情况。从之前文档继承的版本不代表实际模型的身份证明。恢复、撤销和重做后，`modelRevisionVerified` 及对应诊断会随当前文档更新；只有宿主为实际模型提供的版本与文档明确一致时才标记为已验证
+
+运行时 `loadDesign()` 要求尺寸与映射相容，不迁移坐标或切换模型。`loadProduct()` 保留对象坐标和现有画布，成功后更新映射并重设历史；新产品声明不同尺寸时拒绝，未声明尺寸时沿用当前画布，来源标为 `sources.canvas: 'instance'`。准备失败保留原产品，后发请求或销毁会以 `AbortError` 取消旧提交；意外提交失败会销毁不可用实例并要求重建
+
+**先升级所有文档读取方，再启用 Schema 2 写入**，包括管理端回放。已发布 `0.1.2` 的读取器无法识别 Schema 2。模型 URL 和资源归属仍由业务外层管理，同时核对服务端对设计版本和大小的校验
+
+本能力不进行 UV 重展开、独立 UDIM 编辑、去重叠、拉伸补偿或物理尺寸推断。背景仍拉伸到打印包围矩形；矩形不是精确轮廓蒙版，本轮未实现 `cover`/`contain` 或按轮廓裁剪导出
+
 ## 自定义界面
 
 `createCustomizer()` 提供编辑器和查看器，将它们挂载到两个不同的 DOM 容器后，通过返回的 `ProductCustomizerApi` 连接你自己的控件：
@@ -124,6 +217,8 @@ UV 坐标应当保存在三维模型中
 CustomForge 仅支持浏览器环境，应在 DOM 挂载容器可用后创建实例
 
 编辑器和查看器必须使用两个不同的容器；页面卸载、组件卸载或不再使用实例时必须调用 `destroy()` 释放 Fabric、WebGL、观察器和事件资源
+
+替换产品或候选模型加载失败时会释放模型持有的解码位图。销毁实例也会使其 WebGL 上下文失效，再次使用时须创建新实例。
 
 ```html
 <div id="texture-editor"></div>
@@ -400,9 +495,9 @@ if (savedDesign) {
 }
 ```
 
-当前 Schema 版本为 `1`，文档保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID、名称、显隐、锁定状态、图片用途、基于中心点的变换和丰富的文字排版属性。缺少可选排版字段的旧版 version 1 文档仍按原有的粗体、居中默认值加载
+文档读取器支持 Schema `1` 和 `2`。两者均保存逻辑画布尺寸，并按从后到前的渲染顺序保存文字和图片对象，包括稳定对象 ID、名称、显隐、锁定状态、图片用途、基于中心点的变换和丰富的文字排版属性。Schema 2 还保存上文所述的解析映射。缺少可选排版字段的旧版 version 1 文档仍按原有的粗体、居中默认值加载
 
-Design JSON 有意排除产品模型、目标 Mesh 和基础纹理。文档只能加载到逻辑宽高完全相同的编辑器中
+Design JSON 不包含模型文件、模型 URL 和基础纹理，Schema 2 会在映射中保存打印节点名称。文档只能加载到逻辑宽高相同且映射相容的编辑器中
 
 带有 `role: 'background'` 的图片是设计对象，不是产品基础纹理，只允许存在一个并且必须位于对象数组首位，旧版 v1 文档缺少 `role` 时继续按普通图片元素加载
 
@@ -445,6 +540,7 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `getProduct()` | 返回补全默认值后的当前商品配置 |
 | `getCanvasSize()` | 返回逻辑纹理尺寸 |
 | `getPrintableBounds()` | 返回逻辑画布坐标中的 UV 可打印边界 |
+| `getPrintSurfaceInfo()` | 返回解析映射、来源、实际尺寸、内容版本验证和诊断 |
 | `getObjects()` | 按从后到前的图层顺序返回当前对象 |
 | `getSelectedObjectIds()` | 返回当前选区中的稳定对象 ID |
 | `selectObject(id)` | 根据稳定 ID 选中可见对象 |
@@ -474,7 +570,7 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `on(event, listener)` | 订阅实例事件，并返回取消订阅函数 |
 | `destroy()` | 释放 DOM 事件、Fabric 状态和 WebGL 资源 |
 
-当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`viewchange`、`status` 和 `error`
+当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`viewchange`、`diagnostic`、`status` 和 `error`
 
 无界面能力契约导出为 `ProductCustomizerApi`，默认界面能力契约导出为 `CustomForgeWorkbenchApi`。具体类仍然保留，但消费方可以只依赖接口，避免业务代码与实现细节耦合。
 

@@ -8,12 +8,13 @@ function fullCanvasBounds(width: number, height: number): ObjectBounds {
 /**
  * 将 UV 三角形的坐标范围转换为逻辑画布包围框
  *
- * UV 坐标会限制在 0 到 1 之间；布局为空、无效或退化时回退到整张画布
+ * 输入必须先经过共享映射；原始模式可保留历史退化回退，新模式返回真实空区域
  *
  * @param layout 当前可打印 Mesh 的 UV 布局
  * @param flipY 是否按照垂直翻转后的纹理方向计算
  * @param canvasWidth 逻辑画布宽度
  * @param canvasHeight 逻辑画布高度
+ * @param legacyFallback 是否保留旧版全画布回退，默认 true
  * @returns 当前 UV 可打印区域在逻辑画布中的轴对齐包围框
  */
 export function calculateUvCanvasBounds(
@@ -21,6 +22,7 @@ export function calculateUvCanvasBounds(
   flipY: boolean,
   canvasWidth: number,
   canvasHeight: number,
+  legacyFallback = true,
 ): ObjectBounds {
   const coordinates = layout.triangleCoordinates
   let minimumX = Number.POSITIVE_INFINITY
@@ -52,7 +54,7 @@ export function calculateUvCanvasBounds(
     width <= 0 ||
     height <= 0
   ) {
-    return fullCanvasBounds(canvasWidth, canvasHeight)
+    return legacyFallback ? fullCanvasBounds(canvasWidth, canvasHeight) : { left: 0, top: 0, width: 0, height: 0 }
   }
 
   return { left: minimumX, top: minimumY, width, height }

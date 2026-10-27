@@ -17,6 +17,7 @@ interface UvOverlayAppearance {
  * @param width 逻辑画布宽度，单位为像素
  * @param height 逻辑画布高度，单位为像素
  * @param appearance 辅助填充和边界颜色
+ * @param legacyClamping 是否保留原始模式的逐点边框收缩，新模式由 Canvas 自然裁剪
  */
 export function drawUvOverlay(
   context: CanvasRenderingContext2D,
@@ -25,15 +26,16 @@ export function drawUvOverlay(
   width: number,
   height: number,
   appearance: UvOverlayAppearance,
+  legacyClamping = true,
 ): void {
   const { triangleCoordinates, boundaryCoordinates } = layout
   const canvasX = (u: number) =>
-    Math.min(Math.max(u * width, 1), width - 1)
+    legacyClamping ? Math.min(Math.max(u * width, 1), width - 1) : u * width
   const canvasY = (v: number) =>
-    Math.min(
+    legacyClamping ? Math.min(
       Math.max((flipY ? 1 - v : v) * height, 1),
       height - 1,
-    )
+    ) : (flipY ? 1 - v : v) * height
 
   context.save()
   try {

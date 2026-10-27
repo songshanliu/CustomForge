@@ -272,11 +272,15 @@ assert(rootDeclaration.includes('DesignImageRole'), 'Design image role type is m
 assert(rootDeclaration.includes('HistoryState'), 'History state type is missing')
 assert(rootDeclaration.includes('CustomizerEventMap'), 'Customizer event map type is missing')
 assert(rootDeclaration.includes('ProductCustomizerApi'), 'Core API contract is missing')
+for (const name of ['PrintSurfaceError', 'UvDomain', 'PrintUvMapping', 'PrintUvChannel', 'PrintSurfaceInfo', 'PrintDiagnostic', 'DesignDocumentV1', 'DesignDocumentV2', 'DesignPrintMapping']) {
+  assert(rootDeclaration.includes(name), `Print mapping public type is missing: ${name}`)
+}
 
 const coreApiDeclaration = await readProjectFile('dist/core/api.d.ts')
 assert(coreApiDeclaration.includes('getTextureBlob'), 'Core texture Blob API is missing')
 assert(coreApiDeclaration.includes('setViewState'), 'Core view restore API is missing')
 assert(coreApiDeclaration.includes('selectObjects'), 'Core multi-selection API is missing')
+assert(coreApiDeclaration.includes('getPrintSurfaceInfo'), 'Resolved print surface API is missing')
 
 const coreTypesDeclaration = await readProjectFile('dist/core/types.d.ts')
 assert(coreTypesDeclaration.includes('historychange'), 'History event type is missing')
@@ -308,6 +312,9 @@ assert(
 const workbenchTypesDeclaration = await readProjectFile(
   'dist/workbench/types.d.ts',
 )
+for (const name of ['readModelMetadata', 'initialDesign', 'onDiagnostic', 'formatDiagnostic']) {
+  assert(workbenchTypesDeclaration.includes(name), `Workbench print option is missing: ${name}`)
+}
 assert(
   workbenchTypesDeclaration.includes('setTheme'),
   'Workbench runtime theme API is missing',

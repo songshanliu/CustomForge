@@ -25,3 +25,11 @@ Fabric.js and Three.js are installed transitively through CustomForge and are de
 The example verifies Workbench branding, theme tokens, configurable asset catalogs, Design JSON types, history controls, and the built-in product without importing repository source files
 
 For a strict repository-independent check, copy this directory outside the repository and replace the `customforge` dependency with the absolute path to that tarball
+
+## Unreleased mapping options
+
+This source now also imports the public print-surface and diagnostic types, explicitly selects original mapping, and checks the resolved canvas against saved Design JSON. Use a fresh local pack: these additions are not in the published `0.1.2` package. The repository version and expected artifact name remain unchanged until a separate release task.
+
+For a model with out-of-range UVs, pass `product.uvMapping: { mode: 'fit-bounds' }` deliberately, or supply a numerical `domain`. Enable `readModelMetadata: true` only when node metadata should determine settings. Restore saved work with `initialDesign` before allocating the canvas; do not turn an old Schema 1 document into fitted mapping implicitly. The root README documents size limits, source priorities, Schema compatibility, and upgrade order.
+
+Packaged negative-UV, UV0–UV3, material, restore, and lifecycle regressions run through the sibling API contract consumer with `pnpm test:browser` from the repository root. Its README also documents the optional real-model regression. Run `pnpm verify:consumers` after repacking to refresh both consumers before using that browser gate.

@@ -1,5 +1,7 @@
 import { Mesh } from 'three'
 import type { UvLayout } from '../core/uv'
+import type { PrintUvChannel } from '../core/types'
+import { PrintSurfaceError } from '../core/printErrors'
 
 interface GeometryRange {
   start: number
@@ -61,24 +63,37 @@ function extractBoundaryCoordinates(
  * 提取目标 Mesh 第一个材质槽使用的 UV 三角形
  *
  * @param mesh 接收实时纹理的目标 Mesh
+ * @param channel 所选 UV 通道，默认 0，缺失时不回退到其他通道
  * @returns 保持模型原始 V 方向的 UV 三角形和外边界布局
  * @throws Mesh 缺少 UV、面数据无效或第一个材质槽没有三角形时抛出错误
  */
-export function extractUvLayout(mesh: Mesh): UvLayout {
+export function extractUvLayout(mesh: Mesh, channel: PrintUvChannel = 0): UvLayout {
   const geometry = mesh.geometry
-  const uv = geometry.getAttribute('uv')
+  const uv = geometry.getAttribute(channel === 0 ? 'uv' : `uv${channel}`)
   if (!uv) {
-    throw new Error(`Customizable mesh does not contain UV coordinates: ${mesh.name}`)
+    throw new PrintSurfaceError('PRINT_UV_MISSING', `Customizable mesh does not contain UV coordinates: ${mesh.name} (channel ${channel})`)
   }
+  if (uv.itemSize !== 2) throw new PrintSurfaceError('PRINT_UV_INVALID', `Print UV channel ${channel} must contain VEC2 coordinates`)
 
   const index = geometry.getIndex()
-  const elementCount = index?.count ?? uv.count
-  const ranges: GeometryRange[] =
-    Array.isArray(mesh.material) && geometry.groups.length > 0
+  const position = geometry.getAttribute('position')
+  const elementCount = index?.count ?? position?.count ?? uv.count
+  const drawStart = geometry.drawRange.start
+  const drawCount = geometry.drawRange.count
+  if (!Number.isInteger(drawStart) || drawStart < 0 || (drawCount !== Infinity && (!Number.isInteger(drawCount) || drawCount < 0))) throw new PrintSurfaceError('PRINT_UV_INVALID', 'Print geometry has an invalid draw range')
+  const ranges: GeometryRange[] = (
+    Array.isArray(mesh.material)
       ? geometry.groups
           .filter((group) => (group.materialIndex ?? 0) === 0)
           .map(({ start, count }) => ({ start, count }))
-      : [{ start: 0, count: elementCount }]
+      : [{ start: 0, count: elementCount }])
+    .map((range) => {
+      if (!Number.isInteger(range.start) || !Number.isInteger(range.count) || range.start < 0 || range.count < 0 || range.start + range.count > elementCount) throw new PrintSurfaceError('PRINT_UV_INVALID', `Customizable mesh has invalid triangle groups: ${mesh.name}`)
+      const start = Math.max(range.start, drawStart)
+      const end = Math.min(range.start + range.count, drawStart + drawCount, elementCount)
+      return { start, count: Math.max(0, end - start) }
+    })
+    .filter((range) => range.count > 0)
   const coordinateCount = ranges.reduce((total, range) => {
     if (
       !Number.isInteger(range.start) ||
@@ -88,13 +103,13 @@ export function extractUvLayout(mesh: Mesh): UvLayout {
       range.start + range.count > elementCount ||
       range.count % 3 !== 0
     ) {
-      throw new Error(`Customizable mesh has invalid triangle groups: ${mesh.name}`)
+      throw new PrintSurfaceError('PRINT_UV_INVALID', `Customizable mesh has invalid triangle groups: ${mesh.name}`)
     }
     return total + range.count * 2
   }, 0)
 
   if (coordinateCount === 0) {
-    throw new Error(`Customizable mesh has no triangles in its first material slot: ${mesh.name}`)
+    throw new PrintSurfaceError('PRINT_UV_INVALID', `Customizable mesh has no triangles in its first material slot: ${mesh.name}`)
   }
 
   const triangleCoordinates = new Float32Array(coordinateCount)
@@ -102,10 +117,11 @@ export function extractUvLayout(mesh: Mesh): UvLayout {
   for (const range of ranges) {
     for (let offset = range.start; offset < range.start + range.count; offset += 1) {
       const vertexIndex = index ? index.getX(offset) : offset
+      if (!Number.isInteger(vertexIndex) || vertexIndex < 0 || vertexIndex >= uv.count || (position && vertexIndex >= position.count)) throw new PrintSurfaceError('PRINT_UV_INVALID', `Print surface has an invalid vertex index: ${mesh.name}`)
       const u = uv.getX(vertexIndex)
       const v = uv.getY(vertexIndex)
       if (!Number.isFinite(u) || !Number.isFinite(v)) {
-        throw new Error(`Customizable mesh has invalid UV coordinates: ${mesh.name}`)
+        throw new PrintSurfaceError('PRINT_UV_INVALID', `Customizable mesh has invalid UV coordinates: ${mesh.name}`)
       }
       triangleCoordinates[targetIndex] = u
       triangleCoordinates[targetIndex + 1] = v

@@ -1,4 +1,7 @@
 import { normalizeProductConfiguration } from '../core/config'
+import { parseDesignDocument } from '../core/design'
+import { resolvePrintConfiguration, resolvePrintSurface } from '../core/printConfiguration'
+import { PrintSurfaceError } from '../core/printErrors'
 import type {
   CustomizerEventListener,
   ProductCustomizerApi,
@@ -17,6 +20,8 @@ import type {
   DesignObject,
   ImageDesignObject,
   ProductConfiguration,
+  PrintDiagnostic,
+  PrintSurfaceInfo,
   ProductViewState,
   ResolvedProductConfiguration,
   TextDesignObject,
@@ -26,6 +31,8 @@ import type {
 import { DesignEditor } from '../editor/DesignEditor'
 import { TextureBridge } from '../bridge/TextureBridge'
 import { ProductViewer } from '../viewer/ProductViewer'
+import type { PreparedProduct } from '../viewer/ProductViewer'
+import { extractUvLayout } from '../viewer/uvLayout'
 
 /**
  * 统一管理二维编辑器、三维查看器和实时纹理同步
@@ -45,42 +52,20 @@ export class ProductCustomizer implements ProductCustomizerApi {
   private readonly stopHistoryListener: () => void
   private readonly stopViewListener: () => void
   private destroyed = false
+  private printSurface: PrintSurfaceInfo
+  private loadGeneration = 0
+  private committingProduct = false
+  private readonly configurationOptions: Pick<CustomizerOptions, 'editorWidth' | 'editorHeight' | 'readModelMetadata'>
+  private readonly onDiagnostic?: (diagnostic: PrintDiagnostic) => void
 
-  private constructor(options: CustomizerOptions) {
-    const editorHost = resolveElement(options.editor, 'Editor')
-    const viewerHost = resolveElement(options.viewer, 'Viewer')
-
-    if (editorHost === viewerHost) {
-      throw new Error('Editor and viewer must use different elements')
-    }
-
-    const historyLimit = options.historyLimit ?? 50
-    if (!Number.isInteger(historyLimit) || historyLimit < 1) {
-      throw new RangeError('historyLimit must be a positive integer')
-    }
-
-    this.product = normalizeProductConfiguration(options.product)
-    this.editor = new DesignEditor(editorHost, {
-      width: options.editorWidth ?? 1024,
-      height: options.editorHeight ?? 512,
-      historyLimit,
-      ariaLabel: options.editorAriaLabel,
-      defaultText: options.defaultText,
-      textObjectName: options.textObjectName,
-      imageObjectName: options.imageObjectName,
-      backgroundObjectName: options.backgroundObjectName,
-      appearance: options.appearance?.editor,
-    })
-    this.viewer = new ProductViewer(
-      viewerHost,
-      options.viewerAriaLabel,
-      options.appearance?.viewer,
-    )
-    this.textureBridge = new TextureBridge(
-      this.editor,
-      this.viewer,
-      this.product.textureFlipY,
-    )
+  private constructor(options: CustomizerOptions, editor: DesignEditor, viewer: ProductViewer, bridge: TextureBridge, product: ResolvedProductConfiguration, info: PrintSurfaceInfo) {
+    this.product = product
+    this.printSurface = info
+    this.editor = editor
+    this.viewer = viewer
+    this.textureBridge = bridge
+    this.configurationOptions = { editorWidth: options.editorWidth, editorHeight: options.editorHeight, readModelMetadata: options.readModelMetadata }
+    this.onDiagnostic = options.onDiagnostic
 
     this.stopSelectionListener = this.editor.onSelectionChange((objectIds) => {
       this.emit('selectionchange', {
@@ -95,7 +80,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
       this.emit('historychange', state)
     })
     this.stopViewListener = this.viewer.onViewChange((state) => {
-      this.emit('viewchange', state)
+      if (!this.committingProduct) this.emit('viewchange', state)
     })
   }
 
@@ -107,12 +92,49 @@ export class ProductCustomizer implements ProductCustomizerApi {
    * @throws DOM 容器无效或初始化失败时释放已创建资源并继续抛出原始错误
    */
   static async create(options: CustomizerOptions): Promise<ProductCustomizer> {
-    const customizer = new ProductCustomizer(options)
+    options = { ...options, product: structuredClone(options.product ?? {}) }
+    const editorHost = resolveElement(options.editor, 'Editor')
+    const viewerHost = resolveElement(options.viewer, 'Viewer')
+    if (editorHost === viewerHost) throw new Error('Editor and viewer must use different elements')
+    const historyLimit = options.historyLimit ?? 50
+    if (!Number.isInteger(historyLimit) || historyLimit < 1) throw new RangeError('historyLimit must be a positive integer')
+    if (options.onDiagnostic !== undefined && typeof options.onDiagnostic !== 'function') throw new TypeError('onDiagnostic must be a function')
+    const design = options.initialDesign === undefined ? undefined : parseDesignDocument(options.initialDesign)
+    const requested = options.product ?? {}
+    const identity = normalizeProductConfiguration({ ...requested, surfaceMesh: requested.surfaceMesh ?? (design?.version === 2 ? design.printMapping.surfaceMesh : undefined) })
+    const viewer = new ProductViewer(viewerHost, options.viewerAriaLabel, options.appearance?.viewer)
+    let prepared: PreparedProduct | undefined
+    let editor: DesignEditor | undefined
+    let bridge: TextureBridge | undefined
     try {
-      await customizer.initialize()
+      prepared = await viewer.prepareProduct(identity)
+      const configuration = resolvePrintConfiguration(options, prepared.metadata, design, viewer.getMaxTextureSize())
+      const { info, layout } = resolvePrintSurface(configuration, extractUvLayout(prepared.surface, configuration.product.uvChannel))
+      const legacy = configuration.product.uvMapping.mode === 'original' && info.uvChannel === 0
+      editor = new DesignEditor(editorHost, {
+        width: info.canvas.width, height: info.canvas.height, historyLimit,
+        printMapping: info.mapping, usesMappingDocument: info.usesMappingDocument, legacyMapping: legacy,
+        modelRevision: configuration.product.modelRevision,
+        ariaLabel: options.editorAriaLabel, defaultText: options.defaultText,
+        textObjectName: options.textObjectName, imageObjectName: options.imageObjectName,
+        backgroundObjectName: options.backgroundObjectName, appearance: options.appearance?.editor,
+      })
+      editor.setUvLayout(layout, info.mapping.textureFlipY, configuration.product.uvMapping.mode === 'original')
+      await editor.setBackgroundTexture(configuration.product.textureUrl)
+      if (design) await editor.loadDesign(design)
+      editor.clearHistory()
+      bridge = new TextureBridge(editor, viewer, info.mapping)
+      viewer.commitProduct(prepared, info.uvChannel)
+      prepared = undefined
+      const customizer = new ProductCustomizer(options, editor, viewer, bridge, configuration.product, info)
+      customizer.publishDiagnostics()
+      customizer.emit('ready', { product: customizer.getProduct() })
       return customizer
     } catch (error) {
-      customizer.destroy()
+      if (prepared) viewer.disposePreparedProduct(prepared)
+      bridge?.destroy()
+      editor?.destroy()
+      viewer.destroy()
       throw error
     }
   }
@@ -172,6 +194,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
       product: this.getProduct(),
       canvas: this.getCanvasSize(),
       printableBounds: this.getPrintableBounds(),
+      printSurface: this.getPrintSurfaceInfo(),
       objects: this.getObjects(),
       selectedObjectIds: this.getSelectedObjectIds(),
       history: {
@@ -184,7 +207,19 @@ export class ProductCustomizer implements ProductCustomizerApi {
 
   /** 返回当前补全默认值后的产品配置独立快照 */
   getProduct(): ResolvedProductConfiguration {
-    return { ...this.product }
+    return normalizeProductConfiguration(this.product)
+  }
+
+  /** 返回数值映射、配置来源和当前诊断的独立快照，恢复文档版本不会自动证明实际模型身份 */
+  getPrintSurfaceInfo(): PrintSurfaceInfo {
+    const restoredMapping = this.editor.getRestoredPrintMapping()
+    const modelRevisionVerified = restoredMapping?.modelRevision !== undefined && restoredMapping.modelRevision === this.product.modelRevision
+    const diagnostics = this.printSurface.diagnostics.filter((entry) => entry.code !== 'MODEL_REVISION_UNVERIFIED')
+    if (!modelRevisionVerified) diagnostics.push({ code: 'MODEL_REVISION_UNVERIFIED', severity: 'warning', message: 'Model content identity is not verified; an unchanged URL does not prove identical model content' })
+    return structuredClone({
+      ...this.printSurface, mapping: restoredMapping ?? this.printSurface.mapping,
+      modelRevisionVerified, diagnostics, usesMappingDocument: this.editor.usesMappingDocument,
+    })
   }
 
   /** 返回当前二维逻辑画布尺寸 */
@@ -359,7 +394,8 @@ export class ProductCustomizer implements ProductCustomizerApi {
   /**
    * 创建当前二维设计的版本化 JSON 快照
    *
-   * 快照不包含产品模型、目标 Mesh 或基础纹理配置
+   * 旧模式默认保存 Schema 1，新映射保存含数值域、节点、通道与方向的 Schema 2
+   * 快照不包含模型文件、模型 URL 或基础纹理配置
    * Blob URL 图片会在添加时转换为 Data URL，因此返回值可以跨页面会话保存
    *
    * @returns 可以安全传给 JSON.stringify 的 DesignDocument
@@ -373,7 +409,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
    * 校验并恢复版本化 Design JSON
    *
    * 图片全部加载成功后才替换当前二维对象，产品和基础纹理保持不变
-   * 输入画布尺寸必须与当前编辑器的逻辑尺寸完全一致
+   * 输入画布尺寸必须与当前编辑器的逻辑尺寸完全一致，Schema 2 映射也必须一致
    *
    * @param value JSON.parse 结果或符合 DesignDocument 的对象
    * @throws Schema 无效、画布尺寸不匹配或图片加载失败时抛出错误
@@ -382,6 +418,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
     this.emit('status', { message: 'Loading design' })
     try {
       await this.editor.loadDesign(value)
+      this.publishDiagnostics()
       this.emit('status', { message: 'Design loaded' })
     } catch (error) {
       this.reportError(error)
@@ -409,6 +446,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
     try {
       const changed = await this.editor.undo()
       if (changed) {
+        this.publishDiagnostics()
         this.emit('status', { message: 'Undo complete' })
       }
       return changed
@@ -428,6 +466,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
     try {
       const changed = await this.editor.redo()
       if (changed) {
+        this.publishDiagnostics()
         this.emit('status', { message: 'Redo complete' })
       }
       return changed
@@ -500,32 +539,68 @@ export class ProductCustomizer implements ProductCustomizerApi {
   /**
    * 更换模型、基础纹理和接收纹理的目标 Mesh
    *
-   * 成功后保留当前设计对象，并将当前设计设为新的历史起点
+   * 成功后保留当前设计对象，并将当前设计设为新的历史起点；这不是原产品回放
+   * 新元数据声明不同逻辑尺寸时要求重建实例，不迁移图层坐标
+   * 后发请求或 destroy 会取消旧请求的提交；异步校验失败时保留当前产品
    *
    * @param product 新的产品配置
    * @throws 模型或纹理加载失败、目标 Mesh 不存在时抛出错误
    */
   async loadProduct(product: ProductConfiguration): Promise<void> {
-    const nextProduct = normalizeProductConfiguration(product)
+    if (this.destroyed) throw new DOMException('Customizer has been destroyed', 'AbortError')
+    const generation = ++this.loadGeneration
     this.emit('status', { message: 'Loading product' })
-
+    let prepared: PreparedProduct | undefined
+    let background: Awaited<ReturnType<DesignEditor['prepareBackgroundTexture']>> = undefined
+    let committed = false
     try {
-      const uvLayout = await this.viewer.loadProduct(nextProduct)
-      await this.editor.setBackgroundTexture(nextProduct.textureUrl)
-      this.textureBridge.setFlipY(nextProduct.textureFlipY)
-      this.editor.setUvLayout(uvLayout, nextProduct.textureFlipY)
-      this.product = nextProduct
+      product = structuredClone(product)
+      prepared = await this.viewer.prepareProduct(normalizeProductConfiguration(product))
+      if (this.destroyed || generation !== this.loadGeneration) throw new DOMException('Product loading was superseded or cancelled', 'AbortError')
+      const canvas = this.editor.getCanvasSize()
+      const configuration = resolvePrintConfiguration({ ...this.configurationOptions, product }, prepared.metadata, undefined, this.viewer.getMaxTextureSize(), canvas)
+      const { info, layout } = resolvePrintSurface(configuration, extractUvLayout(prepared.surface, configuration.product.uvChannel))
+      if (info.canvas.width !== canvas.width || info.canvas.height !== canvas.height) throw new PrintSurfaceError('CANVAS_SIZE_MISMATCH', 'The new product requires a different canvas size; rebuild with initialDesign or migrate explicitly')
+      background = await this.editor.prepareBackgroundTexture(configuration.product.textureUrl)
+      if (this.destroyed || generation !== this.loadGeneration) throw new DOMException('Product loading was superseded or cancelled', 'AbortError')
+      this.committingProduct = true
+      this.viewer.commitProduct(prepared, info.uvChannel)
+      prepared = undefined
+      committed = true
+      this.textureBridge.setMapping(info.mapping)
+      this.editor.commitBackgroundTexture(background)
+      background = undefined
+      const legacy = configuration.product.uvMapping.mode === 'original'
+      this.editor.setUvLayout(layout, info.mapping.textureFlipY, legacy)
+      this.editor.setPrintMapping(info.mapping, info.usesMappingDocument, legacy && info.uvChannel === 0, configuration.product.modelRevision)
+      this.product = configuration.product
+      this.printSurface = info
       this.editor.clearHistory()
+      this.committingProduct = false
+      this.publishDiagnostics()
       this.emit('ready', { product: this.getProduct() })
-      this.emit('status', { message: nextProduct.modelUrl ? 'Remote product ready' : 'Demo product ready' })
+      this.emit('viewchange', this.getViewState())
+      this.emit('status', { message: this.product.modelUrl ? 'Remote product ready' : 'Demo product ready' })
     } catch (error) {
-      this.reportError(error)
+      if (generation === this.loadGeneration) {
+        if (committed) {
+          const failure = new Error('Product commit failed; this customizer has been destroyed and must be recreated', { cause: error })
+          this.destroy()
+          this.reportError(failure)
+          throw failure
+        }
+        this.reportError(error)
+      }
       throw error
+    } finally {
+      this.committingProduct = false
+      if (prepared) this.viewer.disposePreparedProduct(prepared)
+      background?.dispose()
     }
   }
 
   /**
-   * 释放事件监听、Fabric Canvas、纹理和 WebGL 资源
+   * 释放事件监听、Fabric Canvas、纹理、模型解码位图和 WebGL 上下文
    *
    * 重复调用不会再次释放资源，首次调用后不得继续使用其他实例方法
    */
@@ -535,6 +610,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
     }
 
     this.destroyed = true
+    this.loadGeneration += 1
     this.stopSelectionListener?.()
     this.stopRenderListener?.()
     this.stopHistoryListener?.()
@@ -544,12 +620,16 @@ export class ProductCustomizer implements ProductCustomizerApi {
     this.viewer.destroy()
   }
 
-  private async initialize(): Promise<void> {
-    const uvLayout = await this.viewer.loadProduct(this.product)
-    await this.editor.setBackgroundTexture(this.product.textureUrl)
-    this.textureBridge.setFlipY(this.product.textureFlipY)
-    this.editor.setUvLayout(uvLayout, this.product.textureFlipY)
-    this.emit('ready', { product: this.getProduct() })
+  private publishDiagnostics(): void {
+    for (const diagnostic of this.getPrintSurfaceInfo().diagnostics) {
+      const copy = { ...diagnostic }
+      this.emit('diagnostic', copy)
+      try {
+        this.onDiagnostic?.({ ...diagnostic })
+      } catch (error) {
+        console.error('[CustomForge] Diagnostic callback failed', error)
+      }
+    }
   }
 
   private emit<K extends CustomizerEventName>(

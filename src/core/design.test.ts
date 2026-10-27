@@ -70,9 +70,26 @@ describe('parseDesignDocument', () => {
   })
 
   it('rejects unsupported schema versions', () => {
-    expect(() => parseDesignDocument({ ...validDesign, version: 2 })).toThrow(
-      'design.version must be 1',
+    expect(() => parseDesignDocument({ ...validDesign, version: 3 })).toThrow(
+      'design.version must be 1 or 2',
     )
+  })
+
+  it('preserves a sanitized numerical Schema 2 mapping without changing layer data', () => {
+    const printMapping = {
+      version: 1, surfaceMesh: 'PrintArea', uvChannel: 1,
+      domain: { minU: -2, minV: 0.25, maxU: -1, maxV: 1.25 },
+      textureFlipY: true, modelRevision: 'sha256:fixture',
+    }
+    const parsed = parseDesignDocument({ ...validDesign, version: 2, printMapping: { ...printMapping, ignored: true } })
+    expect(parsed).toEqual({ ...validDesign, version: 2, printMapping })
+    expect(JSON.parse(JSON.stringify(parsed))).toEqual(parsed)
+  })
+
+  it('rejects malformed mappings and excessive canvas allocations before restoring objects', () => {
+    expect(() => parseDesignDocument({ ...validDesign, version: 2 })).toThrow()
+    expect(() => parseDesignDocument({ ...validDesign, canvas: { width: 8192, height: 8192 } })).toThrow('area limit')
+    expect(() => parseDesignDocument({ ...validDesign, canvas: { width: 1024.5, height: 512 } })).toThrow('positive integers')
   })
 
   it('rejects duplicate object ids', () => {

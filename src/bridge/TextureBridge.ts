@@ -1,4 +1,5 @@
-import { CanvasTexture, SRGBColorSpace } from 'three'
+import { CanvasTexture, ClampToEdgeWrapping, SRGBColorSpace } from 'three'
+import type { DesignPrintMapping } from '../core/types'
 import type { DesignEditor } from '../editor/DesignEditor'
 import type { ProductViewer } from '../viewer/ProductViewer'
 
@@ -17,12 +18,12 @@ export class TextureBridge {
   /**
    * @param editor 提供不含交互控件的纹理 Canvas 和渲染事件的二维编辑器
    * @param viewer 接收实时纹理的三维查看器
-   * @param flipY 是否垂直翻转纹理
+   * @param mapping 已解析的域、通道和上传方向，只作用于设计纹理
    */
-  constructor(editor: DesignEditor, viewer: ProductViewer, flipY: boolean) {
+  constructor(editor: DesignEditor, viewer: ProductViewer, mapping: DesignPrintMapping) {
     this.texture = new CanvasTexture(editor.textureCanvas)
     this.texture.colorSpace = SRGBColorSpace
-    this.texture.flipY = flipY
+    this.setMapping(mapping)
     this.texture.anisotropy = 4
     viewer.setTexture(this.texture)
 
@@ -31,12 +32,22 @@ export class TextureBridge {
   }
 
   /**
-   * 更新纹理垂直翻转状态并立即标记刷新
+   * 完整更新设计域、通道和方向，切换回原始模式时复位矩阵
    *
-   * @param flipY 是否垂直翻转纹理
+   * @param mapping 与二维辅助布局共用的已解析映射
    */
-  setFlipY(flipY: boolean): void {
-    this.texture.flipY = flipY
+  setMapping(mapping: DesignPrintMapping): void {
+    const { domain } = mapping
+    const spanU = domain.maxU - domain.minU, spanV = domain.maxV - domain.minV
+    this.texture.channel = mapping.uvChannel
+    this.texture.flipY = mapping.textureFlipY
+    this.texture.wrapS = ClampToEdgeWrapping
+    this.texture.wrapT = ClampToEdgeWrapping
+    this.texture.repeat.set(1 / spanU, 1 / spanV)
+    this.texture.offset.set(-domain.minU / spanU, -domain.minV / spanV)
+    this.texture.center.set(0, 0)
+    this.texture.rotation = 0
+    this.texture.updateMatrix()
     this.texture.needsUpdate = true
   }
 

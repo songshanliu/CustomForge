@@ -3,11 +3,25 @@ import { normalizeWorkbenchOptions } from './config'
 import type { WorkbenchExtensionButton } from './types'
 
 describe('normalizeWorkbenchOptions', () => {
+  it('T24 preserves omitted sizes and forwards initial design and diagnostics without parsing twice', () => {
+    const initialDesign = { version: 2 }
+    const onDiagnostic = () => undefined
+    const options = normalizeWorkbenchOptions({
+      container: '#app', readModelMetadata: true, initialDesign, onDiagnostic,
+      formatDiagnostic: (diagnostic) => `localized:${diagnostic.code}`,
+    })
+    expect(options.editorWidth).toBeUndefined()
+    expect(options.editorHeight).toBeUndefined()
+    expect(options.initialDesign).toBe(initialDesign)
+    expect(options.onDiagnostic).toBe(onDiagnostic)
+    expect(options.readModelMetadata).toBe(true)
+    expect(options.formatDiagnostic({ code: 'CANVAS_METADATA_MISSING', severity: 'warning', message: 'English' })).toBe('localized:CANVAS_METADATA_MISSING')
+  })
   it('provides a complete default Workbench', () => {
     const options = normalizeWorkbenchOptions({ container: '#app' })
 
-    expect(options.editorWidth).toBe(1024)
-    expect(options.editorHeight).toBe(512)
+    expect(options.editorWidth).toBeUndefined()
+    expect(options.editorHeight).toBeUndefined()
     expect(options.historyLimit).toBe(50)
     expect(options.classNames).toEqual([])
     expect(options.appearance).toBeUndefined()

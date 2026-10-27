@@ -5,7 +5,6 @@ import {
   DirectionalLight,
   MathUtils,
   Mesh,
-  MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
   Scene,
@@ -14,14 +13,27 @@ import {
   WebGLRenderer,
   type CanvasTexture,
   type Material,
+  Texture,
 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { NormalizedProductConfiguration } from '../core/config'
-import type { ProductViewState, ViewerAppearance } from '../core/types'
-import type { UvLayout } from '../core/uv'
+import type { PrintUvChannel, ProductViewState, ViewerAppearance } from '../core/types'
+import { PrintSurfaceError } from '../core/printErrors'
 import defaultProductModelUrl from './assets/cup_decal_small_margins.glb?url&no-inline'
-import { extractUvLayout } from './uvLayout'
+import { bindDesignMaterial } from './printMaterial'
+
+/** 尚未加入活动场景的已加载模型，必须提交或释放 */
+export interface PreparedProduct {
+  /** 本次仅下载和解析一次的模型场景 */
+  root: Object3D
+  /** 已定位的打印节点 */
+  surface: Mesh
+  /** 选定打印节点的 extras，不读取根级示例尺寸 */
+  metadata: Record<string, unknown>
+  /** 用于释放独立设计采样绑定 */
+  releaseBinding?: () => void
+}
 
 const DEFAULT_PRODUCT_HEIGHT = 2.35
 const DEFAULT_PRODUCT_BASE_Y = -1.17
@@ -47,7 +59,9 @@ export class ProductViewer {
   private readonly loader = new GLTFLoader()
   private readonly resizeObserver: ResizeObserver
   private productRoot?: Object3D
-  private surface?: Mesh
+  private currentProduct?: PreparedProduct
+  private readonly disposedProducts = new WeakSet<PreparedProduct>()
+  private destroyed = false
   private texture?: CanvasTexture
   private animationFrame = 0
   private readonly viewChangeListeners = new Set<ViewChangeListener>()
@@ -98,38 +112,50 @@ export class ProductViewer {
   }
 
   /**
-   * 加载远程模型或随包提供的默认 GLB 模型
+   * 下载并解析候选模型，不移除当前产品，也不创建二维画布
    *
    * @param product 已完成默认值补全的产品配置
-   * @returns 目标 Mesh 第一个材质槽使用的 UV 三角形布局
-   * @throws 模型加载失败、找不到目标 Mesh 或目标 Mesh 缺少有效 UV 时抛出错误
+   * @returns 包含原始打印节点和元数据的候选资源，调用方必须提交或释放
+   * @throws 模型无效或找不到打印节点时释放候选资源并保留旧产品
    */
-  async loadProduct(product: NormalizedProductConfiguration): Promise<UvLayout> {
+  async prepareProduct(product: NormalizedProductConfiguration): Promise<PreparedProduct> {
+    const gltf = await this.loader.loadAsync(product.modelUrl ?? defaultProductModelUrl)
+    const root = gltf.scene
+    try {
+      if (this.destroyed) throw new DOMException('Viewer was destroyed during model loading', 'AbortError')
+      const surface = this.findSurface(root, product.surfaceMesh)
+      if (!product.modelUrl) this.prepareBundledProduct(root, surface)
+      const diagonal = new Box3().setFromObject(root).getSize(new Vector3()).length()
+      if (!Number.isFinite(diagonal) || diagonal <= 0) throw new Error('The product has invalid bounds')
+      return { root, surface, metadata: surface.userData }
+    } catch (error) {
+      this.disposeRoot(root)
+      throw error
+    }
+  }
+
+  /** 返回设备支持的单边纹理上限，必须在分配二维画布前校验 */
+  getMaxTextureSize(): number {
+    return this.renderer.capabilities.maxTextureSize
+  }
+
+  /** 将校验后的候选模型一次提交，先准备私有材质绑定再释放旧模型 */
+  commitProduct(product: PreparedProduct, channel: PrintUvChannel): void {
+    if (this.destroyed || this.disposedProducts.has(product)) throw new DOMException('Product loading was cancelled', 'AbortError')
+    if (this.texture) product.releaseBinding = bindDesignMaterial(product.surface, this.texture, channel)
+    this.fitCamera(product.root)
     this.removeProduct()
+    this.productRoot = product.root
+    this.currentProduct = product
+    this.scene.add(product.root)
+  }
 
-    if (product.modelUrl) {
-      const gltf = await this.loader.loadAsync(product.modelUrl)
-      this.productRoot = gltf.scene
-      this.surface = this.findSurface(gltf.scene, product.surfaceMesh)
-    } else {
-      const gltf = await this.loader.loadAsync(defaultProductModelUrl)
-      this.productRoot = gltf.scene
-      this.surface = this.findSurface(gltf.scene, product.surfaceMesh)
-      this.prepareBundledProduct(gltf.scene, this.surface)
-    }
-
-    const surface = this.surface
-    if (!surface) {
-      throw new Error('Customizable mesh was not initialized')
-    }
-    const uvLayout = extractUvLayout(surface)
-
-    this.scene.add(this.productRoot)
-    if (this.texture) {
-      this.attachTexture(this.texture)
-    }
-    this.fitCamera(this.productRoot)
-    return uvLayout
+  /** 幂等释放未提交或已移出场景的候选模型，不释放共享设计纹理 */
+  disposePreparedProduct(product: PreparedProduct): void {
+    if (this.disposedProducts.has(product)) return
+    this.disposedProducts.add(product)
+    product.releaseBinding?.()
+    this.disposeRoot(product.root)
   }
 
   /**
@@ -141,8 +167,9 @@ export class ProductViewer {
    */
   setTexture(texture: CanvasTexture): void {
     this.texture = texture
-    if (this.surface) {
-      this.attachTexture(texture)
+    if (this.currentProduct) {
+      this.currentProduct.releaseBinding?.()
+      this.currentProduct.releaseBinding = bindDesignMaterial(this.currentProduct.surface, texture, texture.channel as PrintUvChannel)
     }
   }
 
@@ -194,8 +221,10 @@ export class ProductViewer {
     return () => this.viewChangeListeners.delete(listener)
   }
 
-  /** 释放动画帧、相机控制、模型材质和 WebGLRenderer */
+  /** 幂等释放模型及解码位图，并使当前 WebGL 上下文失效；销毁后须创建新实例 */
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
     cancelAnimationFrame(this.animationFrame)
     this.resizeObserver.disconnect()
     this.controls.removeEventListener('change', this.handleControlsChange)
@@ -203,6 +232,7 @@ export class ProductViewer {
     this.viewChangeListeners.clear()
     this.removeProduct()
     this.renderer.dispose()
+    this.renderer.forceContextLoss()
     this.renderer.domElement.remove()
   }
 
@@ -260,39 +290,9 @@ export class ProductViewer {
   private findSurface(root: Object3D, meshName: string): Mesh {
     const object = root.getObjectByName(meshName)
     if (!(object instanceof Mesh)) {
-      throw new Error(`Customizable mesh was not found: ${meshName}`)
+      throw new PrintSurfaceError('PRINT_SURFACE_MISSING', `Customizable mesh was not found: ${meshName}`)
     }
     return object
-  }
-
-  /**
-   * 将纹理应用到目标 Mesh 的第一个材质槽
-   *
-   * 非 MeshStandardMaterial 会被替换为基础标准材质
-   */
-  private attachTexture(texture: CanvasTexture): void {
-    if (!this.surface) {
-      return
-    }
-
-    const materials = Array.isArray(this.surface.material)
-      ? this.surface.material
-      : [this.surface.material]
-    const material = materials[0]
-
-    if (!(material instanceof MeshStandardMaterial)) {
-      const replacement = new MeshStandardMaterial({
-        color: '#ffffff',
-        roughness: 0.45,
-        map: texture,
-      })
-      this.surface.material = replacement
-      return
-    }
-
-    material.map = texture
-    material.color.set('#ffffff')
-    material.needsUpdate = true
   }
 
   private fitCamera(root: Object3D, direction?: Vector3): void {
@@ -385,23 +385,44 @@ export class ProductViewer {
   }
 
   private removeProduct(): void {
-    if (!this.productRoot) {
-      return
+    if (this.currentProduct) {
+      this.scene.remove(this.currentProduct.root)
+      this.disposePreparedProduct(this.currentProduct)
     }
+    this.currentProduct = undefined
+    this.productRoot = undefined
+  }
 
-    this.scene.remove(this.productRoot)
-    this.productRoot.traverse((object) => {
+  private disposeRoot(root: Object3D): void {
+    const geometries = new Set<Mesh['geometry']>()
+    const materials = new Set<Material>()
+    const textures = new Set<Texture>()
+    const bitmaps = new Set<ImageBitmap>()
+    root.traverse((object) => {
       if (!(object instanceof Mesh)) {
         return
       }
-      object.geometry.dispose()
-      const materials: Material[] = Array.isArray(object.material)
+      geometries.add(object.geometry)
+      const entries: Material[] = Array.isArray(object.material)
         ? object.material
         : [object.material]
-      materials.forEach((material) => material.dispose())
+      entries.forEach((material) => {
+        materials.add(material)
+        Object.values(material).forEach((value) => {
+          if (value instanceof Texture && value !== this.texture) textures.add(value)
+        })
+      })
     })
-    this.productRoot = undefined
-    this.surface = undefined
+    geometries.forEach((geometry) => geometry.dispose())
+    materials.forEach((material) => material.dispose())
+    textures.forEach((texture) => {
+      const images: unknown[] = Array.isArray(texture.image) ? texture.image : [texture.image]
+      for (const image of images) {
+        if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) bitmaps.add(image)
+      }
+      texture.dispose()
+    })
+    bitmaps.forEach((bitmap) => bitmap.close())
   }
 
   private resize(): void {

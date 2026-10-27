@@ -2,6 +2,7 @@ import type {
   ProductConfiguration,
   ResolvedProductConfiguration,
 } from './types'
+import { readUvChannel, readUvMapping } from './printMapping'
 
 /** 默认接收实时纹理的 Mesh 名称 */
 export const DEFAULT_SURFACE_MESH = 'PrintArea'
@@ -25,11 +26,20 @@ export function normalizeProductConfiguration(
   const modelUrl = product.modelUrl?.trim() || undefined
   const textureUrl = product.textureUrl?.trim() || undefined
   const surfaceMesh = product.surfaceMesh?.trim() || DEFAULT_SURFACE_MESH
+  if (product.textureFlipY !== undefined && typeof product.textureFlipY !== 'boolean') {
+    throw new TypeError('textureFlipY must be a boolean')
+  }
+  if (product.modelRevision !== undefined && (typeof product.modelRevision !== 'string' || !product.modelRevision.trim())) {
+    throw new TypeError('modelRevision must be a non-empty string')
+  }
 
   return {
     modelUrl,
     textureUrl,
     surfaceMesh,
     textureFlipY: product.textureFlipY ?? false,
+    uvChannel: readUvChannel(product.uvChannel ?? 0),
+    uvMapping: readUvMapping(product.uvMapping ?? { mode: 'original' }),
+    ...(product.modelRevision === undefined ? {} : { modelRevision: product.modelRevision.trim() }),
   }
 }

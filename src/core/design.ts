@@ -8,8 +8,9 @@ import type {
   TextFontStyle,
   TextFontWeight,
 } from './types'
+import { readDesignPrintMapping, validateCanvasSize } from './printMapping'
 
-/** 当前支持的 Design JSON Schema 版本 */
+/** 旧消费者默认保存的 Design JSON Schema 版本，读取器同时支持版本 2 */
 export const DESIGN_SCHEMA_VERSION = 1
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -217,12 +218,12 @@ function parseObject(value: unknown, index: number): DesignObject {
  *
  * @param value JSON.parse 结果或其他未知输入
  * @returns 只包含当前 Schema 字段的新设计文档
- * @throws 文档版本、字段类型、对象 ID 或图片来源不符合契约时抛出 TypeError
+ * @throws 文档版本、字段类型、对象 ID 或图片来源无效时抛出 TypeError，非法尺寸或映射域抛出 PrintSurfaceError
  */
 export function parseDesignDocument(value: unknown): DesignDocument {
   const design = readRecord(value, 'design')
-  if (design.version !== DESIGN_SCHEMA_VERSION) {
-    throw new TypeError(`design.version must be ${DESIGN_SCHEMA_VERSION}`)
+  if (design.version !== 1 && design.version !== 2) {
+    throw new TypeError('design.version must be 1 or 2')
   }
 
   const canvas = readRecord(design.canvas, 'design.canvas')
@@ -249,12 +250,8 @@ export function parseDesignDocument(value: unknown): DesignDocument {
     }
   }
 
-  return {
-    version: DESIGN_SCHEMA_VERSION,
-    canvas: {
-      width: readPositiveNumber(canvas.width, 'design.canvas.width'),
-      height: readPositiveNumber(canvas.height, 'design.canvas.height'),
-    },
-    objects,
-  }
+  const size = validateCanvasSize(canvas.width, canvas.height)
+  return design.version === 2
+    ? { version: 2, canvas: size, printMapping: readDesignPrintMapping(design.printMapping), objects }
+    : { version: 1, canvas: size, objects }
 }

@@ -1277,6 +1277,8 @@
 }
 
 .customforge-workbench[data-status="busy"]
+  .customforge-workbench__status-indicator,
+.customforge-workbench[data-status="warning"]
   .customforge-workbench__status-indicator {
   background: #b7791f;
 }

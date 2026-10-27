@@ -1,4 +1,4 @@
-import type { DesignDocument } from 'customforge'
+import type { DesignDocument, PrintDiagnostic, PrintSurfaceInfo } from 'customforge'
 import { createWorkbench } from 'customforge/workbench'
 import 'customforge/style.css'
 import './styles.css'
@@ -23,6 +23,8 @@ const element = svgDataUrl(`
 
 const workbench = await createWorkbench({
   container: '#workbench',
+  product: { uvMapping: { mode: 'original' }, uvChannel: 0 },
+  onDiagnostic: (diagnostic: PrintDiagnostic) => console.info(diagnostic.code, diagnostic.message),
   branding: {
     title: 'Package consumer',
     subtitle: 'Installed from a local npm artifact',
@@ -56,6 +58,10 @@ workbench.customizer.addText({
 })
 
 const initialDesign: DesignDocument = workbench.customizer.saveDesign()
+const printSurface: PrintSurfaceInfo = workbench.customizer.getPrintSurfaceInfo()
+if (initialDesign.canvas.width !== printSurface.canvas.width || initialDesign.canvas.height !== printSurface.canvas.height) {
+  throw new Error('Saved and resolved canvas dimensions differ')
+}
 workbench.setStatus(`${initialDesign.objects.length} packaged object`)
 
 window.addEventListener('beforeunload', () => workbench.destroy(), {

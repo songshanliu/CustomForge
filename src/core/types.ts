@@ -3,6 +3,108 @@
  */
 export type ElementTarget = HTMLElement | string
 
+/** 原始 UV 中对应一张完整设计纹理的矩形，允许负数和大于 1 的坐标 */
+export interface UvDomain {
+  /** 横向最小坐标 */
+  minU: number
+  /** 纵向最小坐标 */
+  minV: number
+  /** 横向最大坐标，必须大于 minU */
+  maxU: number
+  /** 纵向最大坐标，必须大于 minV */
+  maxV: number
+}
+
+/** glTF TEXCOORD_0 到 TEXCOORD_3，与 Three.js 的 uv、uv1、uv2、uv3 对应 */
+export type PrintUvChannel = 0 | 1 | 2 | 3
+
+/** 设计映射策略；整体适配共用一个仿射变换，不重新展开或逐岛缩放 UV */
+export type PrintUvMapping =
+  | { /** 保留标准域及原有 UV 留白，默认模式 */ mode: 'original' }
+  | { /** 将第一材质槽全部实际三角形的整体 UV 范围适配到一张设计纹理 */ mode: 'fit-bounds' }
+  | {
+      /** 使用显式参考域，允许保留顶点范围之外的留白 */
+      mode: 'domain'
+      /** 有限且不退化的原始 UV 参考矩形 */
+      domain: UvDomain
+    }
+
+/** 可持久化的已解析映射；版本 1 的方向只通过纹理上传翻转一次 */
+export interface DesignPrintMapping {
+  /** 映射协议版本，当前为 1 */
+  version: 1
+  /** 接收设计的实际 Mesh 名称，固定使用其第一材质槽 */
+  surfaceMesh: string
+  /** 设计使用的原始 UV 通道 */
+  uvChannel: PrintUvChannel
+  /** 保存解析后的数值域，恢复时不重新按新模型计算 */
+  domain: UvDomain
+  /** CanvasTexture 上传时是否垂直翻转 */
+  textureFlipY: boolean
+  /** 调用方提供的不可变内容版本，SDK 不根据 URL 推断版本 */
+  modelRevision?: string
+}
+
+/** 配置项实际采用的来源，instance 表示产品切换沿用当前逻辑画布 */
+export type PrintConfigurationSource = 'configuration' | 'model-metadata' | 'legacy-metadata' | 'default' | 'design' | 'instance'
+
+/** SDK 诊断标识，与 HTTP 或业务响应码无关 */
+export type PrintDiagnosticCode =
+  | 'UV_OUTSIDE_DESIGN_DOMAIN' | 'PRINT_UV_MISSING' | 'PRINT_UV_INVALID'
+  | 'PRINT_UV_DOMAIN_DEGENERATE' | 'CANVAS_METADATA_MISSING' | 'MODEL_METADATA_INVALID'
+  | 'MODEL_METADATA_IGNORED' | 'MODEL_REVISION_UNVERIFIED' | 'DESIGN_MAPPING_MISMATCH'
+  | 'CANVAS_SIZE_INVALID' | 'CANVAS_SIZE_LIMIT' | 'CANVAS_SIZE_MISMATCH'
+  | 'PRINT_SURFACE_MISSING' | 'PRINT_MATERIAL_UNSUPPORTED'
+
+/** 可保留并交给宿主翻译的诊断，初始化诊断也能通过 getPrintSurfaceInfo 读取 */
+export interface PrintDiagnostic {
+  /** 稳定诊断标识 */
+  code: PrintDiagnosticCode
+  /** info 为说明，warning 为可继续使用但需要注意的情况 */
+  severity: 'info' | 'warning'
+  /** 默认英文说明，宿主可依据 code 自行呈现文案 */
+  message: string
+}
+
+/** 当前产品的独立解析快照，不包含 Three.js、Fabric.js 或可变 TypedArray */
+export interface PrintSurfaceInfo {
+  /** 实际目标 Mesh 名称 */
+  surfaceMesh: string
+  /** 固定为第一材质槽 */
+  materialIndex: 0
+  /** 二维提取与设计采样共用的 UV 通道 */
+  uvChannel: PrintUvChannel
+  /** 仅统计实际打印三角形的原始 UV 包围框，原始模式下可退化 */
+  rawBounds: UvDomain
+  /** 实际打印三角形数量 */
+  triangleCount: number
+  /** 已解析数值映射 */
+  mapping: DesignPrintMapping
+  /** 解析采用的策略，不代表自动识别物理比例 */
+  mappingMode: PrintUvMapping['mode']
+  /** 配置逐项来源 */
+  sources: {
+    /** 逻辑画布尺寸来源 */
+    canvas: PrintConfigurationSource
+    /** UV 通道来源 */
+    uvChannel: PrintConfigurationSource
+    /** UV 坐标域来源 */
+    uvMapping: PrintConfigurationSource
+    /** 纹理上传方向来源 */
+    textureFlipY: PrintConfigurationSource
+  }
+  /** 最终逻辑画布尺寸，单位为像素 */
+  canvas: DesignCanvas
+  /** 转换后在画布中的打印包围框，不是复杂轮廓蒙版 */
+  printableBounds: CanvasBounds
+  /** 仅当当前恢复文档与宿主为实际模型提供的内容版本明确一致时为 true，恢复或历史操作后更新 */
+  modelRevisionVerified: boolean
+  /** 是否按 Schema 2 保存当前设计 */
+  usesMappingDocument: boolean
+  /** 当前模型与设计恢复的诊断，不包含之前产品的旧诊断 */
+  diagnostics: PrintDiagnostic[]
+}
+
 /**
  * 产品配置
  */
@@ -18,6 +120,12 @@ export interface ProductConfiguration {
 
   /** 是否在映射到三维模型前垂直翻转纹理，默认为 false */
   textureFlipY?: boolean
+  /** 设计使用的 UV 通道，默认 0；指定通道不存在时加载失败 */
+  uvChannel?: PrintUvChannel
+  /** 默认 original；fit-bounds 和 domain 必须主动配置，不修改模型 UV */
+  uvMapping?: PrintUvMapping
+  /** 调用方提供的不可变模型内容版本，不以模型 URL 代替 */
+  modelRevision?: string
 }
 
 /** 补全默认值后的产品配置快照 */
@@ -33,6 +141,12 @@ export interface ResolvedProductConfiguration {
 
   /** 是否在映射到三维模型前垂直翻转纹理 */
   textureFlipY: boolean
+  /** 二维与三维设计共同使用的 UV 通道 */
+  uvChannel: PrintUvChannel
+  /** 当前采用的映射策略，实际域通过 getPrintSurfaceInfo 查询 */
+  uvMapping: PrintUvMapping
+  /** 外层资源系统提供的内容版本 */
+  modelRevision?: string
 }
 
 /** 二维编辑器交互元素的外观配置 */
@@ -87,14 +201,20 @@ export interface CustomizerOptions {
   /** 三维查看器的挂载元素或 CSS 选择器 */
   viewer: ElementTarget
 
-  /** 二维编辑画布的逻辑宽度，单位为像素，默认为 1024 */
+  /** 二维逻辑宽度，单位为像素；恢复文档和元数据解析后才回退为 1024，上限 8192 */
   editorWidth?: number
 
-  /** 二维编辑画布的逻辑高度，单位为像素，默认为 512 */
+  /** 二维逻辑高度，单位为像素；元数据模式下必须与宽度一起提供，总面积不超过 16777216 像素 */
   editorHeight?: number
 
   /** 初始化时加载的产品配置 */
   product?: ProductConfiguration
+  /** 主动读取目标打印节点 extras.customforge，默认 false；不从 UV 推断画布比例 */
+  readModelMetadata?: boolean
+  /** 在创建画布前校验并恢复 Schema 1/2，模型地址仍由 product 提供 */
+  initialDesign?: unknown
+  /** 接收初始化、产品切换及设计恢复诊断，异常不会中止加载；诊断同时保存在解析快照中 */
+  onDiagnostic?: (diagnostic: PrintDiagnostic) => void
 
   /** 可保留的撤销步骤数量，默认为 50 */
   historyLimit?: number
@@ -389,7 +509,7 @@ export type DesignObject = TextDesignObject | ImageDesignObject
  *
  * 只包含二维可编辑对象，不包含产品模型、目标 Mesh 或基础纹理配置
  */
-export interface DesignDocument {
+export interface DesignDocumentV1 {
   /** Schema 版本，当前固定为 1 */
   version: 1
 
@@ -399,6 +519,21 @@ export interface DesignDocument {
   /** 按渲染层级从后到前排列的可编辑对象 */
   objects: DesignObject[]
 }
+
+/** 保存已解析映射的设计文档，模型文件与基础纹理由宿主管理 */
+export interface DesignDocumentV2 {
+  /** Schema 版本，固定为 2 */
+  version: 2
+  /** 图层逻辑像素所依据的尺寸 */
+  canvas: DesignCanvas
+  /** 数值域、目标节点、通道和方向，恢复时必须保持一致 */
+  printMapping: DesignPrintMapping
+  /** 按从后到前顺序排列的设计对象 */
+  objects: DesignObject[]
+}
+
+/** Schema 1 保持旧行为；Schema 2 同时保存映射，不包含模型 URL 或模型二进制 */
+export type DesignDocument = DesignDocumentV1 | DesignDocumentV2
 
 /** 撤销与重做历史的可用状态 */
 export interface HistoryState {
@@ -455,6 +590,8 @@ export interface CustomizerState {
 
   /** 当前产品 UV 在逻辑画布中的可打印包围框 */
   printableBounds: CanvasBounds
+  /** 当前打印面解析结果及诊断 */
+  printSurface: PrintSurfaceInfo
 
   /** 按从后到前顺序排列的设计对象 */
   objects: DesignObject[]
@@ -473,6 +610,8 @@ export interface CustomizerState {
  * 产品定制器事件及其载荷
  */
 export interface CustomizerEventMap {
+  /** 成功解析产品后发送的单条诊断，也可通过解析快照读取初始化诊断 */
+  diagnostic: PrintDiagnostic
   /** 二维设计内容或图层状态发生变化 */
   change: { objectCount: number }
 
