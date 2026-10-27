@@ -119,7 +119,7 @@ UV 坐标应当保存在三维模型中
 
 ## UV 映射与画布元数据
 
-以下能力属于**尚未发布的源码改动**，已发布的 `0.1.2` 不支持这些新增接口。升级消费方前请使用重新打包的本地制品验证
+以下映射能力需要 `0.2.1` 或更高版本；已发布的 `0.1.2` 不支持这些接口。本地验证时，请使用当前源码重新打包的制品，再升级消费方
 
 默认仍使用 UV0 和 `[0,1] × [0,1]` 原始坐标域，不会自动填满模型的 UV 留白。负 UV 是有效的模型数据，但原始模式会把域外采样夹到纹理边缘。需要将整个打印布局对应到完整设计图时，显式配置：
 
@@ -634,10 +634,10 @@ pnpm dev
 pnpm pack:local
 ```
 
-命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.1.2.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
+命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.2.1.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
 
 ```bash
-pnpm add /absolute/path/to/customforge-0.1.2.tgz
+pnpm add /absolute/path/to/customforge-0.2.1.tgz
 ```
 
 仓库中的 [npm 消费示例](./examples/npm-consumer)和 [API 契约消费示例](./examples/api-contract-consumer)独立于源码 workspace 安装该 tarball，具体启动和验证方法见各自的 README

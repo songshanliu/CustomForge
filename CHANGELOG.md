@@ -4,6 +4,8 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-28
+
 ### Added
 
 - Opt-in `fit-bounds` and explicit `domain` print mappings with consistent UV0–UV3 selection across the editor and design texture
@@ -18,8 +20,9 @@ All notable changes to CustomForge will be documented in this file
 - Prepare product changes before committing them, reject incompatible canvas sizes, discard superseded requests, and reset old mapping state on successful switches
 - Preserve optional saved model revisions on runtime restore and refresh identity verification after restore and history operations without trusting document metadata as model proof
 - Release model-owned ImageBitmaps on replacement and failed preparation, and lose the renderer context when destroying an instance
+- Align the package version and consumer tarball paths with the release tag after the `v0.2.0` release gate rejected mismatched metadata
 
-These changes are unreleased. Package version remains `0.1.2` until release validation and an explicit version update.
+The `v0.2.0` tag did not produce an npm release: its source still declared package version `0.1.2`. Release preparation continues with `0.2.1` without moving the existing tag.
 
 ## [0.1.2] - 2026-09-28
 

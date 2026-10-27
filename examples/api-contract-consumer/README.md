@@ -21,13 +21,13 @@ pnpm check
 pnpm build
 ```
 
-The dependency path expects `customforge-0.1.2.tgz` in the `core_code` directory. `--ignore-workspace` keeps this consumer independent from the repository workspace, `--lockfile=false` avoids retaining integrity data for a regenerated tarball, and `--ignore-scripts` prevents transitive install scripts from running during this contract check.
+The dependency path expects `customforge-0.2.1.tgz` in the `core_code` directory. `--ignore-workspace` keeps this consumer independent from the repository workspace, `--lockfile=false` avoids retaining integrity data for a regenerated tarball, and `--ignore-scripts` prevents transitive install scripts from running during this contract check.
 
 `pnpm test:browser` starts this consumer temporarily in 1440×900 and 390×844 viewports and verifies the packaged model, design operations, history, persistence, PNG output, view state, maximum zoom-out rendering, runtime extensions, and instance teardown in headless Chrome. The desktop pass also creates an in-memory GLB with 47,432 UV triangles, verifies the printable overlay and product switching, and reports the packaged Workbench initialization time and maximum Long Task without adding the fixture to the npm tarball.
 
-## Unreleased print mapping contract
+## Print mapping contract
 
-Repack the modified source before checking these additions; the published `0.1.2` package does not expose them even though the local artifact still uses that version number. No dependency version or release is changed by this task.
+Repack the current source as `customforge-0.2.1.tgz` before checking these additions. The published `0.1.2` package does not expose these APIs; installing an older tarball does not validate the current mapping contract.
 
 `src/printMappingSmoke.ts` imports only the public package entries. Its generated GLBs and asymmetric PNG exercise negative UVs, both vertical directions, UV0–UV3, separate UV islands, metadata sizing before canvas creation, the resolution label, a single initial GLB fetch, numerical Schema 2 restore, history, PNG selection exclusion, failed and superseded loads, mapping reset, and core/Workbench parity. Both viewport passes run these cases.
 

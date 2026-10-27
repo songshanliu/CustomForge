@@ -14,7 +14,7 @@ pnpm build
 pnpm dev
 ```
 
-The dependency path in `package.json` expects `customforge-0.1.2.tgz` in the repository root. The example intentionally does not keep a lockfile because each local pack produces new tarball integrity data
+The dependency path in `package.json` expects `customforge-0.2.1.tgz` in the repository root. The example intentionally does not keep a lockfile because each local pack produces new tarball integrity data
 
 `--ignore-workspace` is required because this example deliberately consumes the tarball as an independent project instead of joining the parent pnpm workspace
 
@@ -26,9 +26,9 @@ The example verifies Workbench branding, theme tokens, configurable asset catalo
 
 For a strict repository-independent check, copy this directory outside the repository and replace the `customforge` dependency with the absolute path to that tarball
 
-## Unreleased mapping options
+## Mapping options
 
-This source now also imports the public print-surface and diagnostic types, explicitly selects original mapping, and checks the resolved canvas against saved Design JSON. Use a fresh local pack: these additions are not in the published `0.1.2` package. The repository version and expected artifact name remain unchanged until a separate release task.
+This source also imports the public print-surface and diagnostic types, explicitly selects original mapping, and checks the resolved canvas against saved Design JSON. Use a fresh `customforge-0.2.1.tgz` local pack: these additions are not in the published `0.1.2` package.
 
 For a model with out-of-range UVs, pass `product.uvMapping: { mode: 'fit-bounds' }` deliberately, or supply a numerical `domain`. Enable `readModelMetadata: true` only when node metadata should determine settings. Restore saved work with `initialDesign` before allocating the canvas; do not turn an old Schema 1 document into fitted mapping implicitly. The root README documents size limits, source priorities, Schema compatibility, and upgrade order.
 

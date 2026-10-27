@@ -121,7 +121,7 @@ High-density printable meshes are supported without synchronously closing every 
 
 ## UV Mapping and Canvas Metadata
 
-The following additions are **unreleased source changes**, not APIs available in the published `0.1.2` package. Test a freshly packed local artifact before upgrading consumers
+The following mapping APIs require `0.2.1` or later; the published `0.1.2` package does not include them. For local validation, test a freshly packed artifact from the current source before upgrading consumers
 
 The default remains UV0 with the original `[0,1] × [0,1]` domain. Existing margins stay in place. Negative UVs are valid model data, but original mapping clamps samples outside that domain. To fit the entire printable layout explicitly:
 
@@ -637,10 +637,10 @@ Build and pack the library:
 pnpm pack:local
 ```
 
-This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.1.2.tgz`. To install it in another project, use the tarball's absolute path:
+This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.2.1.tgz`. To install it in another project, use the tarball's absolute path:
 
 ```bash
-pnpm add /absolute/path/to/customforge-0.1.2.tgz
+pnpm add /absolute/path/to/customforge-0.2.1.tgz
 ```
 
 The checked-in [npm consumer](./examples/npm-consumer) and [API contract consumer](./examples/api-contract-consumer) install this tarball independently of the source workspace. Their READMEs describe setup and verification
