@@ -8,6 +8,7 @@ import type {
   DesignCanvas,
   DesignDocument,
   DesignObject,
+  EditorViewState,
   ImageDesignObject,
   ProductConfiguration,
   PrintSurfaceInfo,
@@ -36,13 +37,14 @@ export interface ProductCustomizerApi {
     listener: CustomizerEventListener<K>,
   ): () => void
 
-  /** 添加并选中文字对象，返回可持久化对象快照 */
+  /** 添加并选中文字，省略 x/y 时适配实际打印范围；显式坐标使用逻辑像素 */
   addText(options?: AddTextOptions): TextDesignObject
 
   /**
    * 加载、添加并选中图片，返回可持久化对象快照
    *
    * 远程图片必须允许跨域访问；Blob URL 会在加入设计时转换为 Data URL
+   * 普通图片省略 x/y 时适配实际打印范围，显式坐标使用逻辑像素
    */
   addImage(options: AddImageOptions): Promise<ImageDesignObject>
 
@@ -57,6 +59,12 @@ export interface ProductCustomizerApi {
 
   /** 返回当前产品 UV 在逻辑画布中的可打印包围框 */
   getPrintableBounds(): CanvasBounds
+
+  /** 重新测量二维容器并等比取景，不修改对象、设计历史或三维纹理；隐藏时延后 */
+  fitEditorView(): void
+
+  /** 返回二维视图独立快照，不暴露 Fabric 矩阵；隐藏或回退状态由 ready 和 fallback 标识 */
+  getEditorViewState(): EditorViewState
 
   /** 返回数值映射、最终尺寸、配置来源及初始化诊断的独立快照 */
   getPrintSurfaceInfo(): PrintSurfaceInfo

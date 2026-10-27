@@ -708,6 +708,8 @@ export interface WorkbenchExtensionButton {
 
 /** Workbench 初始化配置 */
 export interface WorkbenchOptions {
+  /** 二维显示取景配置，默认适配实际打印区域；不改变设计逻辑尺寸 */
+  editorView?: CustomizerOptions['editorView']
   /** Workbench 独占使用的挂载元素或 CSS 选择器 */
   container: ElementTarget
 

@@ -61,6 +61,8 @@ export type {
   ElementTarget,
   ImageDesignObject,
   EditorAppearance,
+  EditorViewOptions,
+  EditorViewState,
   HistoryState,
   ProductConfiguration,
   PrintConfigurationSource,

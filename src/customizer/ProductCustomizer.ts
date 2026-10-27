@@ -18,6 +18,7 @@ import type {
   DesignCanvas,
   DesignDocument,
   DesignObject,
+  EditorViewState,
   ImageDesignObject,
   ProductConfiguration,
   PrintDiagnostic,
@@ -29,6 +30,7 @@ import type {
   UpdateTextOptions,
 } from '../core/types'
 import { DesignEditor } from '../editor/DesignEditor'
+import { normalizeEditorViewOptions } from '../editor/editorView'
 import { TextureBridge } from '../bridge/TextureBridge'
 import { ProductViewer } from '../viewer/ProductViewer'
 import type { PreparedProduct } from '../viewer/ProductViewer'
@@ -51,6 +53,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
   private readonly stopRenderListener: () => void
   private readonly stopHistoryListener: () => void
   private readonly stopViewListener: () => void
+  private readonly stopEditorViewListener: () => void
   private destroyed = false
   private printSurface: PrintSurfaceInfo
   private loadGeneration = 0
@@ -82,6 +85,9 @@ export class ProductCustomizer implements ProductCustomizerApi {
     this.stopViewListener = this.viewer.onViewChange((state) => {
       if (!this.committingProduct) this.emit('viewchange', state)
     })
+    this.stopEditorViewListener = this.editor.onEditorViewChange((state) => {
+      if (!this.committingProduct) this.emit('editorviewchange', state)
+    })
   }
 
   /**
@@ -93,6 +99,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
    */
   static async create(options: CustomizerOptions): Promise<ProductCustomizer> {
     options = { ...options, product: structuredClone(options.product ?? {}) }
+    options.editorView = normalizeEditorViewOptions(options.editorView)
     const editorHost = resolveElement(options.editor, 'Editor')
     const viewerHost = resolveElement(options.viewer, 'Viewer')
     if (editorHost === viewerHost) throw new Error('Editor and viewer must use different elements')
@@ -118,10 +125,12 @@ export class ProductCustomizer implements ProductCustomizerApi {
         ariaLabel: options.editorAriaLabel, defaultText: options.defaultText,
         textObjectName: options.textObjectName, imageObjectName: options.imageObjectName,
         backgroundObjectName: options.backgroundObjectName, appearance: options.appearance?.editor,
+        editorView: options.editorView,
       })
       editor.setUvLayout(layout, info.mapping.textureFlipY, configuration.product.uvMapping.mode === 'original')
       await editor.setBackgroundTexture(configuration.product.textureUrl)
       if (design) await editor.loadDesign(design)
+      editor.fitEditorView()
       editor.clearHistory()
       bridge = new TextureBridge(editor, viewer, info.mapping)
       viewer.commitProduct(prepared, info.uvChannel)
@@ -161,6 +170,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
    * 在二维画布中添加并选中一个文字对象
    *
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
+   * 未提供 x/y 时在实际打印范围内居中并等比适配，显式位置仍使用逻辑画布坐标
    *
    * @param options 文字内容、位置和样式配置
    * @returns 创建后的可持久化文字对象快照
@@ -173,6 +183,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
    * 加载图片并将其添加到二维画布
    *
    * role 为 background 时会替换已有设计背景、铺满当前 UV 可打印区域并默认锁定在最底层
+   * 普通图片未提供 x/y 时在实际打印范围内居中；显式位置仍使用逻辑画布坐标
    * 创建后和用户变换期间，对象会自动缩放或平移以保持完整可见
    *
    * @param options 图片地址、位置和显示宽度
@@ -188,9 +199,10 @@ export class ProductCustomizer implements ProductCustomizerApi {
     }
   }
 
-  /** 返回产品、画布、对象、选区、历史和视角的独立状态快照 */
+  /** 返回产品、逻辑画布、二维取景、对象、选区、历史和三维视角的独立快照 */
   getState(): CustomizerState {
     return {
+      editorView: this.getEditorViewState(),
       product: this.getProduct(),
       canvas: this.getCanvasSize(),
       printableBounds: this.getPrintableBounds(),
@@ -230,6 +242,16 @@ export class ProductCustomizer implements ProductCustomizerApi {
   /** 返回当前产品 UV 在逻辑画布中的可打印包围框 */
   getPrintableBounds(): CanvasBounds {
     return this.editor.getPrintableBounds()
+  }
+
+  /** 主动重新测量二维容器并等比取景，不影响设计数据、历史或纹理；隐藏时保留上次变换 */
+  fitEditorView(): void {
+    this.editor.fitEditorView()
+  }
+
+  /** 返回二维显示取景独立快照，坐标以 CSS 像素表示；不包含 Fabric 或可变矩阵 */
+  getEditorViewState(): EditorViewState {
+    return this.editor.getEditorViewState()
   }
 
   /**
@@ -579,6 +601,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
       this.committingProduct = false
       this.publishDiagnostics()
       this.emit('ready', { product: this.getProduct() })
+      this.emit('editorviewchange', this.getEditorViewState())
       this.emit('viewchange', this.getViewState())
       this.emit('status', { message: this.product.modelUrl ? 'Remote product ready' : 'Demo product ready' })
     } catch (error) {
@@ -615,6 +638,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
     this.stopRenderListener?.()
     this.stopHistoryListener?.()
     this.stopViewListener?.()
+    this.stopEditorViewListener?.()
     this.textureBridge.destroy()
     this.editor.destroy()
     this.viewer.destroy()

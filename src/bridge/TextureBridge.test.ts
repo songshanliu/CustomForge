@@ -12,7 +12,7 @@ describe('design texture mapping', () => {
     vi.stubGlobal('requestAnimationFrame', () => 1)
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const stop = vi.fn()
-    const editor = { textureCanvas: {}, onRender: () => stop } as unknown as DesignEditor
+    const editor = { textureCanvas: {}, onTextureRender: () => stop } as unknown as DesignEditor
     const viewer = { setTexture: vi.fn() } as unknown as ProductViewer
     const mapping: DesignPrintMapping = { version: 1, surfaceMesh: 'PrintArea', uvChannel: 1, domain: { minU: -2, minV: 0.25, maxU: -1, maxV: 1.25 }, textureFlipY }
     const bridge = new TextureBridge(editor, viewer, mapping)

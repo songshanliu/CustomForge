@@ -975,22 +975,6 @@
   max-width: 100%;
   max-height: 100%;
   isolation: isolate;
-  background-color: var(--cfw-surface);
-  background-image:
-    linear-gradient(
-      color-mix(in srgb, var(--cfw-ink) 5%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--cfw-ink) 5%, transparent) 1px,
-      transparent 1px
-    );
-  background-position: -1px -1px;
-  background-size: 24px 24px;
-  border: 1px solid color-mix(in srgb, var(--cfw-ink) 10%, var(--cfw-line));
-  border-radius: 4px;
-  box-shadow: 0 3px 10px rgb(24 24 27 / 6%);
 }
 
 .customforge-workbench__editor-stage

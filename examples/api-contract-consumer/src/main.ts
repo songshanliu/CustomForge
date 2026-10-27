@@ -12,6 +12,7 @@ import 'customforge/style.css'
 import './styles.css'
 import { createHighDensityProductFixture } from './highDensityProduct'
 import { verifyPrintMappingSmoke, verifyRealPrintMappingSmoke } from './printMappingSmoke'
+import { verifyEditorViewSmoke } from './editorViewSmoke'
 
 const HIGH_DENSITY_INITIALIZATION_BUDGET_MS = 2_000
 const HIGH_DENSITY_LONG_TASK_BUDGET_MS = 500
@@ -403,6 +404,7 @@ async function runBrowserSmoke(
     }
     setSmokePhase('print-mapping-contract')
     await verifyPrintMappingSmoke()
+    await verifyEditorViewSmoke()
     const realModelRevision = new URLSearchParams(window.location.search).get('real-model')
     if (realModelRevision) await verifyRealPrintMappingSmoke('/__customforge_smoke/model.glb', realModelRevision, new URLSearchParams(window.location.search).get('baseline') ?? undefined)
     setSmokePhase('rebuild-workbench')

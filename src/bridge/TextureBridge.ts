@@ -27,7 +27,7 @@ export class TextureBridge {
     this.texture.anisotropy = 4
     viewer.setTexture(this.texture)
 
-    this.stopListening = editor.onRender(() => this.scheduleUpdate())
+    this.stopListening = editor.onTextureRender(() => this.scheduleUpdate())
     this.scheduleUpdate()
   }
 

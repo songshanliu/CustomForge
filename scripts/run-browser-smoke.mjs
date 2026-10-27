@@ -15,7 +15,9 @@ const installedPackageDist = join(
   'customforge',
   'dist',
 )
-const serverUrl = 'http://127.0.0.1:5175/'
+const smokePort = Number(process.env.CUSTOMFORGE_SMOKE_PORT ?? 5175)
+if (!Number.isInteger(smokePort) || smokePort < 1 || smokePort > 65535) throw new Error('CUSTOMFORGE_SMOKE_PORT must be a valid TCP port')
+const serverUrl = `http://127.0.0.1:${smokePort}/`
 const realModelPath = process.env.CUSTOMFORGE_SMOKE_MODEL
 const realModelRevision = realModelPath ? createHash('sha256').update(await readFile(realModelPath)).digest('hex') : undefined
 const modelQuery = realModelRevision ? `&real-model=${realModelRevision}` : ''
@@ -142,7 +144,7 @@ async function waitForDevToolsPort(browser, profileDirectory, getStderr) {
         return Number(port)
       }
     } catch (error) {
-      if (error?.code !== 'ENOENT') {
+      if (!['ENOENT', 'EBUSY', 'EACCES'].includes(error?.code)) {
         throw error
       }
     }
@@ -252,6 +254,9 @@ async function readSmokeSnapshot(devTools) {
         realModel: ['passed', 'failed'].includes(body?.dataset.smokeStatus)
           ? JSON.parse(document.getElementById('customforge-real-model-evidence')?.textContent ?? 'null')
           : null,
+        editorView: ['passed', 'failed'].includes(body?.dataset.smokeStatus)
+          ? JSON.parse(document.getElementById('customforge-editor-view-evidence')?.textContent ?? 'null') : null,
+        input: JSON.parse(body?.dataset.viewportInput ?? 'null'),
         domTail: document.documentElement?.outerHTML.slice(-4000) ?? '',
       }
     })()`,
@@ -263,6 +268,7 @@ async function readSmokeSnapshot(devTools) {
 async function waitForSmokeResult(devTools, browser, getStderr) {
   const deadline = Date.now() + smokeTimeoutMs
   let latestSnapshot
+  let lastInputId
 
   while (Date.now() < deadline) {
     if (browser.exitCode !== null) {
@@ -270,6 +276,40 @@ async function waitForSmokeResult(devTools, browser, getStderr) {
     }
     try {
       latestSnapshot = await readSmokeSnapshot(devTools)
+      const input = latestSnapshot?.input
+      if (input && input.id !== lastInputId) {
+        lastInputId = input.id
+        if (input.kind === 'metrics') {
+          // CDP 单独修改 DPR 不发送平台 resolution/resize 事件，同时改变并恢复布局宽度模拟浏览器缩放
+          await devTools.send('Emulation.setDeviceMetricsOverride', { width: input.width + 1, height: input.height, deviceScaleFactor: input.dpr, mobile: false })
+          await devTools.send('Emulation.setDeviceMetricsOverride', { width: input.width, height: input.height, deviceScaleFactor: input.dpr, mobile: false })
+        } else if (input.kind === 'capture') {
+          if (process.env.CUSTOMFORGE_SMOKE_EVIDENCE) {
+            await mkdir(process.env.CUSTOMFORGE_SMOKE_EVIDENCE, { recursive: true })
+            const screenshot = await devTools.send('Page.captureScreenshot', { format: 'png' })
+            await writeFile(join(process.env.CUSTOMFORGE_SMOKE_EVIDENCE, `${input.name}-${input.id}.png`), Buffer.from(screenshot.data, 'base64'))
+          }
+        } else {
+          const [from, to] = input.points
+          if (input.kind === 'touch') {
+            await devTools.send('Emulation.setTouchEmulationEnabled', { enabled: true })
+            await devTools.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...from, id: 0 }] })
+          } else {
+            await devTools.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...from })
+            await devTools.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...from, button: 'left', clickCount: 1, modifiers: input.modifiers ?? 0 })
+          }
+          for (let i = 1; i <= 8; i++) {
+            const point = { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }
+            if (input.kind === 'touch') await devTools.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...point, id: 0 }] })
+            else await devTools.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, buttons: 1, modifiers: input.modifiers ?? 0 })
+          }
+          if (input.kind === 'touch') {
+            await devTools.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+            await devTools.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+          } else await devTools.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...to, button: 'left', clickCount: 1, modifiers: input.modifiers ?? 0 })
+        }
+        await devTools.send('Runtime.evaluate', { expression: `document.body.dataset.viewportInputDone = ${JSON.stringify(input.id)}` })
+      }
       if (['passed', 'failed'].includes(latestSnapshot?.status)) {
         return latestSnapshot
       }
@@ -401,6 +441,15 @@ async function saveRealModelEvidence(snapshot, viewport) {
   console.log(`${viewport} real-model mapping verified (${realModelRevision}; ${snapshot.realModel.cases.length} original/fit/direction cases)`)
 }
 
+async function saveEditorViewEvidence(snapshot, viewport) {
+  if (!snapshot.editorView?.cases?.length) throw new Error('Editor viewport contract evidence is missing')
+  const directory = process.env.CUSTOMFORGE_SMOKE_EVIDENCE
+  if (directory) {
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, `${viewport}-editor-view.json`), JSON.stringify(snapshot.editorView, null, 2))
+  }
+}
+
 await access(viteEntry)
 await assertInstalledPackageIsFresh()
 const browser = await findBrowser()
@@ -411,7 +460,7 @@ const server = spawn(process.execPath, [
   '--host',
   '127.0.0.1',
   '--port',
-  '5175',
+  String(smokePort),
   '--strictPort',
   '--config',
   join(consumerRoot, 'vite.smoke.config.mjs'),
@@ -434,6 +483,7 @@ try {
     '1440,900',
   )
   assertSmokePassed(desktopResult, 'Desktop', serverOutput)
+  await saveEditorViewEvidence(desktopResult.snapshot, 'desktop')
   await saveRealModelEvidence(desktopResult.snapshot, 'desktop')
   const mobileResult = await runBrowser(
     browser,
@@ -442,6 +492,7 @@ try {
     '390,844',
   )
   assertSmokePassed(mobileResult, 'Mobile', serverOutput)
+  await saveEditorViewEvidence(mobileResult.snapshot, 'mobile')
   await saveRealModelEvidence(mobileResult.snapshot, 'mobile')
   const highDensityMilliseconds =
     desktopResult.snapshot.highDensityMilliseconds
@@ -462,5 +513,5 @@ try {
   if (server.exitCode === null) {
     server.kill()
   }
-  await rm(profileDirectory, { recursive: true, force: true })
+  await rm(profileDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 150 })
 }

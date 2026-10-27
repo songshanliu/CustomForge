@@ -210,6 +210,29 @@ Schema 1 还需传入外层保存的 `textureFlipY`，旧文档本身未保存�
 
 本能力不进行 UV 重展开、独立 UDIM 编辑、去重叠、拉伸补偿或物理尺寸推断。背景仍拉伸到打印包围矩形；矩形不是精确轮廓蒙版，本轮未实现 `cover`/`contain` 或按轮廓裁剪导出
 
+## 编辑视图
+
+从 0.3.0 起，编辑区默认围绕真正的可打印范围自动取景。较小或偏移的区域会等比放大并居中，每侧增加 6% 比例留白，距离容器边缘至少 16 CSS 像素，横纵方向始终使用同一个缩放倍数。
+
+这里改变的是显示取景。逻辑画布尺寸、保存的对象坐标、UV 映射、PNG 分辨率和商品贴图都不随容器改变。没有明确坐标的新文字和图片会放在可打印范围内；显式 `x`/`y` 继续使用逻辑设计像素。原有对象约束仍针对逻辑画布，本轮没有增加 UV 多边形裁剪。
+
+`createCustomizer()` 与 `createWorkbench()` 均接受 `editorView`，普通接入可以省略。如果希望保留原来的整画布显示：
+
+```ts
+const workbench = await createWorkbench({
+  container: '#app',
+  editorView: {
+    fit: 'canvas', paddingRatio: 0, minPadding: 28, allowUpscale: false,
+  },
+})
+workbench.customizer.fitEditorView() // 宿主特殊布局变化后可主动重算，普通变化由 SDK 自动处理
+const view = workbench.customizer.getEditorViewState()
+```
+
+容器或面板变化由 `ResizeObserver` 自动处理。容器隐藏或不足安全边距时，状态返回 `ready: false` 并保留最后有效变换，重新可见后补算。真正没有有效打印范围时，`fallback` 为 `invalid-print-area`，不会把显示用的整画布回退谎报成模型打印区域。极小区域最多放大 128 倍，并通过 `zoomLimited: true` 说明数值保护。
+
+`getEditorViewState()` 返回独立快照，包含逻辑尺寸、实际打印范围、容器 CSS 尺寸、缩放、偏移、选项及就绪状态。`editorviewchange` 单独通知取景变化。重算、容器变化和选择操作不会写入历史、触发设计 `change` 或上传未变化的纹理，这些视图参数也不写入 Design JSON。
+
 ## 自定义界面
 
 `createCustomizer()` 提供编辑器和查看器，将它们挂载到两个不同的 DOM 容器后，通过返回的 `ProductCustomizerApi` 连接你自己的控件：
@@ -540,6 +563,8 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `getProduct()` | 返回补全默认值后的当前商品配置 |
 | `getCanvasSize()` | 返回逻辑纹理尺寸 |
 | `getPrintableBounds()` | 返回逻辑画布坐标中的 UV 可打印边界 |
+| `getEditorViewState()` | 返回二维取景独立快照，包含就绪状态和真实回退原因 |
+| `fitEditorView()` | 重新适配二维容器，不改变设计坐标和输出纹理 |
 | `getPrintSurfaceInfo()` | 返回解析映射、来源、实际尺寸、内容版本验证和诊断 |
 | `getObjects()` | 按从后到前的图层顺序返回当前对象 |
 | `getSelectedObjectIds()` | 返回当前选区中的稳定对象 ID |
@@ -570,7 +595,7 @@ Workbench 在焦点不位于表单控件时支持 `Ctrl` 或 `Cmd` + `Z`、`Ctrl
 | `on(event, listener)` | 订阅实例事件，并返回取消订阅函数 |
 | `destroy()` | 释放 DOM 事件、Fabric 状态和 WebGL 资源 |
 
-当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`viewchange`、`diagnostic`、`status` 和 `error`
+当前事件包括 `ready`、`change`、`selectionchange`、`historychange`、`viewchange`、`editorviewchange`、`diagnostic`、`status` 和 `error`
 
 无界面能力契约导出为 `ProductCustomizerApi`，默认界面能力契约导出为 `CustomForgeWorkbenchApi`。具体类仍然保留，但消费方可以只依赖接口，避免业务代码与实现细节耦合。
 
@@ -634,10 +659,10 @@ pnpm dev
 pnpm pack:local
 ```
 
-命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.2.1.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
+命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.3.0.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
 
 ```bash
-pnpm add /absolute/path/to/customforge-0.2.1.tgz
+pnpm add /absolute/path/to/customforge-0.3.0.tgz
 ```
 
 仓库中的 [npm 消费示例](./examples/npm-consumer)和 [API 契约消费示例](./examples/api-contract-consumer)独立于源码 workspace 安装该 tarball，具体启动和验证方法见各自的 README

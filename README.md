@@ -212,6 +212,29 @@ Upgrade all document readers, including administrative replay, **before** enabli
 
 This is not UV unwrapping, independent UDIM editing, overlap removal, distortion correction, or physical size inference. Background images still stretch to the printable bounding rectangle. That rectangle is not an exact contour mask; `cover`/`contain` and contour-clipped export are not implemented here
 
+## Editor View
+
+Since 0.3.0, the editor automatically centers and fits the actual printable region, including small or offset UV layouts. The default adds 6% padding on each side and at least 16 CSS pixels from the container edges. It can enlarge a small region; it never stretches the two axes independently.
+
+This is display framing. Logical canvas dimensions, saved object coordinates, UV mapping, PNG resolution, and the texture on the product stay unchanged. New text and images without explicit coordinates start inside the printable bounds. Explicit `x`/`y` values still refer to logical design pixels. Existing containment rules still use the logical canvas, rather than clipping objects to UV polygons.
+
+Both `createCustomizer()` and `createWorkbench()` accept `editorView`. Most integrations can leave it out. To keep the previous whole-canvas display:
+
+```ts
+const workbench = await createWorkbench({
+  container: '#app',
+  editorView: {
+    fit: 'canvas', paddingRatio: 0, minPadding: 28, allowUpscale: false,
+  },
+})
+workbench.customizer.fitEditorView() // Optional after a host-specific layout change
+const view = workbench.customizer.getEditorViewState()
+```
+
+`ResizeObserver` handles normal container and panel changes automatically. Hidden or undersized containers return `ready: false` and retain the last valid transform until visible. A genuinely empty printable region reports `fallback: 'invalid-print-area'`; the visible whole-canvas fallback is not reported as a detected print area. Extremely small regions are limited to 128× zoom and report `zoomLimited: true`.
+
+`getEditorViewState()` returns a detached snapshot with logical dimensions, actual printable bounds, container CSS dimensions, zoom, offsets, options, and readiness. `editorviewchange` reports framing changes separately from `change`. Refitting, resizing and selection do not add history entries or upload unchanged design textures. These display settings are not stored in Design JSON.
+
 ## Build Your Own UI
 
 `createCustomizer()` provides the editor and viewer without the Workbench controls. Mount them in two separate DOM containers and connect your own UI to the returned `ProductCustomizerApi`:
@@ -543,6 +566,8 @@ Successful product replacement keeps the current design but starts a new history
 | `getProduct()` | Return the resolved current product configuration |
 | `getCanvasSize()` | Return the logical texture dimensions |
 | `getPrintableBounds()` | Return the UV printable bounds in logical canvas coordinates |
+| `getEditorViewState()` | Return a detached 2D display snapshot, including readiness and fallback |
+| `fitEditorView()` | Refit the 2D container without changing design coordinates or texture output |
 | `getPrintSurfaceInfo()` | Return resolved mapping, sources, final canvas, content verification, and diagnostics |
 | `getObjects()` | Return the current objects in back-to-front layer order |
 | `getSelectedObjectIds()` | Return stable IDs for the current selection |
@@ -573,7 +598,7 @@ Successful product replacement keeps the current design but starts a new history
 | `on(event, listener)` | Subscribe to instance events; returns an unsubscribe function |
 | `destroy()` | Release DOM events, Fabric state, and WebGL resources |
 
-Available events are `ready`, `change`, `selectionchange`, `historychange`, `viewchange`, `diagnostic`, `status`, and `error`
+Available events are `ready`, `change`, `selectionchange`, `historychange`, `viewchange`, `editorviewchange`, `diagnostic`, `status`, and `error`
 
 The headless contract is exported as `ProductCustomizerApi`; the default UI contract is exported as `CustomForgeWorkbenchApi`. The concrete classes remain available, but consumers can depend on these interfaces without coupling application code to their implementation.
 
@@ -637,10 +662,10 @@ Build and pack the library:
 pnpm pack:local
 ```
 
-This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.2.1.tgz`. To install it in another project, use the tarball's absolute path:
+This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.3.0.tgz`. To install it in another project, use the tarball's absolute path:
 
 ```bash
-pnpm add /absolute/path/to/customforge-0.2.1.tgz
+pnpm add /absolute/path/to/customforge-0.3.0.tgz
 ```
 
 The checked-in [npm consumer](./examples/npm-consumer) and [API contract consumer](./examples/api-contract-consumer) install this tarball independently of the source workspace. Their READMEs describe setup and verification

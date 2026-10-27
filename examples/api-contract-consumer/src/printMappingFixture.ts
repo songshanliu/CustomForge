@@ -26,9 +26,10 @@ function encodeGlb(document: object, binary: Uint8Array) {
  * @param includeMetadata 是否导出节点元数据，用于验证缺失与关闭读取的兼容路径
  * @param mappedBase 是否增加 UV1 与 KHR_texture_transform 驱动的 PBR 底材贴图
  * @param splitIslands 是否拆成两个独立 UV 岛和两个分离平面，用于验证岛间留白
+ * @param region 可选的标准域内偏移与比例，仅供显示取景样本使用
  * @returns 临时模型地址和释放函数，调用方须在测试结束后释放
  */
-export function createPrintMappingFixture(standard = false, missingUv = false, canvas = { width: 256, height: 128 }, includeMetadata = true, mappedBase = false, splitIslands = false) {
+export function createPrintMappingFixture(standard = false, missingUv = false, canvas = { width: 256, height: 128 }, includeMetadata = true, mappedBase = false, splitIslands = false, region?: { left: number; top: number; width: number; height: number }) {
   const positions = new Float32Array(splitIslands ? [-1, -1, 0, -0.2, -1, 0, -0.2, 1, 0, -1, 1, 0, 0.2, -1, 0, 1, -1, 0, 1, 1, 0, 0.2, 1, 0] : [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0])
   const normals = new Float32Array(positions.length)
   for (let index = 2; index < normals.length; index += 3) normals[index] = 1
@@ -38,6 +39,10 @@ export function createPrintMappingFixture(standard = false, missingUv = false, c
     uv1[index] = 1 - (uv[index] + 2)
     uv1[index + 1] = uv[index + 1] - 0.25
     if (standard) { uv[index] += 2; uv[index + 1] -= 0.25 }
+    if (region) {
+      uv[index] = region.left + uv[index] * region.width
+      uv[index + 1] = region.top + uv[index + 1] * region.height
+    }
   }
   const indices = new Uint16Array(splitIslands ? [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7] : [0, 1, 2, 0, 2, 3])
   const arrays = [positions, normals, uv, uv1, indices]

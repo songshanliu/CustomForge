@@ -345,6 +345,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         viewer: requiredElement(element, '[data-role="viewer-host"]'),
         editorWidth: normalized.editorWidth,
         editorHeight: normalized.editorHeight,
+        editorView: normalized.editorView,
         historyLimit: normalized.historyLimit,
         product: normalized.product,
         readModelMetadata: normalized.readModelMetadata,
@@ -601,6 +602,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         this.refreshExtensions()
       }),
       this.customizer.on('viewchange', () => this.refreshExtensions()),
+      this.customizer.on('editorviewchange', () => this.refreshExtensions()),
       this.customizer.on('ready', () => this.setProductReadyStatus()),
       this.customizer.on('status', ({ message }) => {
         if (message === 'Remote product ready' || message === 'Demo product ready') {

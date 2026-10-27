@@ -195,6 +195,8 @@ export interface CustomizerAppearance {
  * 产品定制器初始化配置
  */
 export interface CustomizerOptions {
+  /** 二维显示取景；默认围绕打印区域等比适配，独立于逻辑尺寸、保存数据和输出纹理 */
+  editorView?: EditorViewOptions
   /** 二维编辑器的挂载元素或 CSS 选择器 */
   editor: ElementTarget
 
@@ -254,6 +256,7 @@ export type TextFontWeight = number | 'normal' | 'bold'
  * 添加文字时使用的配置
  *
  * 创建后和用户变换期间，文字包围盒会自动约束在编辑画布内
+ * 未提供 x/y 时围绕实际打印区域居中，必要时等比缩小；显式坐标继续使用逻辑像素
  */
 export interface AddTextOptions {
   /** 文字内容 */
@@ -268,7 +271,7 @@ export interface AddTextOptions {
   /** 文字左上角在画布中的纵坐标，单位为像素，越界时自动修正 */
   y?: number
 
-  /** 文字编辑框宽度，单位为像素，包围盒过大时会等比缩小 */
+  /** 文字编辑框宽度，单位为逻辑像素；默认取打印范围宽度的 60%，过大时等比缩小 */
   width?: number
 
   /** 字体名称 */
@@ -342,6 +345,7 @@ export interface UpdateTextOptions {
  * 添加图片时使用的配置
  *
  * 创建后和用户变换期间，图片包围盒会自动约束在编辑画布内
+ * 普通图片未提供 x/y 时在实际打印区域居中并等比适配，显式坐标保持逻辑像素语义
  */
 export interface AddImageOptions {
   /** 图片地址，支持远程地址、Data URL 和 Blob URL */
@@ -359,7 +363,7 @@ export interface AddImageOptions {
   /** 图片中心在画布中的纵坐标，单位为像素，越界时自动修正 */
   y?: number
 
-  /** 图片添加到画布后的显示宽度，单位为像素，包围盒过大时会等比缩小 */
+  /** 图片的逻辑显示宽度，默认取打印范围宽度的 40%，过大时等比缩小 */
   width?: number
 }
 
@@ -559,6 +563,40 @@ export interface CanvasBounds {
   height: number
 }
 
+/** 二维显示取景配置，不迁移对象或改变设计映射 */
+export interface EditorViewOptions {
+  /** 取景对象，默认 print-area；canvas 表示整张逻辑纹理 */
+  fit?: 'print-area' | 'canvas'
+  /** 取景范围每侧比例留白，0～0.5，默认 0.06 */
+  paddingRatio?: number
+  /** 距容器边缘的最小安全距离，CSS 像素，默认 16 */
+  minPadding?: number
+  /** 是否允许放大小区域，默认 true；数值保护上限为 128 倍 */
+  allowUpscale?: boolean
+}
+
+/** 二维显示状态快照，所有视图数值均使用 CSS 像素而非设备像素 */
+export interface EditorViewState extends Required<EditorViewOptions> {
+  /** 保存与输出使用的逻辑纹理尺寸 */
+  designCanvas: DesignCanvas
+  /** 最近观测的容器尺寸，隐藏时可能为零 */
+  viewport: DesignCanvas
+  /** 真实有效打印范围；空区域不会替换为历史整画布回退 */
+  printableBounds: CanvasBounds
+  /** 横纵共用缩放倍数，隐藏时保留最后有效值 */
+  zoom: number
+  /** 逻辑坐标到显示坐标的横向平移，允许为负 */
+  offsetX: number
+  /** 逻辑坐标到显示坐标的纵向平移，允许为负 */
+  offsetY: number
+  /** 是否取得有效容器和取景区域，回退或隐藏时为 false */
+  ready: boolean
+  /** 是否因极小区域触发 128 倍显示上限 */
+  zoomLimited: boolean
+  /** 无有效区域时仍显示整画布，并明确标记回退原因 */
+  fallback: 'none' | 'invalid-print-area'
+}
+
 /** 三维空间中的坐标值 */
 export interface Vector3Value {
   /** 横轴坐标 */
@@ -582,6 +620,8 @@ export interface ProductViewState {
 
 /** 自定义 UI 可以一次读取的核心状态快照 */
 export interface CustomizerState {
+  /** 当前二维显示取景，独立于持久化设计文档 */
+  editorView: EditorViewState
   /** 当前补全默认值后的产品配置 */
   product: ResolvedProductConfiguration
 
@@ -610,6 +650,8 @@ export interface CustomizerState {
  * 产品定制器事件及其载荷
  */
 export interface CustomizerEventMap {
+  /** 二维容器或取景变化，不表示设计修改，不写入历史或触发纹理上传 */
+  editorviewchange: EditorViewState
   /** 成功解析产品后发送的单条诊断，也可通过解析快照读取初始化诊断 */
   diagnostic: PrintDiagnostic
   /** 二维设计内容或图层状态发生变化 */

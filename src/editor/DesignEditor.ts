@@ -4,6 +4,7 @@ import {
   FabricImage,
   Point,
   Textbox,
+  type CanvasEvents,
   type FabricObject,
 } from 'fabric'
 import { parseDesignDocument } from '../core/design'
@@ -20,6 +21,8 @@ import type {
   DesignObject,
   DesignObjectTransform,
   EditorAppearance,
+  EditorViewOptions,
+  EditorViewState,
   HistoryState,
   ImageDesignObject,
   TextAlignment,
@@ -35,11 +38,10 @@ import {
   calculateContainmentOffset,
   calculateContainmentScale,
 } from './objectBounds'
-import { calculateUvCanvasBounds } from './uvBounds'
+import { calculateUvCanvasBounds, calculateUvViewBounds } from './uvBounds'
 import { resolvePersistentImageSource } from './imageSource'
-import { drawUvOverlay } from './uvOverlay'
-
-const EDITOR_DISPLAY_GUTTER = 56
+import { createUvOverlayPaths, renderUvOverlay, type UvOverlayPaths } from './uvOverlay'
+import { calculateEditorView, hasEditorViewBounds, normalizeEditorViewOptions } from './editorView'
 
 interface NormalizedEditorAppearance {
   selectionFill: string
@@ -74,6 +76,8 @@ function normalizeEditorAppearance(
 
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
+  /** 仅影响显示的取景配置 */
+  editorView?: EditorViewOptions
   /** 三维共用的已解析映射 */
   printMapping?: DesignPrintMapping
   /** 宿主为实际模型提供的内容版本，不从待恢复文档推断 */
@@ -116,15 +120,48 @@ type HistoryListener = (state: HistoryState) => void
 
 /** 将 Fabric 主画布重绘为不含选择框的实时纹理 */
 class DesignCanvas extends Canvas {
-  /** 将纯设计内容绘制到稳定的纹理 Canvas */
-  renderTexture(context: CanvasRenderingContext2D): void {
-    const previousSkipControlsDrawing = this.skipControlsDrawing
-    this.skipControlsDrawing = true
+  private texturePass = false
 
+  /** 使用当前屏幕 DPR，避免 Fabric 模块初始化时固定的设备比例 */
+  override getRetinaScaling(): number {
+    return this.enableRetinaScaling ? Math.max(window.devicePixelRatio || 1, 1) : 1
+  }
+
+  /** 内部纹理输出不对交互监听者暴露临时尺寸或渲染事件 */
+  override fire<K extends keyof CanvasEvents>(name: K, options?: CanvasEvents[K]): void {
+    if (this.texturePass && (name === 'before:render' || name === 'after:render')) return
+    super.fire(name, options)
+  }
+
+  /** 将纯设计内容绘制到稳定的纹理 Canvas */
+  renderTexture(context: CanvasRenderingContext2D, width: number, height: number): void {
+    const previous = {
+      viewportTransform: this.viewportTransform, width: this.width, height: this.height,
+      enableRetinaScaling: this.enableRetinaScaling, skipOffscreen: this.skipOffscreen,
+      skipControlsDrawing: this.skipControlsDrawing, texturePass: this.texturePass,
+    }
+    const editing = this.getObjects().filter((object): object is Textbox => object instanceof Textbox && object.isEditing)
+    this.texturePass = true
+    this.viewportTransform = [1, 0, 0, 1, 0, 0]
+    this.width = width
+    this.height = height
+    this.enableRetinaScaling = false
+    this.skipOffscreen = false
+    this.skipControlsDrawing = true
+    editing.forEach((object) => { object.isEditing = false })
+    context.save()
     try {
+      context.setTransform(1, 0, 0, 1, 0, 0)
       this.renderCanvas(context, this.getObjects())
+    } catch (error) {
+      // 失败的对象渲染可能留下未配对的 context.save，重置仅用于纹理的 backing store
+      context.canvas.width = width
+      throw error
     } finally {
-      this.skipControlsDrawing = previousSkipControlsDrawing
+      context.restore()
+      Object.assign(this, previous)
+      editing.forEach((object) => { object.isEditing = true })
+      this.calcViewportBoundaries()
     }
   }
 }
@@ -148,6 +185,25 @@ export class DesignEditor {
   private readonly backgroundObjectName: string
   private readonly appearance: NormalizedEditorAppearance
   private editableBounds: CanvasBounds
+  private actualPrintableBounds: CanvasBounds = { left: 0, top: 0, width: 0, height: 0 }
+  private readonly editorViewOptions: Required<EditorViewOptions>
+  private editorViewState: EditorViewState
+  private readonly editorViewListeners = new Set<(state: EditorViewState) => void>()
+  private readonly textureListeners = new Set<RenderListener>()
+  private readonly paper: HTMLDivElement
+  private uvPaths?: UvOverlayPaths
+  private resizeFrame = 0
+  private displayDpr = 0
+  private dprQuery?: MediaQueryList
+  private contentDirty = true
+  private textureDirty = true
+  private textureNotificationPending = true
+  private readonly scheduleDisplayResize = () => {
+    if (!this.destroyed && !this.resizeFrame) this.resizeFrame = requestAnimationFrame(() => {
+      this.resizeFrame = 0
+      this.resizeDisplay()
+    })
+  }
   private readonly renderListeners = new Set<RenderListener>()
   private readonly selectionListeners = new Set<SelectionListener>()
   private readonly historyListeners = new Set<HistoryListener>()
@@ -194,6 +250,8 @@ export class DesignEditor {
     this.imageObjectName = options.imageObjectName ?? 'Image'
     this.backgroundObjectName = options.backgroundObjectName ?? 'Background'
     this.appearance = normalizeEditorAppearance(options.appearance)
+    this.editorViewOptions = normalizeEditorViewOptions(options.editorView)
+    this.editorViewState = calculateEditorView({ width: this.width, height: this.height }, this.actualPrintableBounds, { width: 0, height: 0 }, this.editorViewOptions)
     this.editableBounds = {
       left: 0,
       top: 0,
@@ -228,6 +286,10 @@ export class DesignEditor {
     this.historySignature = JSON.stringify(initialDesign)
 
     this.canvas.wrapperEl.classList.add('customforge-design-canvas')
+    this.paper = document.createElement('div')
+    this.paper.className = 'customforge-editor-paper'
+    this.paper.setAttribute('aria-hidden', 'true')
+    this.canvas.wrapperEl.prepend(this.paper)
     this.uvOverlay = document.createElement('canvas')
     this.uvOverlay.width = this.width
     this.uvOverlay.height = this.height
@@ -244,7 +306,14 @@ export class DesignEditor {
       }
 
       this.renderTextureCanvas()
-      this.renderListeners.forEach((listener) => listener())
+      if (this.textureNotificationPending) {
+        this.textureNotificationPending = false
+        this.textureListeners.forEach((listener) => listener())
+      }
+      if (this.contentDirty) {
+        this.contentDirty = false
+        this.renderListeners.forEach((listener) => listener())
+      }
     })
 
     const notifySelection = () => this.notifySelectionChange()
@@ -255,6 +324,7 @@ export class DesignEditor {
 
     const constrainTarget = ({ target }: { target: FabricObject }) => {
       this.constrainObjectToCanvas(target)
+      this.markContentChanged()
     }
     this.canvas.on('object:moving', constrainTarget)
     this.canvas.on('object:scaling', constrainTarget)
@@ -270,8 +340,16 @@ export class DesignEditor {
       this.scheduleHistoryCommit()
     })
 
-    this.resizeObserver = new ResizeObserver(() => this.resizeDisplay())
-    this.resizeObserver.observe(host)
+    this.canvas.on('object:added', () => this.markContentChanged())
+    this.canvas.on('object:removed', () => this.markContentChanged())
+    this.resizeObserver = new ResizeObserver(this.scheduleDisplayResize)
+    try {
+      this.resizeObserver.observe(host, { box: 'device-pixel-content-box' })
+    } catch {
+      this.resizeObserver.observe(host)
+    }
+    window.addEventListener('resize', this.scheduleDisplayResize)
+    this.observeDpr()
     this.resizeDisplay()
   }
 
@@ -295,26 +373,10 @@ export class DesignEditor {
       this.height,
       legacyMapping,
     )
-    const context = this.uvOverlay.getContext('2d')
-    if (!context) {
-      return
-    }
-
-    context.clearRect(0, 0, this.width, this.height)
-    if (layout.triangleCoordinates.length === 0) {
-      this.uvOverlay.hidden = true
-      return
-    }
-
-    this.uvOverlay.hidden = false
-    const accent = this.appearance.uvFill ??
-      (getComputedStyle(this.canvas.wrapperEl)
-        .getPropertyValue('--cfw-accent')
-        .trim() || '#268a4b')
-    drawUvOverlay(context, layout, flipY, this.width, this.height, {
-      fill: accent,
-      boundary: this.appearance.uvBoundary,
-    }, legacyMapping)
+    this.actualPrintableBounds = calculateUvViewBounds(layout, flipY, this.width, this.height)
+    this.uvPaths = createUvOverlayPaths(layout, flipY, this.width, this.height, legacyMapping)
+    this.uvOverlay.hidden = !hasEditorViewBounds(this.actualPrintableBounds)
+    this.resizeDisplay(true)
   }
 
   /**
@@ -351,14 +413,39 @@ export class DesignEditor {
   }
 
   /**
-   * 订阅 Fabric Canvas 完成渲染事件
+   * 订阅设计内容或图层状态变更，选择和取景不会触发
    *
-   * @param listener 每次画布完成渲染后调用的函数
+   * @param listener 设计变更完成显示后调用的函数
    * @returns 用于取消本次订阅的函数
    */
   onRender(listener: RenderListener): () => void {
     this.renderListeners.add(listener)
     return () => this.renderListeners.delete(listener)
+  }
+
+  /** 订阅纯设计纹理更新，不包含选择或显示取景 */
+  onTextureRender(listener: RenderListener): () => void {
+    this.textureListeners.add(listener)
+    return () => this.textureListeners.delete(listener)
+  }
+
+  /** 订阅二维取景状态变化，返回取消订阅函数 */
+  onEditorViewChange(listener: (state: EditorViewState) => void): () => void {
+    this.editorViewListeners.add(listener)
+    return () => this.editorViewListeners.delete(listener)
+  }
+
+  /** 返回不含可变矩阵引用的二维取景快照 */
+  getEditorViewState(): EditorViewState {
+    return structuredClone(this.editorViewState)
+  }
+
+  /** 主动重新测量容器并取景，隐藏时保留最后有效变换 */
+  fitEditorView(): void {
+    this.resizeDisplay()
+    // 同一帧内隐藏再显示可能不产生新的 ResizeObserver 尺寸记录，补一次延后测量
+    const { viewport, minPadding } = this.editorViewState
+    if (viewport.width <= 2 * minPadding || viewport.height <= 2 * minPadding) this.scheduleDisplayResize()
   }
 
   /**
@@ -578,7 +665,7 @@ export class DesignEditor {
 
     this.objectNames.set(object, normalizedName)
     this.canvas.requestRenderAll()
-    this.commitHistory()
+    this.commitHistory(false)
     return true
   }
 
@@ -622,7 +709,7 @@ export class DesignEditor {
 
     this.applyObjectLock(object, locked)
     this.canvas.requestRenderAll()
-    this.commitHistory()
+    this.commitHistory(false)
     return true
   }
 
@@ -841,6 +928,7 @@ export class DesignEditor {
     const previous = this.canvas.backgroundImage
     this.canvas.backgroundImage = image
     this.canvas.backgroundColor = ''
+    this.markContentChanged()
     this.canvas.requestRenderAll()
     if (previous !== image) previous?.dispose()
   }
@@ -857,9 +945,9 @@ export class DesignEditor {
   addText(options: AddTextOptions = {}): TextDesignObject {
     this.flushHistoryCommit()
     const text = new Textbox(options.text ?? this.defaultText, {
-      left: options.x ?? this.width * 0.18,
-      top: options.y ?? this.height * 0.36,
-      width: options.width ?? this.width * 0.42,
+      left: options.x ?? this.defaultPlacementBounds().left,
+      top: options.y ?? this.defaultPlacementBounds().top,
+      width: options.width ?? this.defaultPlacementBounds().width * 0.6,
       fontFamily: options.fontFamily ?? 'Arial',
       fontSize: options.fontSize ?? 22,
       fontWeight: options.fontWeight ?? 700,
@@ -876,6 +964,7 @@ export class DesignEditor {
       ...this.objectControlAppearance(),
     })
 
+    this.placeDefaultObject(text, options)
     this.addAndSelect(text, options.name)
     return this.serializeObject(text) as TextDesignObject
   }
@@ -897,12 +986,12 @@ export class DesignEditor {
     const source = await resolvePersistentImageSource(options.src)
     const image = await this.loadImage(source)
     const role = options.role ?? 'element'
-    const targetWidth = options.width ?? this.width * 0.22
+    const targetWidth = options.width ?? this.defaultPlacementBounds().width * 0.4
     const scale = targetWidth / Math.max(image.width, 1)
 
     image.set({
-      left: options.x ?? this.width * 0.62,
-      top: options.y ?? this.height * 0.29,
+      left: options.x ?? this.defaultPlacementBounds().left + this.defaultPlacementBounds().width / 2,
+      top: options.y ?? this.defaultPlacementBounds().top + this.defaultPlacementBounds().height / 2,
       originX: 'center',
       originY: 'center',
       scaleX: scale,
@@ -918,6 +1007,8 @@ export class DesignEditor {
         throw error
       }
       this.removeDesignBackgrounds()
+    } else {
+      this.placeDefaultObject(image, options)
     }
     this.imageSources.set(image, source)
     this.addAndSelect(image, options.name, role === 'background', role)
@@ -953,6 +1044,7 @@ export class DesignEditor {
     this.flushHistoryCommit()
     await this.replaceDesign(value)
     this.commitHistory()
+    this.fitEditorView()
   }
 
   private async replaceDesign(value: unknown): Promise<void> {
@@ -1161,6 +1253,11 @@ export class DesignEditor {
       this.historyTimer = undefined
     }
     this.resizeObserver.disconnect()
+    cancelAnimationFrame(this.resizeFrame)
+    window.removeEventListener('resize', this.scheduleDisplayResize)
+    this.dprQuery?.removeEventListener('change', this.onDprChange)
+    this.editorViewListeners.clear()
+    this.textureListeners.clear()
     this.renderListeners.clear()
     this.selectionListeners.clear()
     this.historyListeners.clear()
@@ -1400,6 +1497,7 @@ export class DesignEditor {
   }
 
   private scheduleHistoryCommit(): void {
+    this.markContentChanged()
     if (this.historyBusy) {
       return
     }
@@ -1421,7 +1519,7 @@ export class DesignEditor {
     this.commitHistory()
   }
 
-  private commitHistory(): void {
+  private commitHistory(textureChanged = true): void {
     if (this.historyBusy) {
       return
     }
@@ -1437,6 +1535,7 @@ export class DesignEditor {
     }
     this.history.push(snapshot)
     this.historySignature = signature
+    this.markContentChanged(textureChanged)
     this.notifyHistoryChange()
   }
 
@@ -1469,22 +1568,83 @@ export class DesignEditor {
     }
   }
 
-  private resizeDisplay(): void {
-    const availableWidth = Math.max(this.host.clientWidth - EDITOR_DISPLAY_GUTTER, 1)
-    const availableHeight = Math.max(this.host.clientHeight - EDITOR_DISPLAY_GUTTER, 1)
-    const scale = Math.min(
-      availableWidth / this.width,
-      availableHeight / this.height,
-      1,
-    )
+  private resizeDisplay(forceOverlay = false): void {
+    if (this.destroyed) return
+    const style = getComputedStyle(this.host)
+    const viewport = {
+      width: Math.max(0, this.host.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0')),
+      height: Math.max(0, this.host.clientHeight - parseFloat(style.paddingTop || '0') - parseFloat(style.paddingBottom || '0')),
+    }
+    const state = calculateEditorView({ width: this.width, height: this.height }, this.actualPrintableBounds, viewport, this.editorViewOptions, this.editorViewState)
+    const changed = JSON.stringify(state) !== JSON.stringify(this.editorViewState)
+    const dpr = this.canvas.getRetinaScaling()
+    const dprChanged = dpr !== this.displayDpr
+    this.editorViewState = state
+    if (viewport.width > 2 * state.minPadding && viewport.height > 2 * state.minPadding) {
+      if (this.canvas.width !== viewport.width || this.canvas.height !== viewport.height || dprChanged) {
+        this.canvas.setDimensions(viewport)
+        this.uvOverlay.width = Math.ceil(viewport.width * dpr)
+        this.uvOverlay.height = Math.ceil(viewport.height * dpr)
+        this.displayDpr = dpr
+      }
+      if (changed || dprChanged || forceOverlay) {
+        this.canvas.setViewportTransform([state.zoom, 0, 0, state.zoom, state.offsetX, state.offsetY])
+        this.canvas.getObjects().forEach((object) => object.setCoords())
+        this.canvas.getActiveObject()?.setCoords()
+        this.drawEditorGuides(state, dpr)
+      }
+    }
+    if (changed || dprChanged) this.editorViewListeners.forEach((listener) => listener(this.getEditorViewState()))
+  }
 
-    this.canvas.setDimensions(
-      {
-        width: `${Math.floor(this.width * scale)}px`,
-        height: `${Math.floor(this.height * scale)}px`,
-      },
-      { cssOnly: true },
-    )
+  private drawEditorGuides(state: EditorViewState, dpr: number): void {
+    const bounds = state.fit === 'canvas' || state.fallback !== 'none'
+      ? { left: 0, top: 0, width: this.width, height: this.height } : state.printableBounds
+    const { zoom: z, paddingRatio: r } = state
+    Object.assign(this.paper.style, {
+      left: `${state.offsetX + z * (bounds.left - bounds.width * r)}px`,
+      top: `${state.offsetY + z * (bounds.top - bounds.height * r)}px`,
+      width: `${z * bounds.width * (1 + 2 * r)}px`,
+      height: `${z * bounds.height * (1 + 2 * r)}px`,
+    })
+    const context = this.uvOverlay.getContext('2d')
+    if (context && this.uvPaths) renderUvOverlay(context, this.uvPaths, state, dpr, {
+      fill: this.appearance.uvFill ?? (getComputedStyle(this.canvas.wrapperEl).getPropertyValue('--cfw-accent').trim() || '#268a4b'),
+      boundary: this.appearance.uvBoundary,
+    })
+  }
+
+  private readonly onDprChange = () => {
+    this.observeDpr()
+    this.scheduleDisplayResize()
+  }
+
+  private observeDpr(): void {
+    this.dprQuery?.removeEventListener('change', this.onDprChange)
+    this.dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+    this.dprQuery.addEventListener('change', this.onDprChange)
+  }
+
+  private defaultPlacementBounds(): CanvasBounds {
+    return hasEditorViewBounds(this.actualPrintableBounds) ? this.actualPrintableBounds : { left: 0, top: 0, width: this.width, height: this.height }
+  }
+
+  private placeDefaultObject(object: FabricObject, options: { x?: number; y?: number }): void {
+    if (options.x !== undefined || options.y !== undefined) return
+    const bounds = this.defaultPlacementBounds()
+    const box = object.getBoundingRect()
+    const scale = Math.min(1, bounds.width * 0.8 / Math.max(box.width, 1), bounds.height * 0.65 / Math.max(box.height, 1))
+    object.set({ scaleX: object.scaleX * scale, scaleY: object.scaleY * scale })
+    object.setPositionByOrigin(new Point(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2), 'center', 'center')
+    object.setCoords()
+  }
+
+  private markContentChanged(textureChanged = true): void {
+    this.contentDirty = true
+    if (textureChanged) {
+      this.textureDirty = true
+      this.textureNotificationPending = true
+    }
   }
 
   private applySelection(objects: FabricObject[]): void {
@@ -1503,6 +1663,7 @@ export class DesignEditor {
       cornerStrokeColor: this.appearance.controlBorder,
       borderColor: this.appearance.objectBorder,
       cornerSize: this.appearance.controlSize,
+      objectCaching: false,
     }
   }
 
@@ -1548,9 +1709,11 @@ export class DesignEditor {
   }
 
   private renderTextureCanvas(): void {
+    if (!this.textureDirty) return
     this.renderingTexture = true
     try {
-      this.textureRenderer.renderTexture(this.textureContext)
+      this.textureRenderer.renderTexture(this.textureContext, this.width, this.height)
+      this.textureDirty = false
     } finally {
       this.renderingTexture = false
     }

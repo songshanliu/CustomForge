@@ -4,6 +4,22 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
+### Added
+
+- Automatically fit the 2D editor around the actual printable region with equal-axis scaling, centering, 6% per-side padding, and 16 CSS px container clearance; small regions can enlarge
+- Expose `editorView`, `getEditorViewState()`, `fitEditorView()`, and `editorviewchange` through the core and Workbench, including honest invalid-region fallback and bounded extreme zoom
+- Cover real mouse/touch transforms, changing DPR, hidden containers, viewport-independent decoded PNG pixels, offscreen objects, text editing, and failed-render recovery in the packaged browser consumer
+
+### Changed
+
+- Separate the editor display viewport from logical texture output; resizing, selection and refitting no longer emit design changes or upload unchanged textures
+- Place default text and images inside the actual printable bounds, while explicit API coordinates retain logical canvas semantics
+- Cache UV paths per product and display paper padding outside the design texture
+
+The default 2D view changes in this release. To retain whole-canvas sizing, pass `editorView: { fit: 'canvas', paddingRatio: 0, minPadding: 28, allowUpscale: false }`. Saved Schema 1/2 coordinates, mapping, texture resolution, transparency, and model materials are unchanged.
+
 ## [0.2.1] - 2026-10-28
 
 ### Added

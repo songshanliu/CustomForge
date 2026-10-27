@@ -1,8 +1,63 @@
 import type { UvLayout } from '../core/uv'
+import type { EditorViewState } from '../core/types'
 
 interface UvOverlayAppearance {
   fill: string
   boundary: string
+}
+
+/** 模型变化时创建的逻辑坐标 UV 路径，容器变化时复用 */
+export interface UvOverlayPaths {
+  /** 三角形区域路径 */
+  fill: Path2D
+  /** 外边界路径 */
+  boundary: Path2D
+}
+
+/** 将 UV 布局缓存为逻辑路径，保持既有方向和原始模式的辅助线约定 */
+export function createUvOverlayPaths(layout: UvLayout, flipY: boolean, width: number, height: number, legacyClamping: boolean): UvOverlayPaths {
+  const paths = { fill: new Path2D(), boundary: new Path2D() }
+  const x = (u: number) => legacyClamping ? Math.min(Math.max(u * width, 1), width - 1) : u * width
+  const y = (v: number) => {
+    const value = (flipY ? 1 - v : v) * height
+    return legacyClamping ? Math.min(Math.max(value, 1), height - 1) : value
+  }
+  for (let i = 0; i < layout.triangleCoordinates.length; i += 6) {
+    const a = layout.triangleCoordinates
+    paths.fill.moveTo(x(a[i]), y(a[i + 1]))
+    paths.fill.lineTo(x(a[i + 2]), y(a[i + 3]))
+    paths.fill.lineTo(x(a[i + 4]), y(a[i + 5]))
+  }
+  for (let i = 0; i < layout.boundaryCoordinates.length; i += 4) {
+    const a = layout.boundaryCoordinates
+    paths.boundary.moveTo(x(a[i]), y(a[i + 1]))
+    paths.boundary.lineTo(x(a[i + 2]), y(a[i + 3]))
+  }
+  return paths
+}
+
+/** 将缓存路径应用同一取景和 DPR，边界线宽与虚线保持 CSS 像素大小 */
+export function renderUvOverlay(context: CanvasRenderingContext2D, paths: UvOverlayPaths, state: EditorViewState, dpr: number, appearance: UvOverlayAppearance): void {
+  context.save()
+  try {
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.clearRect(0, 0, context.canvas.width, context.canvas.height)
+    const { zoom, offsetX, offsetY, designCanvas } = state
+    context.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * offsetX, dpr * offsetY)
+    context.beginPath()
+    context.rect(0, 0, designCanvas.width, designCanvas.height)
+    context.clip()
+    context.fillStyle = appearance.fill
+    context.globalAlpha = 0.012
+    context.fill(paths.fill)
+    context.globalAlpha = 0.28
+    context.strokeStyle = appearance.boundary
+    context.lineWidth = 1 / zoom
+    context.setLineDash([6 / zoom, 6 / zoom])
+    context.stroke(paths.boundary)
+  } finally {
+    context.restore()
+  }
 }
 
 /**
