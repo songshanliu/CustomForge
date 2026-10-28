@@ -118,6 +118,8 @@ function parseTransform(value: unknown, path: string): DesignObjectTransform {
     rotation: readFiniteNumber(transform.rotation, `${path}.rotation`),
     flipX: readBoolean(transform.flipX, `${path}.flipX`),
     flipY: readBoolean(transform.flipY, `${path}.flipY`),
+    ...(transform.skewX === undefined ? {} : { skewX: readFiniteNumber(transform.skewX, `${path}.skewX`) }),
+    ...(transform.skewY === undefined ? {} : { skewY: readFiniteNumber(transform.skewY, `${path}.skewY`) }),
   }
 }
 

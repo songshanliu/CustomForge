@@ -105,7 +105,8 @@ export interface ProductCustomizerApi {
   /**
    * 更新对象中心位置、缩放、旋转和翻转并返回实际结果
    *
-   * 坐标使用逻辑画布像素，缩放必须大于零，结果会约束在画布内
+   * 坐标使用逻辑画布像素，缩放必须大于零；默认限制出界，背景可通过 objectBoundary.background 允许出血
+   * 只修改一轴缩放不会压缩另一轴；边界策略不写入文档，恢复实例须传入相同配置
    */
   updateObjectTransform(
     id: string,

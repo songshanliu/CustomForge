@@ -21,12 +21,16 @@ const serverUrl = `http://127.0.0.1:${smokePort}/`
 const realModelPath = process.env.CUSTOMFORGE_SMOKE_MODEL
 const realModelRevision = realModelPath ? createHash('sha256').update(await readFile(realModelPath)).digest('hex') : undefined
 const modelQuery = realModelRevision ? `&real-model=${realModelRevision}` : ''
+const boundaryModelPath = process.env.CUSTOMFORGE_BOUNDARY_MODEL
+const boundaryRevision = boundaryModelPath ? createHash('sha256').update(await readFile(boundaryModelPath)).digest('hex') : undefined
+const boundaryQuery = boundaryRevision ? `&boundary-model=${boundaryRevision}${process.env.CUSTOMFORGE_BOUNDARY_ONLY ? '&boundary-only=1' : ''}` : ''
 const baselineDirectory = process.env.CUSTOMFORGE_SMOKE_BASELINE
 const baselineQuery = baselineDirectory ? `&baseline=${encodeURIComponent(`/@fs/${baselineDirectory.replaceAll('\\', '/')}/workbench.js`)}` : ''
-const desktopSmokeUrl = `${serverUrl}?smoke=desktop${modelQuery}${baselineQuery}`
-const mobileSmokeUrl = `${serverUrl}?smoke=mobile${modelQuery}${baselineQuery}`
+const desktopSmokeUrl = `${serverUrl}?smoke=desktop${modelQuery}${baselineQuery}${boundaryQuery}`
+const mobileSmokeUrl = `${serverUrl}?smoke=mobile${modelQuery}${baselineQuery}${boundaryQuery}`
 const browserStartupTimeoutMs = 10_000
-const smokeTimeoutMs = realModelPath ? 180_000 : 90_000
+const smokeTimeoutMs = Number(process.env.CUSTOMFORGE_SMOKE_TIMEOUT_MS ?? (realModelPath || boundaryModelPath ? 1_800_000 : 600_000))
+if (!Number.isSafeInteger(smokeTimeoutMs) || smokeTimeoutMs <= 0) throw new Error('CUSTOMFORGE_SMOKE_TIMEOUT_MS must be a positive safe integer')
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -256,6 +260,8 @@ async function readSmokeSnapshot(devTools) {
           : null,
         editorView: ['passed', 'failed'].includes(body?.dataset.smokeStatus)
           ? JSON.parse(document.getElementById('customforge-editor-view-evidence')?.textContent ?? 'null') : null,
+        objectBoundary: ['passed', 'failed'].includes(body?.dataset.smokeStatus)
+          ? JSON.parse(document.getElementById('customforge-object-boundary-evidence')?.textContent ?? 'null') : null,
         input: JSON.parse(body?.dataset.viewportInput ?? 'null'),
         domTail: document.documentElement?.outerHTML.slice(-4000) ?? '',
       }
@@ -269,6 +275,7 @@ async function waitForSmokeResult(devTools, browser, getStderr) {
   const deadline = Date.now() + smokeTimeoutMs
   let latestSnapshot
   let lastInputId
+  let lastPhase
 
   while (Date.now() < deadline) {
     if (browser.exitCode !== null) {
@@ -276,6 +283,10 @@ async function waitForSmokeResult(devTools, browser, getStderr) {
     }
     try {
       latestSnapshot = await readSmokeSnapshot(devTools)
+      if (latestSnapshot?.phase !== lastPhase && latestSnapshot?.phase?.startsWith('object-boundary/')) {
+        lastPhase = latestSnapshot.phase
+        console.log(`Verifying ${lastPhase}`)
+      }
       const input = latestSnapshot?.input
       if (input && input.id !== lastInputId) {
         lastInputId = input.id
@@ -298,15 +309,18 @@ async function waitForSmokeResult(devTools, browser, getStderr) {
             await devTools.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...from })
             await devTools.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...from, button: 'left', clickCount: 1, modifiers: input.modifiers ?? 0 })
           }
-          for (let i = 1; i <= 8; i++) {
-            const point = { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }
+          const moves = input.moves ?? 8
+          const points = Array.from({ length: moves }, (_, index) => ({ x: from.x + (to.x - from.x) * (index + 1) / moves, y: from.y + (to.y - from.y) * (index + 1) / moves }))
+          for (let i = 0; i < (input.repeat ?? 0); i++) points.push(to)
+          if (input.back) for (let i = 1; i <= moves; i++) points.push({ x: to.x + (from.x - to.x) * i / moves, y: to.y + (from.y - to.y) * i / moves })
+          for (const point of points) {
             if (input.kind === 'touch') await devTools.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...point, id: 0 }] })
             else await devTools.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, buttons: 1, modifiers: input.modifiers ?? 0 })
           }
           if (input.kind === 'touch') {
             await devTools.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
             await devTools.send('Emulation.setTouchEmulationEnabled', { enabled: false })
-          } else await devTools.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...to, button: 'left', clickCount: 1, modifiers: input.modifiers ?? 0 })
+          } else await devTools.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...(input.back ? from : to), button: 'left', clickCount: 1, modifiers: input.modifiers ?? 0 })
         }
         await devTools.send('Runtime.evaluate', { expression: `document.body.dataset.viewportInputDone = ${JSON.stringify(input.id)}` })
       }
@@ -334,6 +348,9 @@ async function runBrowser(browser, profileDirectory, url, windowSize) {
     '--headless=new',
     '--no-sandbox',
     '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
     '--disable-component-update',
     '--disable-default-apps',
     '--disable-dev-shm-usage',
@@ -443,10 +460,12 @@ async function saveRealModelEvidence(snapshot, viewport) {
 
 async function saveEditorViewEvidence(snapshot, viewport) {
   if (!snapshot.editorView?.cases?.length) throw new Error('Editor viewport contract evidence is missing')
+  if (!snapshot.objectBoundary?.cases?.length) throw new Error('Object boundary contract evidence is missing')
   const directory = process.env.CUSTOMFORGE_SMOKE_EVIDENCE
   if (directory) {
     await mkdir(directory, { recursive: true })
     await writeFile(join(directory, `${viewport}-editor-view.json`), JSON.stringify(snapshot.editorView, null, 2))
+    await writeFile(join(directory, `${viewport}-object-boundary.json`), JSON.stringify(snapshot.objectBoundary, null, 2))
   }
 }
 

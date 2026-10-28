@@ -21,13 +21,15 @@ pnpm check
 pnpm build
 ```
 
-The dependency path expects `customforge-0.3.0.tgz` in the `core_code` directory. `--ignore-workspace` keeps this consumer independent from the repository workspace, `--lockfile=false` avoids retaining integrity data for a regenerated tarball, and `--ignore-scripts` prevents transitive install scripts from running during this contract check.
+The dependency path expects `customforge-0.3.1.tgz` in the `core_code` directory. `--ignore-workspace` keeps this consumer independent from the repository workspace, `--lockfile=false` avoids retaining integrity data for a regenerated tarball, and `--ignore-scripts` prevents transitive install scripts from running during this contract check.
 
 `pnpm test:browser` starts this consumer temporarily in 1440×900 and 390×844 viewports and verifies the packaged model, design operations, history, persistence, PNG output, view state, maximum zoom-out rendering, runtime extensions, and instance teardown in headless Chrome. The desktop pass also creates an in-memory GLB with 47,432 UV triangles, verifies the printable overlay and product switching, and reports the packaged Workbench initialization time and maximum Long Task without adding the fixture to the npm tarball.
 
 ## Print mapping contract
 
-Repack the current source as `customforge-0.3.0.tgz` before checking these additions. The published `0.1.2` package does not expose these APIs; installing an older tarball does not validate the current mapping contract.
+Repack the current source as `customforge-0.3.1.tgz` before checking these additions. The published `0.1.2` package does not expose these APIs; installing an older tarball does not validate the current mapping contract.
+
+The browser runner allows 10 minutes per viewport, or 30 minutes when a local real model is supplied. `CUSTOMFORGE_SMOKE_TIMEOUT_MS` accepts a positive integer in milliseconds to adjust this budget on slower software-rendering machines; it does not skip assertions.
 
 `src/printMappingSmoke.ts` imports only the public package entries. Its generated GLBs and asymmetric PNG exercise negative UVs, both vertical directions, UV0–UV3, separate UV islands, metadata sizing before canvas creation, the resolution label, a single initial GLB fetch, numerical Schema 2 restore, history, PNG selection exclusion, failed and superseded loads, mapping reset, and core/Workbench parity. Both viewport passes run these cases.
 
@@ -52,3 +54,9 @@ This is a regression for that specific fixture, not an arbitrary-model validator
 The real-model test explicitly uses 1024×512 for sampling. This does not establish the asset's intended print dimensions. Confirm production canvas dimensions with the asset author.
 
 For a same-machine performance comparison, optionally set `CUSTOMFORGE_SMOKE_BASELINE` to the extracted published `0.1.2` package's `dist` directory, containing `workbench.js`, before the command. This uses the consumer's installed runtime dependencies, disables HTTP caching, excludes warmup runs, and records three initialization/readback samples per implementation. The old package reproduces its original clamping behavior; it does not gain the new mapping API. Readback timing includes frame waits and GPU readback, so it is not a production first-paint metric. Both viewports use software SwiftShader; the mobile viewport does not simulate a physical phone.
+
+## Background boundary regression
+
+The packaged browser consumer exercises `objectBoundary` in both factories, real continuous edge/corner controls, event-density and repeated-endpoint stability, fixed anchors, rotations and skew, mixed selections, absolute API assignments, history, Schema 1/2 restoration, and fixed-size transparent output. The default suite uses generated 1380×800, 1550×1190 and default-size fixtures.
+
+To include an unchanged local production GLB, optionally set `CUSTOMFORGE_BOUNDARY_MODEL` to its absolute path before `pnpm test:browser`. Only the test server exposes that selected file on its loopback interface. Set `CUSTOMFORGE_BOUNDARY_ONLY=1` to run the boundary matrix against that model alone; the remaining smoke contracts still run. `CUSTOMFORGE_SMOKE_EVIDENCE` writes the numerical cases and screenshots. These options do not change SDK runtime behavior or select a product in the normal demo.

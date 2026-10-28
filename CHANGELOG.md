@@ -4,6 +4,22 @@ All notable changes to CustomForge will be documented in this file
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-28
+
+### Fixed
+
+- Recompute Fabric gestures from their starting geometry so edge controls preserve the other scale axis, pointer event density does not change the result, and mouseup does not apply a second containment pass
+- Contain active transforms around their fixed anchor and constrain mixed selections together, without repositioning individual members
+- Save selection members in world coordinates and retain optional skew angles across Schema 1/2, history and design restoration
+- Reject transforms whose finite inputs overflow the resulting geometry before mutating the design or replacing its history
+
+### Added
+
+- Opt-in `objectBoundary: { background: 'overflow' }` in both factories, allowing background bleed while preserving fixed texture/PNG dimensions; the default remains `contain` and ordinary elements remain constrained
+- Packaged consumer regressions for continuous real mouse input, event-density independence, fixed anchors, overflow restoration, mixed selections and API idempotency
+
+Boundary configuration belongs to the runtime, not Design JSON. Pass the same option to editing and preview/restoration instances. This release does not change GLB resources, UV mapping, canvas resolution, original materials, or texture edge sampling.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added

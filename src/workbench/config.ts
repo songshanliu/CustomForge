@@ -1,5 +1,6 @@
 import defaultLogoUrl from './assets/CustomForgeLogo.png'
 import { normalizeEditorViewOptions } from '../editor/editorView'
+import { normalizeObjectBoundaryOptions } from '../editor/objectBoundary'
 import { builtInAssetLibrary } from './assets/catalog'
 import type {
   WorkbenchAsset,
@@ -46,6 +47,8 @@ export interface NormalizedWorkbenchBranding {
 export interface NormalizedWorkbenchOptions {
   /** 经过校验的二维显示取景配置 */
   editorView: Required<NonNullable<WorkbenchOptions['editorView']>>
+  /** 已校验的对象边界运行策略 */
+  objectBoundary: Required<NonNullable<WorkbenchOptions['objectBoundary']>>
   /** 添加到 Workbench 根元素的 CSS 类名 */
   classNames: string[]
 
@@ -566,6 +569,7 @@ export function normalizeWorkbenchOptions(
   return {
     classNames: normalizeClassNames(options.className),
     editorView: normalizeEditorViewOptions(options.editorView),
+    objectBoundary: normalizeObjectBoundaryOptions(options.objectBoundary),
     editorWidth: options.editorWidth === undefined ? undefined : positiveInteger(options.editorWidth, 1024, 'editorWidth'),
     editorHeight: options.editorHeight === undefined ? undefined : positiveInteger(options.editorHeight, 512, 'editorHeight'),
     historyLimit: positiveInteger(options.historyLimit, 50, 'historyLimit'),

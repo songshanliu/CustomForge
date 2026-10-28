@@ -29,6 +29,12 @@ const validDesign = {
 }
 
 describe('parseDesignDocument', () => {
+  it('preserves optional skew without changing legacy documents or accepting invalid numbers', () => {
+    const object = { ...validDesign.objects[0], transform: { ...validDesign.objects[0]!.transform, skewX: 12, skewY: -8 } }
+    expect(parseDesignDocument({ ...validDesign, objects: [object] }).objects[0]!.transform).toEqual(object.transform)
+    expect(() => parseDesignDocument({ ...validDesign, objects: [{ ...object, transform: { ...object.transform, skewX: Infinity } }] })).toThrow('finite')
+    expect(parseDesignDocument(validDesign).objects[0]!.transform).not.toHaveProperty('skewX')
+  })
   it('returns a sanitized version 1 document', () => {
     expect(parseDesignDocument({ ...validDesign, ignored: true })).toEqual(validDesign)
   })

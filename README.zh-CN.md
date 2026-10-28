@@ -233,6 +233,31 @@ const view = workbench.customizer.getEditorViewState()
 
 `getEditorViewState()` 返回独立快照，包含逻辑尺寸、实际打印范围、容器 CSS 尺寸、缩放、偏移、选项及就绪状态。`editorviewchange` 单独通知取景变化。重算、容器变化和选择操作不会写入历史、触发设计 `change` 或上传未变化的纹理，这些视图参数也不写入 Design JSON。
 
+## 对象边界与背景出血
+
+从 0.3.1 起，边中点缩放只改变对应轴，不会继续压缩另一轴；重复指针事件和松开鼠标也不会再执行一轮适配。普通图片和文字仍限制在逻辑画布内，UV 红线只作提示，不是对象约束边界。
+
+背景默认同样使用 `contain`。如果需要解锁后的背景可以超出画布，请在创建实例时传入 `objectBoundary: { background: 'overflow' }`：
+
+```ts
+import { createCustomizer, type ObjectBoundaryOptions } from 'customforge'
+import { createWorkbench } from 'customforge/workbench'
+
+const objectBoundary: ObjectBoundaryOptions = { background: 'overflow' }
+// 使用自己的 UI
+const customizer = await createCustomizer({
+  editor: '#editor', viewer: '#viewer', objectBoundary,
+})
+// 或在另一个容器中创建默认工作台
+const workbench = await createWorkbench({ container: '#workbench', objectBoundary })
+```
+
+`addImage({ src, role: 'background' })` 和 `setImageAsBackground(id)` 仍会将图片铺满打印包围矩形、替换旧背景、锁定并置底。用 `setObjectLocked(id, false)` 解锁后可以移动和缩放。启用 `overflow` 后，API、`loadDesign`、`initialDesign`、撤销和重做均保留背景的出血位置和比例；纹理和 PNG 仍使用配置的逻辑尺寸，超出部分被裁切，不会扩大画布、修改 UV 或压缩图片来容纳出血。
+
+这是**创建时的运行配置**，不写入 Design JSON。编辑端和恢复端，包括管理后台预览，都应传入相同配置。默认 `contain` 读取器会把越界对象适配回画布，无法保留依赖出血的设计。请先升级两端读取器，再开启出血；如果业务自行校验设计字段且支持倾斜，还需接受可选的有限数 `transform.skewX` / `skewY`。没有这些字段的旧 Schema 1/2 文档继续按零倾斜恢复，无需迁移。
+
+混合多选始终整体变换：普通成员受到边界约束，出血背景可以留在画布外。计算使用逻辑坐标，不受显示倍率或 DPR 影响。本配置不处理 UV 边缘像素延伸，也不要求移除业务已有的纹理采样适配。
+
 ## 自定义界面
 
 `createCustomizer()` 提供编辑器和查看器，将它们挂载到两个不同的 DOM 容器后，通过返回的 `ProductCustomizerApi` 连接你自己的控件：
@@ -659,10 +684,10 @@ pnpm dev
 pnpm pack:local
 ```
 
-命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.3.0.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
+命令会构建 JavaScript、TypeScript 声明和样式，检查 npm 文件清单，并生成 `customforge-0.3.1.tgz`。在其他项目中安装时，将以下路径替换为该文件的绝对路径：
 
 ```bash
-pnpm add /absolute/path/to/customforge-0.3.0.tgz
+pnpm add /absolute/path/to/customforge-0.3.1.tgz
 ```
 
 仓库中的 [npm 消费示例](./examples/npm-consumer)和 [API 契约消费示例](./examples/api-contract-consumer)独立于源码 workspace 安装该 tarball，具体启动和验证方法见各自的 README

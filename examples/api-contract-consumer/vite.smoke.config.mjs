@@ -16,6 +16,15 @@ export default defineConfig({
       }
     },
     async configureServer(server) {
+      const boundaryPath = process.env.CUSTOMFORGE_BOUNDARY_MODEL
+      if (boundaryPath) {
+        const bytes = await readFile(boundaryPath)
+        server.middlewares.use('/__customforge_smoke/boundary.glb', (_request, response) => {
+          response.setHeader('Content-Type', 'model/gltf-binary')
+          response.setHeader('Cache-Control', 'no-store')
+          response.end(bytes)
+        })
+      }
       const path = process.env.CUSTOMFORGE_SMOKE_MODEL
       if (!path) return
       const bytes = await readFile(path)

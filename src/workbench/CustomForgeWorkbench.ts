@@ -346,6 +346,7 @@ export class CustomForgeWorkbench implements CustomForgeWorkbenchApi {
         editorWidth: normalized.editorWidth,
         editorHeight: normalized.editorHeight,
         editorView: normalized.editorView,
+        objectBoundary: normalized.objectBoundary,
         historyLimit: normalized.historyLimit,
         product: normalized.product,
         readModelMetadata: normalized.readModelMetadata,

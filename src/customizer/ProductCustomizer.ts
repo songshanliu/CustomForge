@@ -31,6 +31,7 @@ import type {
 } from '../core/types'
 import { DesignEditor } from '../editor/DesignEditor'
 import { normalizeEditorViewOptions } from '../editor/editorView'
+import { normalizeObjectBoundaryOptions } from '../editor/objectBoundary'
 import { TextureBridge } from '../bridge/TextureBridge'
 import { ProductViewer } from '../viewer/ProductViewer'
 import type { PreparedProduct } from '../viewer/ProductViewer'
@@ -100,6 +101,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
   static async create(options: CustomizerOptions): Promise<ProductCustomizer> {
     options = { ...options, product: structuredClone(options.product ?? {}) }
     options.editorView = normalizeEditorViewOptions(options.editorView)
+    options.objectBoundary = normalizeObjectBoundaryOptions(options.objectBoundary)
     const editorHost = resolveElement(options.editor, 'Editor')
     const viewerHost = resolveElement(options.viewer, 'Viewer')
     if (editorHost === viewerHost) throw new Error('Editor and viewer must use different elements')
@@ -126,6 +128,7 @@ export class ProductCustomizer implements ProductCustomizerApi {
         textObjectName: options.textObjectName, imageObjectName: options.imageObjectName,
         backgroundObjectName: options.backgroundObjectName, appearance: options.appearance?.editor,
         editorView: options.editorView,
+        objectBoundary: options.objectBoundary,
       })
       editor.setUvLayout(layout, info.mapping.textureFlipY, configuration.product.uvMapping.mode === 'original')
       await editor.setBackgroundTexture(configuration.product.textureUrl)

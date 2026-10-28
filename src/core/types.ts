@@ -195,6 +195,8 @@ export interface CustomizerAppearance {
  * 产品定制器初始化配置
  */
 export interface CustomizerOptions {
+  /** 对象边界运行策略；不写入 Design JSON，恢复实例时须传入相同配置 */
+  objectBoundary?: ObjectBoundaryOptions
   /** 二维显示取景；默认围绕打印区域等比适配，独立于逻辑尺寸、保存数据和输出纹理 */
   editorView?: EditorViewOptions
   /** 二维编辑器的挂载元素或 CSS 选择器 */
@@ -344,7 +346,7 @@ export interface UpdateTextOptions {
 /**
  * 添加图片时使用的配置
  *
- * 创建后和用户变换期间，图片包围盒会自动约束在编辑画布内
+ * 普通图片始终约束在逻辑画布内；背景默认同样约束，objectBoundary.background 为 overflow 时后续变换和恢复允许出血
  * 普通图片未提供 x/y 时在实际打印区域居中并等比适配，显式坐标保持逻辑像素语义
  */
 export interface AddImageOptions {
@@ -378,6 +380,10 @@ export interface DesignCanvas {
 
 /** Design JSON 中所有可编辑对象共用的变换 */
 export interface DesignObjectTransform {
+  /** 横向倾斜角，单位为度；旧文档缺省为 0 */
+  skewX?: number
+  /** 纵向倾斜角，单位为度；旧文档缺省为 0 */
+  skewY?: number
   /** 对象中心在画布中的横坐标，单位为像素 */
   x: number
 
@@ -438,6 +444,12 @@ export interface DesignObjectState {
 
 /** Design JSON 图片对象在设计中的用途 */
 export type DesignImageRole = 'element' | 'background'
+
+/** 创建实例时确定的边界策略，不改变画布分辨率、UV 或文档 Schema */
+export interface ObjectBoundaryOptions {
+  /** 背景默认 contain；overflow 允许背景移动和变换出界，纹理及 PNG 在逻辑画布范围裁切，普通对象仍限制出界 */
+  background?: 'contain' | 'overflow'
+}
 
 /** Design JSON 中的文字对象 */
 export interface TextDesignObject extends DesignObjectState {

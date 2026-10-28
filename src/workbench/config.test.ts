@@ -3,6 +3,11 @@ import { normalizeWorkbenchOptions } from './config'
 import type { WorkbenchExtensionButton } from './types'
 
 describe('normalizeWorkbenchOptions', () => {
+  it('validates and forwards the background boundary policy', () => {
+    expect(normalizeWorkbenchOptions({ container: '#app' }).objectBoundary).toEqual({ background: 'contain' })
+    expect(normalizeWorkbenchOptions({ container: '#app', objectBoundary: { background: 'overflow' } }).objectBoundary.background).toBe('overflow')
+    expect(() => normalizeWorkbenchOptions({ container: '#app', objectBoundary: { background: 'unknown' as 'contain' } })).toThrow()
+  })
   it('T24 preserves omitted sizes and forwards initial design and diagnostics without parsing twice', () => {
     const initialDesign = { version: 2 }
     const onDiagnostic = () => undefined

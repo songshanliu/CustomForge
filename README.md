@@ -235,6 +235,31 @@ const view = workbench.customizer.getEditorViewState()
 
 `getEditorViewState()` returns a detached snapshot with logical dimensions, actual printable bounds, container CSS dimensions, zoom, offsets, options, and readiness. `editorviewchange` reports framing changes separately from `change`. Refitting, resizing and selection do not add history entries or upload unchanged design textures. These display settings are not stored in Design JSON.
 
+## Object boundaries and background bleed
+
+Since 0.3.1, edge controls change one scale axis without shrinking the other. Repeated pointer events and releasing the mouse do not apply another fit. Ordinary images and text remain constrained to the logical canvas; the UV outline is a guide, not the containment boundary.
+
+Backgrounds also default to `contain`. To let an unlocked background extend past the canvas, pass `objectBoundary: { background: 'overflow' }` when creating the instance:
+
+```ts
+import { createCustomizer, type ObjectBoundaryOptions } from 'customforge'
+import { createWorkbench } from 'customforge/workbench'
+
+const objectBoundary: ObjectBoundaryOptions = { background: 'overflow' }
+// Core, with your own UI
+const customizer = await createCustomizer({
+  editor: '#editor', viewer: '#viewer', objectBoundary,
+})
+// Or the default Workbench, mounted in a separate container
+const workbench = await createWorkbench({ container: '#workbench', objectBoundary })
+```
+
+`addImage({ src, role: 'background' })` and `setImageAsBackground(id)` still fit the image to the printable rectangle, replace the previous background, and lock it at the bottom. Unlock it with `setObjectLocked(id, false)` to move or resize it. With `overflow`, the background keeps its saved position and scales across API calls, `loadDesign`, `initialDesign`, undo and redo. The texture and PNG keep their configured logical dimensions and crop content outside that rectangle; UVs, materials and image proportions are not changed to accommodate bleed.
+
+This is a **runtime option**, not a field in Design JSON. Pass the same setting to editing and restoration instances, including an administrative preview. The default `contain` reader intentionally fits out-of-bounds objects; it cannot preserve a design that relies on overflow. Upgrade both readers before enabling bleed, and allow optional finite `transform.skewX` / `skewY` fields in any application-side validator if you support skew. Existing Schema 1/2 documents without those fields retain zero skew and require no migration.
+
+Mixed selections transform together: ordinary members remain bounded while an overflow background may extend outside. Geometry is checked in logical coordinates, independently of zoom or DPR. This option does not extend pixels along UV edges or replace a host's existing texture edge-sampling adapter.
+
 ## Build Your Own UI
 
 `createCustomizer()` provides the editor and viewer without the Workbench controls. Mount them in two separate DOM containers and connect your own UI to the returned `ProductCustomizerApi`:
@@ -662,10 +687,10 @@ Build and pack the library:
 pnpm pack:local
 ```
 
-This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.3.0.tgz`. To install it in another project, use the tarball's absolute path:
+This builds JavaScript, TypeScript declarations, and styles, checks the npm file list, and creates `customforge-0.3.1.tgz`. To install it in another project, use the tarball's absolute path:
 
 ```bash
-pnpm add /absolute/path/to/customforge-0.3.0.tgz
+pnpm add /absolute/path/to/customforge-0.3.1.tgz
 ```
 
 The checked-in [npm consumer](./examples/npm-consumer) and [API contract consumer](./examples/api-contract-consumer) install this tarball independently of the source workspace. Their READMEs describe setup and verification

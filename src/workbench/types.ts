@@ -710,6 +710,8 @@ export interface WorkbenchExtensionButton {
 export interface WorkbenchOptions {
   /** 二维显示取景配置，默认适配实际打印区域；不改变设计逻辑尺寸 */
   editorView?: CustomizerOptions['editorView']
+  /** 对象边界策略，背景默认 contain；overflow 不写入设计文档，恢复时须保持一致 */
+  objectBoundary?: CustomizerOptions['objectBoundary']
   /** Workbench 独占使用的挂载元素或 CSS 选择器 */
   container: ElementTarget
 

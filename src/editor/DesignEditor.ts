@@ -4,8 +4,10 @@ import {
   FabricImage,
   Point,
   Textbox,
+  util,
   type CanvasEvents,
   type FabricObject,
+  type Transform,
 } from 'fabric'
 import { parseDesignDocument } from '../core/design'
 import { resolveRestoredPrintMapping } from '../core/printMapping'
@@ -25,6 +27,7 @@ import type {
   EditorViewState,
   HistoryState,
   ImageDesignObject,
+  ObjectBoundaryOptions,
   TextAlignment,
   TextDesignObject,
   TextFontStyle,
@@ -42,6 +45,7 @@ import { calculateUvCanvasBounds, calculateUvViewBounds } from './uvBounds'
 import { resolvePersistentImageSource } from './imageSource'
 import { createUvOverlayPaths, renderUvOverlay, type UvOverlayPaths } from './uvOverlay'
 import { calculateEditorView, hasEditorViewBounds, normalizeEditorViewOptions } from './editorView'
+import { boundedObjects, captureGeometry, constrainCandidate, installStableTransform, liveBounds, normalizeObjectBoundaryOptions, validGeometry } from './objectBoundary'
 
 interface NormalizedEditorAppearance {
   selectionFill: string
@@ -76,6 +80,8 @@ function normalizeEditorAppearance(
 
 /** 二维编辑器内部初始化配置 */
 interface DesignEditorOptions {
+  /** 创建和恢复时共用的边界策略 */
+  objectBoundary?: ObjectBoundaryOptions
   /** 仅影响显示的取景配置 */
   editorView?: EditorViewOptions
   /** 三维共用的已解析映射 */
@@ -184,6 +190,8 @@ export class DesignEditor {
   private readonly imageObjectName: string
   private readonly backgroundObjectName: string
   private readonly appearance: NormalizedEditorAppearance
+  private readonly objectBoundary: Required<ObjectBoundaryOptions>
+  private constrainTransformEvent?: (transform: Transform) => void
   private editableBounds: CanvasBounds
   private actualPrintableBounds: CanvasBounds = { left: 0, top: 0, width: 0, height: 0 }
   private readonly editorViewOptions: Required<EditorViewOptions>
@@ -250,6 +258,7 @@ export class DesignEditor {
     this.imageObjectName = options.imageObjectName ?? 'Image'
     this.backgroundObjectName = options.backgroundObjectName ?? 'Background'
     this.appearance = normalizeEditorAppearance(options.appearance)
+    this.objectBoundary = normalizeObjectBoundaryOptions(options.objectBoundary)
     this.editorViewOptions = normalizeEditorViewOptions(options.editorView)
     this.editorViewState = calculateEditorView({ width: this.width, height: this.height }, this.actualPrintableBounds, { width: 0, height: 0 }, this.editorViewOptions)
     this.editableBounds = {
@@ -322,19 +331,26 @@ export class DesignEditor {
     this.canvas.on('selection:updated', notifySelection)
     this.canvas.on('selection:cleared', notifySelection)
 
-    const constrainTarget = ({ target }: { target: FabricObject }) => {
-      this.constrainObjectToCanvas(target)
-      this.markContentChanged()
+    this.canvas.on('before:transform', ({ transform }) => {
+      this.flushHistoryCommit()
+      this.constrainTransformEvent = installStableTransform(transform, (start, anchor, action) => {
+        if (action === 'drag') this.constrainMovement(transform.target)
+        else constrainCandidate(transform.target, start, this.width, this.height, this.allowsOverflow, anchor)
+      }, () => this.markContentChanged())
+    })
+    const constrainTarget = ({ transform }: { transform: Transform }) => {
+      this.constrainTransformEvent?.(transform)
     }
     this.canvas.on('object:moving', constrainTarget)
     this.canvas.on('object:scaling', constrainTarget)
     this.canvas.on('object:rotating', constrainTarget)
     this.canvas.on('object:skewing', constrainTarget)
     this.canvas.on('object:resizing', constrainTarget)
-    this.canvas.on('object:modified', ({ target }) => {
-      this.constrainObjectToCanvas(target)
+    this.canvas.on('object:modified', () => {
+      this.constrainTransformEvent = undefined
       this.commitHistory()
     })
+    this.canvas.on('mouse:up', () => { this.constrainTransformEvent = undefined })
     this.canvas.on('text:changed', ({ target }) => {
       this.constrainObjectToCanvas(target)
       this.scheduleHistoryCommit()
@@ -636,6 +652,7 @@ export class DesignEditor {
       return false
     }
 
+    if (object.group instanceof ActiveSelection) this.canvas.discardActiveObject()
     this.fitImageToEditableBounds(object)
     this.removeDesignBackgrounds()
     this.imageRoles.set(object, 'background')
@@ -716,7 +733,8 @@ export class DesignEditor {
   /**
    * 更新对象中心位置、缩放、旋转和翻转
    *
-   * 对象最终仍会约束在逻辑画布内，连续调用会合并为一个历史步骤
+   * 默认限制出界；启用 overflow 的背景保留出血变换，连续调用合并为一个历史步骤
+   * 单轴缩放保持另一轴，绝对值重复调用不会累积压缩
    *
    * @param id Design JSON 中的对象 ID
    * @param options 要更新的变换字段
@@ -738,6 +756,7 @@ export class DesignEditor {
       this.canvas.discardActiveObject()
     }
 
+    const previous = captureGeometry(object)
     const current = this.serializeTransform(object)
     const x = options.x ?? current.x
     const y = options.y ?? current.y
@@ -749,7 +768,15 @@ export class DesignEditor {
       flipY: options.flipY ?? current.flipY,
     })
     object.setPositionByOrigin(new Point(x, y), 'center', 'center')
-    this.constrainObjectToCanvas(object)
+    if (!validGeometry(object)) {
+      object.set(previous)
+      if (selectedIds.length) this.selectObjects(selectedIds)
+      throw new RangeError('Object transform must produce finite geometry')
+    }
+    if (options.scaleX === undefined && options.scaleY === undefined && options.rotation === undefined
+      && options.flipX === undefined && options.flipY === undefined) this.constrainMovement(object)
+    else constrainCandidate(object, previous, this.width, this.height, this.allowsOverflow)
+    object.setCoords()
 
     const selectedObjects = selectedIds
       .map((selectedId) => this.objectsById.get(selectedId))
@@ -855,8 +882,10 @@ export class DesignEditor {
 
     object.initDimensions()
     if (object.group instanceof ActiveSelection) {
-      object.group.triggerLayout()
-      this.constrainObjectToCanvas(object.group)
+      const selected = this.getSelectedObjectIds()
+      this.canvas.discardActiveObject()
+      this.constrainObjectToCanvas(object)
+      this.selectObjects(selected)
     } else {
       this.constrainObjectToCanvas(object)
     }
@@ -937,7 +966,7 @@ export class DesignEditor {
    * 添加并选中一个可编辑文字对象
    *
    * 文字位置使用画布像素坐标，原点位于对象左上角
-   * 对象过大时会等比缩小，越界时会自动移回画布
+   * 对象过大时初次等比适配，越界时会自动移回画布
    *
    * @param options 文字内容、位置和样式
    * @returns 创建后的可持久化文字对象快照
@@ -974,7 +1003,7 @@ export class DesignEditor {
    *
    * role 为 background 时替换已有设计背景、铺满当前 UV 可打印区域并默认锁定在最底层
    * 图片位置使用画布像素坐标，原点位于图片中心
-   * 对象过大时会等比缩小，越界时会自动移回画布
+   * 普通图片过大时初次适配；背景启用 objectBoundary.background: overflow 后允许出血和原样恢复
    * 远程图片必须提供正确的 CORS 响应头才能安全导出 PNG
    *
    * @param options 图片地址、中心位置和显示宽度
@@ -1082,6 +1111,7 @@ export class DesignEditor {
           locked: object.locked ?? false,
           role: object.type === 'image' ? object.role ?? 'element' : 'element',
         })
+        if (!validGeometry(entries[entries.length - 1]!.object)) throw new RangeError('Saved object must produce finite geometry')
       }
       if (this.destroyed || generation !== this.contentGeneration) {
         throw new DOMException('Design loading was superseded or the product mapping changed', 'AbortError')
@@ -1247,6 +1277,7 @@ export class DesignEditor {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.constrainTransformEvent = undefined
     this.contentGeneration += 1
     if (this.historyTimer !== undefined) {
       clearTimeout(this.historyTimer)
@@ -1381,14 +1412,20 @@ export class DesignEditor {
 
   private serializeTransform(object: FabricObject): DesignObjectTransform {
     const center = object.getCenterPoint()
+    const geometry = object.group instanceof ActiveSelection
+      ? util.qrDecompose(object.calcTransformMatrix()) : undefined
+    const skewX = geometry?.skewX ?? object.skewX
+    const skewY = geometry?.skewY ?? object.skewY
     return {
       x: center.x,
       y: center.y,
-      scaleX: Math.abs(object.scaleX),
-      scaleY: Math.abs(object.scaleY),
-      rotation: object.angle,
-      flipX: object.scaleX < 0 ? !object.flipX : object.flipX,
-      flipY: object.scaleY < 0 ? !object.flipY : object.flipY,
+      scaleX: Math.abs(geometry?.scaleX ?? object.scaleX),
+      scaleY: Math.abs(geometry?.scaleY ?? object.scaleY),
+      rotation: geometry?.angle ?? object.angle,
+      flipX: geometry ? geometry.scaleX < 0 : object.scaleX < 0 ? !object.flipX : object.flipX,
+      flipY: geometry ? geometry.scaleY < 0 : object.scaleY < 0 ? !object.flipY : object.flipY,
+      ...(skewX ? { skewX } : {}),
+      ...(skewY ? { skewY } : {}),
     }
   }
 
@@ -1403,6 +1440,8 @@ export class DesignEditor {
       angle: design.transform.rotation,
       flipX: design.transform.flipX,
       flipY: design.transform.flipY,
+      skewX: design.transform.skewX ?? 0,
+      skewY: design.transform.skewY ?? 0,
       visible: design.visible ?? true,
       ...this.objectControlAppearance(),
     }
@@ -1545,8 +1584,11 @@ export class DesignEditor {
   }
 
   private constrainObjectToCanvas(object: FabricObject): void {
+    if (this.allowsOverflow(object)) { object.setCoords(); return }
     object.setCoords()
-    let bounds = object.getBoundingRect()
+    let bounds = liveBounds(object)
+    const epsilon = 1e-7
+    if (bounds.left >= -epsilon && bounds.top >= -epsilon && bounds.left + bounds.width <= this.width + epsilon && bounds.top + bounds.height <= this.height + epsilon) return
     const scale = calculateContainmentScale(bounds, this.width, this.height)
 
     if (scale < 1) {
@@ -1555,7 +1597,7 @@ export class DesignEditor {
         scaleY: object.scaleY * scale,
       })
       object.setCoords()
-      bounds = object.getBoundingRect()
+      bounds = liveBounds(object)
     }
 
     const offset = calculateContainmentOffset(bounds, this.width, this.height)
@@ -1566,6 +1608,19 @@ export class DesignEditor {
       })
       object.setCoords()
     }
+  }
+
+  private readonly allowsOverflow = (object: FabricObject): boolean => this.objectBoundary.background === 'overflow'
+    && object instanceof FabricImage && this.imageRoles.get(object) === 'background'
+
+  private constrainMovement(object: FabricObject): void {
+    const bounds = boundedObjects(object, this.allowsOverflow).map(liveBounds)
+    if (!bounds.length) return
+    const left = Math.min(...bounds.map((entry) => entry.left)), top = Math.min(...bounds.map((entry) => entry.top))
+    const right = Math.max(...bounds.map((entry) => entry.left + entry.width)), bottom = Math.max(...bounds.map((entry) => entry.top + entry.height))
+    const offset = calculateContainmentOffset({ left, top, width: right - left, height: bottom - top }, this.width, this.height)
+    object.set({ left: object.left + offset.x, top: object.top + offset.y })
+    object.setCoords()
   }
 
   private resizeDisplay(forceOverlay = false): void {
@@ -1702,6 +1757,8 @@ export class DesignEditor {
       left: bounds.left + bounds.width / 2,
       top: bounds.top + bounds.height / 2,
       angle: 0,
+      skewX: 0,
+      skewY: 0,
       scaleX: bounds.width / Math.max(image.width, 1),
       scaleY: bounds.height / Math.max(image.height, 1),
     })

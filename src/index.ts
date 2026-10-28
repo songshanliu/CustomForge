@@ -60,6 +60,7 @@ export type {
   DesignObjectTransform,
   ElementTarget,
   ImageDesignObject,
+  ObjectBoundaryOptions,
   EditorAppearance,
   EditorViewOptions,
   EditorViewState,
